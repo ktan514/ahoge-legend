@@ -30,9 +30,27 @@ Godotは4.7.2 stableで初期化し、バージョン更新は専用Issueと検�
 
 ## テスト・検証コマンド
 
-実装環境の初期化後に、実際に使用するコマンドをここへ追記する。
+Godot 4.7.2 stableを使用する。
 
-未設定のコマンドを推測して実行したり、未実施の検証をPASS扱いしない。
+プロジェクト起動:
+
+```bash
+godot --path .
+```
+
+headlessでプロジェクト読込確認:
+
+```bash
+godot --headless --path . --quit
+```
+
+ローカル自動試験:
+
+```bash
+godot --headless --path . --script res://tests/run_all.gd
+```
+
+コマンドを実行していない場合はPASS扱いしない。
 
 ## 保護対象branch
 
@@ -42,7 +60,11 @@ Godotは4.7.2 stableで初期化し、バージョン更新は専用Issueと検�
 
 ## ディレクトリ固有ルール
 
-未設定。
+- `src/config/`: 調整可能な戦闘値を一元管理する。Sceneや状態クラスへ暫定値を重複記載しない。
+- `src/domain/`: ゲームルール上の状態・定義を置き、UIへ依存させない。
+- `src/services/`: ラウンド／マッチ等の進行制御を置く。
+- `src/ui/`: Godot画面と表示・入力の接着を担当し、勝敗ルールそのものを持たせない。
+- `tests/`: headless実行できる回帰試験を置く。
 
 ## アセット管理
 
