@@ -1,0 +1,78 @@
+name: Online foundation
+
+on:
+  pull_request:
+    paths:
+      - "docker-compose.yml"
+      - "server/nakama/**"
+      - "scripts/server-*.sh"
+      - ".github/workflows/online-foundation.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "docker-compose.yml"
+      - "server/nakama/**"
+      - "scripts/server-*.sh"
+      - ".github/workflows/online-foundation.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: TypeScript type-check and build
+        working-directory: server/nakama
+        run: |
+          npm install
+          npm run type-check
+          npm run build
+
+      - name: Validate Docker Compose
+        run: docker compose config
+
+      - name: Start local online foundation
+        run: docker compose up --build -d
+
+      - name: Wait for Nakama and RPC
+        shell: bash
+        run: |
+          for attempt in $(seq 1 30); do
+            if ./scripts/server-health.sh; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose ps
+          docker compose logs
+          exit 1
+
+      - name: Verify restart with persistent volume
+        shell: bash
+        run: |
+          docker compose restart postgres nakama
+
+          for attempt in $(seq 1 30); do
+            if ./scripts/server-health.sh; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker compose ps
+          docker compose logs
+          exit 1
+
+      - name: Shutdown
+        if: always()
+        run: docker compose down -v

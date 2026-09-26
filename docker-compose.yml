@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16.8-alpine
+    environment:
+      POSTGRES_DB: nakama
+      POSTGRES_PASSWORD: localdb
+    volumes:
+      - nakama_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nakama"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    # PostgreSQLはNakamaからCompose内部ネットワーク経由でのみ使用する。
+    # hostの5432は他プロジェクトと競合しやすいため公開しない。
+
+  nakama:
+    build:
+      context: ./server/nakama
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - "/bin/sh"
+      - "-ecx"
+      - >
+        /nakama/nakama migrate up --database.address postgres:localdb@postgres:5432/nakama &&
+        exec /nakama/nakama
+        --config /nakama/data/local.yml
+        --name ahoge-local
+        --database.address postgres:localdb@postgres:5432/nakama
+    restart: unless-stopped
+    ports:
+      - "7349:7349"
+      - "7350:7350"
+      - "7351:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  nakama_postgres_data:
