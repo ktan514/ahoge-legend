@@ -24,6 +24,10 @@ func configure(player_one_id: String, player_two_id: String) -> void:
 
 
 func _ready() -> void:
+	# Battle全体を覆うControl自身がマウス入力を消費しないようにする。
+	# 操作用のButtonだけはBattleHUD側で通常のmouse_filterを維持する。
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	_config = CombatConfigScript.new()
 	_match = MatchCoordinatorScript.new(_config)
 
