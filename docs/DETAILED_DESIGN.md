@@ -171,14 +171,28 @@ GameFlowは個々の攻撃判定を持たない。
 
 責務:
 
-- 認証済みセッション
+- Nakama client生成
+- 開発用Device認証
+- 認証済みSession保持
+- 認証済みaccount取得
 - ランダムマッチ
 - ルームコードマッチ
 - 対戦接続
 - 対戦イベント同期
 - サーバー確定結果の受信
 
-オンライン実装はNakamaのGodot向けクライアントとサーバー機能を使用する。Nakama側のカスタムサーバーロジックはTypeScriptを初期採用する。SDKの具体的なAPI利用方法はオンライン基盤実装Issueで確定する。
+Godotクライアントは公式 `heroiclabs/nakama-godot` v3.4.0 をvendorして使用する。
+`Nakama.gd` はAutoloadとして登録し、ゲーム固有の認証・接続責務は `OnlineSession` に集約する。
+
+ローカル開発ではDevice Authenticationを使用する。
+初回起動時にランダムなDevice IDを生成して `user://` 配下へ保存し、以降は同じIDを再利用する。
+認証成功後は `NakamaSession` を `OnlineSession` が保持し、account取得まで成功した時点をローカル認証成立とする。
+
+raw auth token、refresh token、password等は通常ログへ出力しない。
+Device Authenticationは開発用であり、Steam公開時の正式認証方式は後続Issueで実装する。
+
+WebSocket、Matchmaker、Authoritative Match HandlerはDevice認証基盤の後続Issueで接続する。
+Nakama側のカスタムサーバーロジックはTypeScriptを使用する。
 
 ### 3.10 RankingService
 
@@ -702,7 +716,40 @@ ahoge_health
 
 このRPCはゲームルールを持たず、サーバーRuntimeが正しく読み込まれていることだけを確認する。
 
-Godot Nakama SDK、ユーザー認証、WebSocket、Matchmaker、Authoritative Match Handlerはこの基盤より後のIssueで接続する。
+Godot Nakama SDKとローカルDevice認証は次段階として接続する。
+WebSocket、Matchmaker、Authoritative Match Handlerは認証基盤より後のIssueで接続する。
+
+### 14.0.1 Godotクライアント接続・認証
+
+初期クライアントSDK:
+
+- Nakama Godot SDK 3.4.0
+- 対象Godot: 4.x
+- ローカルHTTP endpoint: `http://127.0.0.1:7350`
+- ローカルserver key: `defaultkey`
+- 開発用認証: Device Authentication
+
+Device IDは次の要件を満たす。
+
+1. 初回のみクライアントでランダム生成する
+2. `user://ahoge_device_id.txt` へ保存する
+3. 再起動後は保存済みIDを再利用する
+4. 空文字・読み込み失敗時は新規生成する
+5. auth tokenそのものはログへ出力しない
+
+認証フロー:
+
+```text
+Godot
+→ OnlineSession
+→ NakamaClient
+→ authenticate_device
+→ NakamaSession
+→ get_account
+→ AUTHENTICATED
+```
+
+この段階ではHTTP APIのみを使用し、Realtime Socketは開かない。
 
 ### 14.1 サーバー権威で確定する対象
 
