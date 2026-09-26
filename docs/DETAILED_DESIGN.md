@@ -182,7 +182,7 @@ GameFlowは個々の攻撃判定を持たない。
 - サーバー確定結果の受信
 
 Godotクライアントは公式 `heroiclabs/nakama-godot` v3.4.0 をvendorして使用する。
-公式SDKは独自改変せず、`NakamaBootstrap` をAutoload名 `Nakama` として登録する。Bootstrapはfresh checkoutでもSDKの`class_name`依存を決定的な順序でpreloadした後、公式`Nakama.gd`を内部Nodeとして生成する。ゲーム固有の認証・接続責務は `OnlineSession` に集約する。
+公式SDKは独自改変せず、`NakamaBootstrap` をAutoload名 `Nakama` として登録する。Bootstrapはfresh checkoutでもSDKの`class_name`依存を決定的な順序で実行時`load()`し、各global classを登録した後に公式`Nakama.gd`を内部Nodeとして生成する。ゲーム固有の認証・接続責務は `OnlineSession` に集約する。
 
 ローカル開発ではDevice Authenticationを使用する。
 初回起動時にランダムなDevice IDを生成して `user://` 配下へ保存し、以降は同じIDを再利用する。
