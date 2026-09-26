@@ -182,7 +182,7 @@ GameFlowは個々の攻撃判定を持たない。
 - サーバー確定結果の受信
 
 Godotクライアントは公式 `heroiclabs/nakama-godot` v3.4.0 をvendorして使用する。
-`Nakama.gd` はAutoloadとして登録し、ゲーム固有の認証・接続責務は `OnlineSession` に集約する。
+公式SDKは独自改変せず、`NakamaBootstrap` をAutoload名 `Nakama` として登録する。Bootstrapはfresh checkoutでもSDKの`class_name`依存を決定的な順序でpreloadした後、公式`Nakama.gd`を内部Nodeとして生成する。ゲーム固有の認証・接続責務は `OnlineSession` に集約する。
 
 ローカル開発ではDevice Authenticationを使用する。
 初回起動時にランダムなDevice IDを生成して `user://` 配下へ保存し、以降は同じIDを再利用する。
@@ -724,6 +724,7 @@ WebSocket、Matchmaker、Authoritative Match Handlerは認証基盤より後のI
 初期クライアントSDK:
 
 - Nakama Godot SDK 3.4.0
+- SDK読込: `NakamaBootstrap` Autoload（公式SDKは無改変）
 - 対象Godot: 4.x
 - ローカルHTTP endpoint: `http://127.0.0.1:7350`
 - ローカルserver key: `defaultkey`
