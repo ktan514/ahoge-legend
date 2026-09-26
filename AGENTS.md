@@ -11,8 +11,9 @@
 3. `AGENTS.md`
 4. `docs/BASIC_DESIGN.md`
 5. `docs/DETAILED_DESIGN.md`
-6. 対象Issue
-7. 対象コード・試験・既存PR
+6. `docs/SCREEN_DESIGN.md`
+7. 対象Issue
+8. 対象コード・試験・既存PR
 
 下位ディレクトリに追加の`AGENTS.md`がある場合は、そのディレクトリの作業であわせて確認する。
 
@@ -40,6 +41,7 @@
 
 - 全体仕様・ユーザー体験・主要ルール: `docs/BASIC_DESIGN.md`
 - 状態遷移・責務・データ・判定方法: `docs/DETAILED_DESIGN.md`
+- 画面一覧・画面遷移・UI構成・ワイヤーフレーム: `docs/SCREEN_DESIGN.md`
 
 コードやプロトタイプが設計書と異なる場合、既存コードの挙動を自動的に正しい仕様とみなさない。
 
