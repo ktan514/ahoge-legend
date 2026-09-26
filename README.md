@@ -87,6 +87,9 @@ Nakama Console:
 http://127.0.0.1:7351
 ```
 
+PostgreSQLはhostの5432へ公開せず、Docker Compose内部ネットワークでNakamaから接続する。
+そのため、PC上ですでに別のPostgreSQLが5432を使用していても競合しない。
+
 ローカルConsoleはNakamaの開発用既定認証を使用します。本番環境のcredentialとは共有しません。
 
 ## Nakama TypeScript Runtime
