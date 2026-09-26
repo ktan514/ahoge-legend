@@ -2,8 +2,10 @@ extends SceneTree
 
 const CombatConfigScript := preload("res://src/config/combat_config.gd")
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
+const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd")
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
+const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -17,6 +19,14 @@ func _init() -> void:
 	_test_overtime_next_hit_wins()
 	_test_attack_state_transitions()
 	_test_defense_cancel_and_dodge()
+	_test_real_attack_registers_hit()
+	_test_parry_blocks_hit()
+	_test_just_parry_staggers_attacker()
+	_test_dodge_blocks_hit()
+	_test_just_dodge_staggers_attacker()
+	_test_attack_clash()
+	_test_short_throw_detach_and_regrow()
+	_test_real_attacks_complete_best_of_three()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -103,6 +113,140 @@ func _test_defense_cancel_and_dodge() -> void:
 	state.set_ahoge_available(false)
 	_expect_true(state.start_defense(), "アホ毛なしでも防御操作を受け付ける")
 	_expect_equal(state.action_state, CombatantStateScript.ActionState.DODGE, "アホ毛なしではDodge")
+
+
+func _test_real_attack_registers_hit() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	var match_flow = fixture["match"]
+	_attack_once(combat, 0)
+	_expect_equal(match_flow.round.state.player_one_hits, 1, "実攻撃到達でP1ヒットが加算される")
+
+
+func _test_parry_blocks_hit() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	var match_flow = fixture["match"]
+	combat.press_attack(0)
+	combat.release_attack(0)
+	_advance_combat(combat, 0.20)
+	combat.defend(1)
+	_advance_combat(combat, 0.30)
+	_expect_equal(match_flow.round.state.player_one_hits, 0, "Parry中はヒットを受けない")
+
+
+func _test_just_parry_staggers_attacker() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	combat.press_attack(0)
+	combat.release_attack(0)
+	_advance_combat(combat, 0.29)
+	combat.defend(1)
+	_advance_combat(combat, 0.05)
+	_expect_equal(
+		combat.get_state(0).action_state,
+		CombatantStateScript.ActionState.STAGGER,
+		"Just Parryで攻撃側がStaggerになる"
+	)
+
+
+func _test_dodge_blocks_hit() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	var match_flow = fixture["match"]
+	combat.get_state(1).set_ahoge_available(false)
+	combat.press_attack(0)
+	combat.release_attack(0)
+	_advance_combat(combat, 0.18)
+	combat.defend(1)
+	_advance_combat(combat, 0.30)
+	_expect_equal(match_flow.round.state.player_one_hits, 0, "Dodge中はヒットを受けない")
+
+
+func _test_just_dodge_staggers_attacker() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	combat.get_state(1).set_ahoge_available(false)
+	combat.press_attack(0)
+	combat.release_attack(0)
+	_advance_combat(combat, 0.29)
+	combat.defend(1)
+	_advance_combat(combat, 0.05)
+	_expect_equal(
+		combat.get_state(0).action_state,
+		CombatantStateScript.ActionState.STAGGER,
+		"Just Dodgeで攻撃側がStaggerになる"
+	)
+
+
+func _test_attack_clash() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	var match_flow = fixture["match"]
+	combat.press_attack(0)
+	combat.press_attack(1)
+	combat.release_attack(0)
+	combat.release_attack(1)
+	_advance_combat(combat, 0.36)
+	_expect_equal(match_flow.round.state.player_one_hits, 0, "ClashでP1ヒットは増えない")
+	_expect_equal(match_flow.round.state.player_two_hits, 0, "ClashでP2ヒットは増えない")
+	_expect_equal(combat.get_state(0).action_state, CombatantStateScript.ActionState.STAGGER, "ClashでP1 Stagger")
+	_expect_equal(combat.get_state(1).action_state, CombatantStateScript.ActionState.STAGGER, "ClashでP2 Stagger")
+
+
+func _test_short_throw_detach_and_regrow() -> void:
+	var fixture = _combat_fixture("SHORT_TEST", "LONG_TEST")
+	var combat = fixture["combat"]
+	combat.press_attack(0)
+	combat.release_attack(0)
+	_advance_combat(combat, 0.20)
+	_expect_false(combat.get_state(0).ahoge_available, "SHORT投擲開始後はアホ毛不在")
+	_expect_true(combat.defend(0), "アホ毛不在中も防御入力可能")
+	_expect_equal(combat.get_state(0).action_state, CombatantStateScript.ActionState.DODGE, "SHORT投擲中はDodge")
+	_advance_combat(combat, 0.65)
+	_expect_true(combat.get_state(0).ahoge_available, "Regrow後はアホ毛復帰")
+
+
+func _test_real_attacks_complete_best_of_three() -> void:
+	var fixture = _combat_fixture("LONG_TEST", "SHORT_TEST")
+	var combat = fixture["combat"]
+	var match_flow = fixture["match"]
+
+	for _round_index in range(2):
+		for _hit_index in range(5):
+			_attack_once(combat, 0)
+
+	_expect_equal(match_flow.player_one_rounds, 2, "実攻撃だけで2ラウンド取得できる")
+	_expect_equal(match_flow.match_winner, 0, "実攻撃だけでBO3を完了できる")
+
+
+func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
+	var config = CombatConfigScript.new()
+	var match_flow = MatchCoordinatorScript.new(config)
+	var player_one = CharacterCatalogScript.get_by_id(player_one_id)
+	var player_two = CharacterCatalogScript.get_by_id(player_two_id)
+	var combat = CombatResolverScript.new(config, match_flow, player_one, player_two)
+	return {
+		"config": config,
+		"match": match_flow,
+		"combat": combat,
+	}
+
+
+func _attack_once(combat, attacker_index: int) -> void:
+	while combat.get_state(attacker_index).action_state != CombatantStateScript.ActionState.IDLE:
+		_advance_combat(combat, 0.05)
+	combat.press_attack(attacker_index)
+	combat.release_attack(attacker_index)
+	_advance_combat(combat, 0.90)
+
+
+func _advance_combat(combat, seconds: float) -> void:
+	var remaining := seconds
+	while remaining > 0.0:
+		var step := minf(0.01, remaining)
+		combat.tick(step)
+		remaining -= step
 
 
 func _expect_true(value: bool, message: String) -> void:

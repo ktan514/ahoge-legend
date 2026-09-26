@@ -20,6 +20,7 @@ var ahoge_available: bool = true
 var charge_elapsed_seconds: float = 0.0
 var attack_charge_ratio: float = 0.0
 var action_remaining_seconds: float = 0.0
+var state_elapsed_seconds: float = 0.0
 
 var _resume_state: int = ActionState.IDLE
 var _resume_remaining_seconds: float = 0.0
@@ -87,12 +88,15 @@ func unlock_round() -> void:
 	charge_elapsed_seconds = 0.0
 	attack_charge_ratio = 0.0
 	action_remaining_seconds = 0.0
+	ahoge_available = true
 	_set_state(ActionState.IDLE)
 
 
 func tick(delta: float) -> void:
 	if delta <= 0.0:
 		return
+
+	state_elapsed_seconds += delta
 
 	if action_state == ActionState.CHARGING:
 		charge_elapsed_seconds = minf(charge_elapsed_seconds + delta, config.max_charge_seconds)
@@ -142,4 +146,5 @@ func _set_state(new_state: int) -> void:
 	if action_state == new_state:
 		return
 	action_state = new_state
+	state_elapsed_seconds = 0.0
 	state_changed.emit(action_state)

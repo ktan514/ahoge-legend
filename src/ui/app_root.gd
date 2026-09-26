@@ -11,6 +11,9 @@ var _last_player_two_id: String = "SHORT_TEST"
 
 
 func _ready() -> void:
+	# AppRoot自身は画面全体を覆うが、マウスイベントを消費しない。
+	# 各画面内のButton等は子Controlとして通常どおり入力を受ける。
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_show_top_menu()
 
 
