@@ -80,6 +80,10 @@ func _ready() -> void:
 	)
 	root.add_child(exit)
 
+	# HUDは画面全体を覆うため、そのままだとControl群がマウスイベントを消費して
+	# Battle._unhandled_input()へ届かない。操作ボタン以外は入力を透過する。
+	_apply_mouse_passthrough(self)
+
 
 func set_combatants(player_one_character, player_one_state, player_two_character, player_two_state) -> void:
 	_player_one_name.text = player_one_character.display_name
@@ -113,3 +117,12 @@ func render(match_flow, player_one_state, player_two_state) -> void:
 
 func flash_message(text: String) -> void:
 	_message.text = text
+
+
+func _apply_mouse_passthrough(control: Control) -> void:
+	if not control is BaseButton:
+		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	for child in control.get_children():
+		if child is Control:
+			_apply_mouse_passthrough(child)
