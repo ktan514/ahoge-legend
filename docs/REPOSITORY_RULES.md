@@ -103,7 +103,7 @@ npm run build
 - `server/nakama/`: Nakama TypeScript Runtimeとローカル設定を置く。Godot UIやクライアント表示へ依存させない。
 - `scripts/server-*.sh`: Docker Composeの起動・停止・疎通確認だけを担当し、本番credentialを含めない。
 - `addons/com.heroiclabs.nakama/`: 公式Nakama Godot SDK 3.4.0をvendorし、独自改変しない。
-- `src/online/nakama_bootstrap.gd`: SDKの`class_name`依存をfresh checkoutでも解決するため、依存順にpreloadして公式`Nakama.gd`を内包する。SDK本体へ修正を入れる代替にはしない。
+- `src/online/nakama_bootstrap.gd`: SDKの`class_name`依存をfresh checkoutでも解決するため、依存順に実行時`load()`してglobal classを登録し、公式`Nakama.gd`を内包する。SDK本体へ修正を入れる代替にはしない。
 - `src/online/`: Godotクライアント側のNakama接続・認証・Session管理を置き、UIや戦闘ルールへ依存させない。
 - `scripts/client-online-smoke.sh`: ローカルNakama起動確認後にGodot headless認証smoke testを実行する。
 
