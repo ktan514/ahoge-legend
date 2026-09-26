@@ -2,5 +2,7 @@
 .import/
 export/
 build/
+server/nakama/node_modules/
+server/nakama/build/
 *.tmp
 .DS_Store

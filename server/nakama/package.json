@@ -1,0 +1,13 @@
+{
+  "name": "ahoge-legend-nakama",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "nakama-runtime": "https://github.com/heroiclabs/nakama-common/archive/refs/tags/v1.48.0.tar.gz",
+    "typescript": "5.9.2"
+  }
+}
