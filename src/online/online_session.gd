@@ -21,7 +21,9 @@ func create_local_client():
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
 		OnlineConfigScript.PORT,
-		OnlineConfigScript.SCHEME
+		OnlineConfigScript.SCHEME,
+		OnlineConfigScript.CLIENT_TIMEOUT_SECONDS,
+		OnlineConfigScript.CLIENT_LOG_LEVEL
 	)
 	return client
 
