@@ -35,6 +35,12 @@
 
 画面は機能確認を優先した仮UIです。
 
+fresh checkout / SDK更新後の初回import:
+
+```bash
+./scripts/godot-import.sh
+```
+
 Godot起動:
 
 ```bash
@@ -107,6 +113,7 @@ npm run build
 ## Godot → Nakamaローカル認証
 
 Nakama起動後に、GodotクライアントからDevice認証できることを確認します。
+`client-online-smoke.sh` は実行前にGodot importも行うため、fresh checkoutでもそのまま実行できます。
 
 ```bash
 ./scripts/server-up.sh
