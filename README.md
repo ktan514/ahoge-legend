@@ -10,6 +10,7 @@
 - クライアント: GDScript
 - Nakama: 3.41.0
 - Nakama Common / nakama-runtime: 1.48.0
+- Nakama Godot SDK: 3.4.0
 - PostgreSQL: 16.8-alpine
 - Nakamaサーバー: TypeScript
 - ローカルサーバー: Docker Compose
@@ -102,6 +103,28 @@ npm run build
 ```
 
 生成される `server/nakama/build/` と `node_modules/` はcommitしません。
+
+## Godot → Nakamaローカル認証
+
+Nakama起動後に、GodotクライアントからDevice認証できることを確認します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-online-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND online smoke: PASS
+```
+
+開発用Device IDは `user://ahoge_device_id.txt` に保存して再利用します。
+raw auth tokenは通常ログへ出力しません。
+
+現在のDevice認証はローカル開発用です。Steam公開時の正式認証は後続Issueで実装します。
+
+SDKは `heroiclabs/nakama-godot` v3.4.0を `addons/com.heroiclabs.nakama/` へvendorしています。
 
 ## 設計正本
 

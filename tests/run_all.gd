@@ -6,6 +6,7 @@ const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd")
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
+const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -27,6 +28,7 @@ func _init() -> void:
 	_test_attack_clash()
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
+	_test_device_identity_persists()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -218,6 +220,21 @@ func _test_real_attacks_complete_best_of_three() -> void:
 
 	_expect_equal(match_flow.player_one_rounds, 2, "実攻撃だけで2ラウンド取得できる")
 	_expect_equal(match_flow.match_winner, 0, "実攻撃だけでBO3を完了できる")
+
+
+func _test_device_identity_persists() -> void:
+	var test_path := "user://ahoge_device_test_%d.txt" % Time.get_ticks_usec()
+	var store = DeviceIdentityStoreScript.new(test_path)
+	var first := store.load_or_create()
+	var second := store.load_or_create()
+
+	_expect_true(first.length() >= 32, "Device IDは十分な長さで生成される")
+	_expect_equal(second, first, "Device IDは同じ保存値を再利用する")
+	_expect_true(FileAccess.file_exists(test_path), "Device IDはuser領域へ保存される")
+
+	var absolute_path := ProjectSettings.globalize_path(test_path)
+	if FileAccess.file_exists(test_path):
+		DirAccess.remove_absolute(absolute_path)
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
