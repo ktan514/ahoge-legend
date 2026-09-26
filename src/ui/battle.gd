@@ -58,17 +58,24 @@ func _process(delta: float) -> void:
 	hud.render(_match, _combat.get_state(0), _combat.get_state(1))
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if _completion_emitted:
 		return
 
 	if event is InputEventMouseButton:
+		# _input()でGUIより先に受け取るため、実際の操作Button上だけは戦闘入力から除外する。
+		var hovered_control := get_viewport().gui_get_hovered_control()
+		var over_button := hovered_control is BaseButton
+
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				_combat.press_attack(0)
+				if not over_button:
+					_combat.press_attack(0)
 			else:
-				_combat.release_attack(0)
-		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+				# Battle領域で開始したChargeは、マウス位置に関係なくreleaseする。
+				if _combat.get_state(0).action_state == 1:
+					_combat.release_attack(0)
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and not over_button:
 			_combat.defend(0)
 
 	if event is InputEventKey and not event.echo:
