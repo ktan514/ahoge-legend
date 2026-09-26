@@ -1,4 +1,3 @@
-class_name MatchResult
 extends Control
 
 signal rematch_requested

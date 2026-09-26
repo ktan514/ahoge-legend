@@ -1,4 +1,3 @@
-class_name BattleHUD
 extends Control
 
 signal debug_hit_requested(player_index: int)
@@ -103,8 +102,8 @@ func set_character_names(player_one_name: String, player_two_name: String) -> vo
 	_player_two_placeholder.text = "%s\nHEAD + AHOGE" % player_two_name
 
 
-func render(match_flow: MatchCoordinator, player_one_state: CombatantState, player_two_state: CombatantState) -> void:
-	var snapshot := match_flow.snapshot()
+func render(match_flow, player_one_state, player_two_state) -> void:
+	var snapshot: Dictionary = match_flow.snapshot()
 	var display_seconds := int(ceil(float(snapshot["remaining_seconds"])))
 
 	_header.text = "P1  ROUNDS %d/%d  HITS %d/%d     |     P2  HITS %d/%d  ROUNDS %d/%d" % [

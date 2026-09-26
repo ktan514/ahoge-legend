@@ -1,25 +1,26 @@
-class_name CharacterCatalog
 extends RefCounted
 
+const CharacterDefinitionScript := preload("res://src/domain/character_definition.gd")
 
-static func all() -> Array[CharacterDefinition]:
-	var characters: Array[CharacterDefinition] = []
-	characters.append(CharacterDefinition.create(
+
+static func all() -> Array:
+	var characters: Array = []
+	characters.append(CharacterDefinitionScript.create(
 		"LONG_TEST",
 		"LONG TEST",
-		CharacterDefinition.AhogeType.LONG,
-		CharacterDefinition.AttackType.SWING
+		CharacterDefinitionScript.AhogeType.LONG,
+		CharacterDefinitionScript.AttackType.SWING
 	))
-	characters.append(CharacterDefinition.create(
+	characters.append(CharacterDefinitionScript.create(
 		"SHORT_TEST",
 		"SHORT TEST",
-		CharacterDefinition.AhogeType.SHORT,
-		CharacterDefinition.AttackType.THROW
+		CharacterDefinitionScript.AhogeType.SHORT,
+		CharacterDefinitionScript.AttackType.THROW
 	))
 	return characters
 
 
-static func get_by_id(character_id: String) -> CharacterDefinition:
+static func get_by_id(character_id: String):
 	for character in all():
 		if character.character_id == character_id:
 			return character

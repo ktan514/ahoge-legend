@@ -1,4 +1,3 @@
-class_name RoundState
 extends RefCounted
 
 var round_number: int

@@ -1,4 +1,3 @@
-class_name CombatConfig
 extends Resource
 
 @export var round_seconds: float = 85.0

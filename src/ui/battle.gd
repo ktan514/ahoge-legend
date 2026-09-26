@@ -1,17 +1,21 @@
-class_name Battle
 extends Control
+
+const CombatConfigScript := preload("res://src/config/combat_config.gd")
+const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
+const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
+const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 
 signal match_completed(summary: Dictionary)
 signal exit_requested
 
-@onready var hud: BattleHUD = $BattleHUD
+@onready var hud = $BattleHUD
 
 var _player_one_id: String = "LONG_TEST"
 var _player_two_id: String = "SHORT_TEST"
-var _config: CombatConfig
-var _match: MatchCoordinator
-var _player_one_state: CombatantState
-var _player_two_state: CombatantState
+var _config
+var _match
+var _player_one_state
+var _player_two_state
 var _completion_emitted: bool = false
 
 
@@ -21,10 +25,10 @@ func configure(player_one_id: String, player_two_id: String) -> void:
 
 
 func _ready() -> void:
-	_config = CombatConfig.new()
-	_match = MatchCoordinator.new(_config)
-	_player_one_state = CombatantState.new(_config)
-	_player_two_state = CombatantState.new(_config)
+	_config = CombatConfigScript.new()
+	_match = MatchCoordinatorScript.new(_config)
+	_player_one_state = CombatantStateScript.new(_config)
+	_player_two_state = CombatantStateScript.new(_config)
 
 	_match.round_finished.connect(_on_round_finished)
 	_match.round_started.connect(_on_round_started)
@@ -35,8 +39,8 @@ func _ready() -> void:
 		exit_requested.emit()
 	)
 
-	var player_one := CharacterCatalog.get_by_id(_player_one_id)
-	var player_two := CharacterCatalog.get_by_id(_player_two_id)
+	var player_one = CharacterCatalogScript.get_by_id(_player_one_id)
+	var player_two = CharacterCatalogScript.get_by_id(_player_two_id)
 	hud.set_character_names(player_one.display_name, player_two.display_name)
 	hud.render(_match, _player_one_state, _player_two_state)
 

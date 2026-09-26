@@ -1,4 +1,3 @@
-class_name CombatantState
 extends RefCounted
 
 signal state_changed(new_state: int)
@@ -15,7 +14,7 @@ enum ActionState {
 	ROUND_LOCKED,
 }
 
-var config: CombatConfig
+var config
 var action_state: int = ActionState.IDLE
 var ahoge_available: bool = true
 var charge_elapsed_seconds: float = 0.0
@@ -26,7 +25,7 @@ var _resume_state: int = ActionState.IDLE
 var _resume_remaining_seconds: float = 0.0
 
 
-func _init(config_value: CombatConfig) -> void:
+func _init(config_value) -> void:
 	config = config_value
 
 

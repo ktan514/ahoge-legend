@@ -1,4 +1,3 @@
-class_name TopMenu
 extends Control
 
 signal local_test_requested

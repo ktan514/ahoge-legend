@@ -1,18 +1,19 @@
-class_name MatchCoordinator
 extends RefCounted
+
+const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd")
 
 signal round_started(round_number: int)
 signal round_finished(round_number: int, winner: int, player_one_rounds: int, player_two_rounds: int)
 signal match_finished(winner: int)
 
-var config: CombatConfig
-var round: RoundCoordinator
+var config
+var round
 var player_one_rounds: int = 0
 var player_two_rounds: int = 0
 var match_winner: int = -1
 
 
-func _init(config_value: CombatConfig) -> void:
+func _init(config_value) -> void:
 	config = config_value
 	_start_round(1)
 
@@ -43,13 +44,13 @@ func snapshot() -> Dictionary:
 
 
 func _start_round(round_number: int) -> void:
-	round = RoundCoordinator.new(config, round_number)
+	round = RoundCoordinatorScript.new(config, round_number)
 	round.round_finished.connect(_on_round_finished)
 	round_started.emit(round_number)
 
 
 func _on_round_finished(winner: int) -> void:
-	var finished_round_number := round.state.round_number
+	var finished_round_number: int = round.state.round_number
 
 	if winner == 0:
 		player_one_rounds += 1

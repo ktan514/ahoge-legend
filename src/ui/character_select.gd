@@ -1,5 +1,6 @@
-class_name CharacterSelect
 extends Control
+
+const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 
 signal battle_requested(player_one_id: String, player_two_id: String)
 signal back_requested
@@ -90,7 +91,7 @@ func _ready() -> void:
 
 func _create_character_selector() -> OptionButton:
 	var selector := OptionButton.new()
-	for character in CharacterCatalog.all():
+	for character in CharacterCatalogScript.all():
 		selector.add_item(character.display_name)
 		selector.set_item_metadata(selector.item_count - 1, character.character_id)
 	return selector
@@ -110,8 +111,8 @@ func _selected_id(selector: OptionButton) -> String:
 
 
 func _update_preview() -> void:
-	var player_one := CharacterCatalog.get_by_id(_selected_id(_player_one))
-	var player_two := CharacterCatalog.get_by_id(_selected_id(_player_two))
+	var player_one = CharacterCatalogScript.get_by_id(_selected_id(_player_one))
+	var player_two = CharacterCatalogScript.get_by_id(_selected_id(_player_two))
 	_preview.text = "%s [%s / %s]  VS  %s [%s / %s]" % [
 		player_one.display_name,
 		player_one.ahoge_type_name(),

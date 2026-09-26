@@ -1,16 +1,17 @@
-class_name RoundCoordinator
 extends RefCounted
+
+const RoundStateScript := preload("res://src/domain/round_state.gd")
 
 signal overtime_started
 signal round_finished(winner: int)
 
-var config: CombatConfig
-var state: RoundState
+var config
+var state
 
 
-func _init(config_value: CombatConfig, round_number: int) -> void:
+func _init(config_value, round_number: int) -> void:
 	config = config_value
-	state = RoundState.new(round_number, config.round_seconds)
+	state = RoundStateScript.new(round_number, config.round_seconds)
 
 
 func tick(delta: float) -> void:
