@@ -368,6 +368,7 @@ AttackDefinition
 - charge_time
 - attack_reach
 - contact_timing
+- contact_ratio
 - projectile_enabled
 - projectile_speed
 - projectile_trajectory
@@ -377,6 +378,9 @@ AttackDefinition
 ```
 
 最終的なフィールド名は実装言語に合わせて調整する。
+
+ローカル縦切りの初期実装では、論理接触時刻を `Strike開始 + strike_time * contact_ratio` として算出する。
+`contact_ratio` は見た目のアホ毛先端位置とは独立した判定用パラメータとする。
 
 ### 7.2 通常攻撃
 
@@ -1015,10 +1019,14 @@ SHORT_TEST
 | AttackClash許容差 | 0.067秒 |
 | Stagger | 0.45秒 |
 | ショート投擲Regrow | 0.60秒 |
+| LONG_TEST contact_ratio | 0.70 |
+| SHORT_TEST contact_ratio | 0.70 |
 
 通常攻撃とチャージ攻撃の中間値は設定値から補間可能にする。
 
 戦闘値はResource、設定オブジェクト等で一元管理し、状態クラスやSceneへマジックナンバーとして直接埋め込まない。
+
+`contact_ratio = 0.70` は実攻撃判定の初期検証値であり、Human Verificationで調整可能とする。
 
 ### 21.3 クライアント更新
 
