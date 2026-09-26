@@ -12,6 +12,7 @@ extends Resource
 @export var charged_release_windup_seconds: float = 0.08
 @export var charged_strike_seconds: float = 0.13
 @export var charged_cooldown_seconds: float = 0.82
+@export var attack_contact_ratio: float = 0.70
 
 @export var parry_active_seconds: float = 0.18
 @export var just_parry_seconds: float = 0.07

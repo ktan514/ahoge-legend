@@ -1,6 +1,7 @@
 extends Control
 
-signal debug_hit_requested(player_index: int)
+const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
+
 signal exit_requested
 
 var _header: Label
@@ -8,8 +9,10 @@ var _timer: Label
 var _status: Label
 var _states: Label
 var _message: Label
-var _player_one_placeholder: Label
-var _player_two_placeholder: Label
+var _player_one_name: Label
+var _player_two_name: Label
+var _player_one_visual
+var _player_two_visual
 
 
 func _ready() -> void:
@@ -34,23 +37,23 @@ func _ready() -> void:
 	battle_area.add_theme_constant_override("separation", 64)
 	root.add_child(battle_area)
 
-	var player_one_panel := PanelContainer.new()
-	player_one_panel.custom_minimum_size = Vector2(360.0, 300.0)
-	_player_one_placeholder = Label.new()
-	_player_one_placeholder.text = "PLAYER 1\nHEAD + AHOGE"
-	_player_one_placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_player_one_placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	player_one_panel.add_child(_player_one_placeholder)
-	battle_area.add_child(player_one_panel)
+	var player_one_box := VBoxContainer.new()
+	_player_one_name = Label.new()
+	_player_one_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	player_one_box.add_child(_player_one_name)
+	_player_one_visual = FighterVisualScript.new()
+	_player_one_visual.custom_minimum_size = Vector2(360.0, 300.0)
+	player_one_box.add_child(_player_one_visual)
+	battle_area.add_child(player_one_box)
 
-	var player_two_panel := PanelContainer.new()
-	player_two_panel.custom_minimum_size = Vector2(360.0, 300.0)
-	_player_two_placeholder = Label.new()
-	_player_two_placeholder.text = "PLAYER 2\nHEAD + AHOGE"
-	_player_two_placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_player_two_placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	player_two_panel.add_child(_player_two_placeholder)
-	battle_area.add_child(player_two_panel)
+	var player_two_box := VBoxContainer.new()
+	_player_two_name = Label.new()
+	_player_two_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	player_two_box.add_child(_player_two_name)
+	_player_two_visual = FighterVisualScript.new()
+	_player_two_visual.custom_minimum_size = Vector2(360.0, 300.0)
+	player_two_box.add_child(_player_two_visual)
+	battle_area.add_child(player_two_box)
 
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -66,40 +69,23 @@ func _ready() -> void:
 	root.add_child(_message)
 
 	var help := Label.new()
-	help.text = "P1: 左クリック Attack/Charge・右クリック Parry/Dodge | P2: Q Attack/Charge・E Parry/Dodge | Debug hit: 1 / 2"
+	help.text = "P1: 左クリック Attack/Charge・右クリック Parry/Dodge | P2: Q Attack/Charge・E Parry/Dodge"
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(help)
-
-	var debug_actions := HBoxContainer.new()
-	debug_actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	debug_actions.add_theme_constant_override("separation", 12)
-	root.add_child(debug_actions)
-
-	var p1_hit := Button.new()
-	p1_hit.text = "DEBUG P1 HIT"
-	p1_hit.pressed.connect(func() -> void:
-		debug_hit_requested.emit(0)
-	)
-	debug_actions.add_child(p1_hit)
-
-	var p2_hit := Button.new()
-	p2_hit.text = "DEBUG P2 HIT"
-	p2_hit.pressed.connect(func() -> void:
-		debug_hit_requested.emit(1)
-	)
-	debug_actions.add_child(p2_hit)
 
 	var exit := Button.new()
 	exit.text = "EXIT TEST"
 	exit.pressed.connect(func() -> void:
 		exit_requested.emit()
 	)
-	debug_actions.add_child(exit)
+	root.add_child(exit)
 
 
-func set_character_names(player_one_name: String, player_two_name: String) -> void:
-	_player_one_placeholder.text = "%s\nHEAD + AHOGE" % player_one_name
-	_player_two_placeholder.text = "%s\nHEAD + AHOGE" % player_two_name
+func set_combatants(player_one_character, player_one_state, player_two_character, player_two_state) -> void:
+	_player_one_name.text = player_one_character.display_name
+	_player_two_name.text = player_two_character.display_name
+	_player_one_visual.configure(player_one_character, player_one_state, 1.0)
+	_player_two_visual.configure(player_two_character, player_two_state, -1.0)
 
 
 func render(match_flow, player_one_state, player_two_state) -> void:
