@@ -768,6 +768,8 @@ HTMLプロトタイプで使用した以下は本番仕様ではない。
 
 ## 19. アセット構成
 
+### 19.1 キャラクター画像
+
 最低限の論理単位:
 
 ```text
@@ -781,6 +783,71 @@ CharacterAssets/
 本番では必要に応じてリグ・変形用に追加分割する。
 
 アセットの頭部接点を基準点として保持し、アホ毛の稼働点を頭部との接点に一致させる。
+
+公式提供素材を使用できる場合でも、ゲーム側の参照先を差し替え可能にし、特定素材のファイル構造へゲームロジックを直接依存させない。
+
+### 19.2 音声アセット
+
+音声は少なくとも次の用途へ分類できる構造とする。
+
+```text
+VoiceUsage
+- ATTACK
+- HIT
+- PARRY
+- DODGE
+- WIN
+- OTHER
+```
+
+配信から切り出した音声を候補として管理する場合は、ファイルだけを保存せず、出典情報を必ず対応付ける。
+
+概念データ:
+
+```text
+VoiceAssetDefinition
+- id
+- character_id
+- usage
+- file_path
+- transcript
+- source_type
+- source_url
+- source_title
+- source_timestamp
+- rights_status
+- rights_basis
+- notes
+```
+
+`source_type` は少なくとも次を区別する。
+
+```text
+STREAM_CLIP
+OFFICIAL_PROVIDED
+ORIGINAL
+THIRD_PARTY_LICENSED
+```
+
+`rights_status` は少なくとも次を区別する。
+
+```text
+PENDING
+APPROVED
+REJECTED
+```
+
+`PENDING` の素材は候補素材であり、公開ビルドへ組み込まない。
+
+`APPROVED` へ変更する場合は、ガイドライン、holo Indie審査結果、公式提供条件、個別許諾など確認可能な根拠を `rights_basis` に記録する。
+
+AIや実装者が、他作品で使用実績があることだけを理由に `APPROVED` へ変更してはならない。
+
+### 19.3 ボイス依存の回避
+
+対戦前掛け合いと勝利後セリフはテキストのみで成立する設計を維持する。
+
+配信切り抜きボイスや公式提供ボイスが利用できない場合でもゲームが完成できるようにし、ボイス素材は必須依存にしない。
 
 ## 20. 検証方針
 
@@ -798,6 +865,7 @@ CharacterAssets/
 - パリィ／回避の状態分岐
 - ジャスト判定
 - ショート投擲中のパリィ禁止
+- 音声アセットのrights_statusがPENDINGのまま公開対象へ含まれないこと
 - Ranking更新権限
 
 ### 20.2 Human Verification必須対象
