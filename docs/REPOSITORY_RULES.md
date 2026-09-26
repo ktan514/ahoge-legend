@@ -12,8 +12,9 @@ AHOGE LEGENDの開発・公開環境は次とする。
 - クライアント実装言語: GDScript
 - Nakamaサーバー実装言語: TypeScript
 - 開発IDE: Godot Editor + VS Code
-- オンライン基盤: Nakama
-- DB: PostgreSQL
+- オンライン基盤: Nakama 3.41.0
+- Nakama Common / nakama-runtime: 1.48.0
+- DB: PostgreSQL 16.8-alpine
 - ローカルサーバー: Docker Compose
 - 本番サーバー: AWS 東京リージョン
 - 配布: Steam
@@ -22,7 +23,7 @@ AHOGE LEGENDの開発・公開環境は次とする。
 
 Godotは4.7.2 stableで初期化し、バージョン更新は専用Issueと検証を経て行う。
 
-ローカル開発ではNakamaとPostgreSQLをDocker Composeで起動できる構成を基本とする。
+ローカル開発ではNakama 3.41.0とPostgreSQL 16.8-alpineをDocker Composeで起動する。Nakama TypeScript Runtimeはnakama-runtime 1.48.0と組み合わせ、TypeScriptをES5へcompileする。
 
 オンライン対戦の勝敗・85秒タイマー・有効ヒット・防御結果・攻撃相殺・ラウンド／マッチ勝敗・ランキング更新は、Nakama側のサーバー権威で確定する。
 
@@ -50,6 +51,33 @@ godot --headless --path . --quit
 godot --headless --path . --script res://tests/run_all.gd
 ```
 
+オンライン基盤起動:
+
+```bash
+./scripts/server-up.sh
+```
+
+オンライン基盤疎通確認:
+
+```bash
+./scripts/server-health.sh
+```
+
+オンライン基盤停止:
+
+```bash
+./scripts/server-down.sh
+```
+
+Nakama TypeScript Runtime:
+
+```bash
+cd server/nakama
+npm install
+npm run type-check
+npm run build
+```
+
 コマンドを実行していない場合はPASS扱いしない。
 
 ## 保護対象branch
@@ -65,6 +93,8 @@ godot --headless --path . --script res://tests/run_all.gd
 - `src/services/`: ラウンド／マッチ等の進行制御を置く。
 - `src/ui/`: Godot画面と表示・入力の接着を担当し、勝敗ルールそのものを持たせない。
 - `tests/`: headless実行できる回帰試験を置く。
+- `server/nakama/`: Nakama TypeScript Runtimeとローカル設定を置く。Godot UIやクライアント表示へ依存させない。
+- `scripts/server-*.sh`: Docker Composeの起動・停止・疎通確認だけを担当し、本番credentialを含めない。
 
 ## アセット管理
 
