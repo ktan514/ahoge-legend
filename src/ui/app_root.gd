@@ -16,13 +16,13 @@ func _ready() -> void:
 
 
 func _show_top_menu() -> void:
-	var screen := _replace_screen(TOP_MENU_SCENE)
+	var screen := _replace_screen(TOP_MENU_SCENE) as TopMenu
 	screen.local_test_requested.connect(_show_character_select)
 	screen.exit_requested.connect(_on_exit_requested)
 
 
 func _show_character_select() -> void:
-	var screen := _replace_screen(CHARACTER_SELECT_SCENE)
+	var screen := _replace_screen(CHARACTER_SELECT_SCENE) as CharacterSelect
 	screen.configure(_last_player_one_id, _last_player_two_id)
 	screen.battle_requested.connect(_show_battle)
 	screen.back_requested.connect(_show_top_menu)

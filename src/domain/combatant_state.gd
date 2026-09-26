@@ -1,7 +1,7 @@
 class_name CombatantState
 extends RefCounted
 
-signal state_changed(new_state: ActionState)
+signal state_changed(new_state: int)
 
 enum ActionState {
 	IDLE,
@@ -16,13 +16,13 @@ enum ActionState {
 }
 
 var config: CombatConfig
-var action_state: ActionState = ActionState.IDLE
+var action_state: int = ActionState.IDLE
 var ahoge_available: bool = true
 var charge_elapsed_seconds: float = 0.0
 var attack_charge_ratio: float = 0.0
 var action_remaining_seconds: float = 0.0
 
-var _resume_state: ActionState = ActionState.IDLE
+var _resume_state: int = ActionState.IDLE
 var _resume_remaining_seconds: float = 0.0
 
 
@@ -113,7 +113,7 @@ func tick(delta: float) -> void:
 
 
 func action_state_name() -> String:
-	return ActionState.keys()[action_state]
+	return str(ActionState.keys()[action_state])
 
 
 func _advance_timed_state() -> void:
@@ -139,7 +139,7 @@ func _advance_timed_state() -> void:
 			_set_state(ActionState.IDLE)
 
 
-func _set_state(new_state: ActionState) -> void:
+func _set_state(new_state: int) -> void:
 	if action_state == new_state:
 		return
 	action_state = new_state
