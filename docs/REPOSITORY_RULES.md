@@ -6,11 +6,32 @@
 
 ## 実行環境
 
-未設定。
+AHOGE LEGENDの開発・公開環境は次とする。
+
+- ゲームエンジン: Godot 4.x系
+- 実装言語: GDScript
+- 開発IDE: Godot Editor + VS Code
+- オンライン基盤: Nakama
+- DB: PostgreSQL
+- ローカルサーバー: Docker Compose
+- 本番サーバー: AWS 東京リージョン
+- 配布: Steam
+- 必須対象OS: Windows 64bit
+- macOS: 対応可能であれば対象とする
+
+Godotの具体的なminor/patch versionは、プロジェクト初期化Issueで固定し、以後は意図せず更新しない。
+
+ローカル開発ではNakamaとPostgreSQLをDocker Composeで起動できる構成を基本とする。
+
+オンライン対戦の勝敗・85秒タイマー・有効ヒット・防御結果・攻撃相殺・ラウンド／マッチ勝敗・ランキング更新は、Nakama側のサーバー権威で確定する。
+
+見た目の頭部・アホ毛モーションおよび制御付き擬似物理はGodotクライアント側で扱い、サーバーの勝敗判定とは分離する。
 
 ## テスト・検証コマンド
 
-未設定。
+実装環境の初期化後に、実際に使用するコマンドをここへ追記する。
+
+未設定のコマンドを推測して実行したり、未実施の検証をPASS扱いしない。
 
 ## 保護対象branch
 
@@ -24,4 +45,6 @@
 
 ## その他
 
-未設定。
+- Steam、Nakama、PostgreSQL、AWSのcredentialやsecretをリポジトリへcommitしない。
+- ローカル固有設定は秘密情報を含まないテンプレートと実値を分離する。
+- 本番インフラの具体的なAWSリソース構成は専用Issueと設計変更を経て決定する。
