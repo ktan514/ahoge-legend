@@ -8,8 +8,9 @@
 
 AHOGE LEGENDの開発・公開環境は次とする。
 
-- ゲームエンジン: Godot 4.x系
-- 実装言語: GDScript
+- ゲームエンジン: Godot 4.7.2 stable
+- クライアント実装言語: GDScript
+- Nakamaサーバー実装言語: TypeScript
 - 開発IDE: Godot Editor + VS Code
 - オンライン基盤: Nakama
 - DB: PostgreSQL
@@ -19,7 +20,7 @@ AHOGE LEGENDの開発・公開環境は次とする。
 - 必須対象OS: Windows 64bit
 - macOS: 対応可能であれば対象とする
 
-Godotの具体的なminor/patch versionは、プロジェクト初期化Issueで固定し、以後は意図せず更新しない。
+Godotは4.7.2 stableで初期化し、バージョン更新は専用Issueと検証を経て行う。
 
 ローカル開発ではNakamaとPostgreSQLをDocker Composeで起動できる構成を基本とする。
 
