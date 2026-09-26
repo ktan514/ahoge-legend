@@ -27,7 +27,7 @@ services:
         /nakama/nakama migrate up --database.address postgres:localdb@postgres:5432/nakama &&
         exec /nakama/nakama
         --config /nakama/data/local.yml
-        --name ahoge-legend-local
+        --name ahoge-local
         --database.address postgres:localdb@postgres:5432/nakama
     restart: unless-stopped
     ports:
