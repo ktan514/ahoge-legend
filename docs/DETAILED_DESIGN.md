@@ -666,6 +666,44 @@ HeadMotionはアクションごとに頭部のローカル位置・回転を生�
 
 ## 14. オンライン責務
 
+### 14.0 ローカルオンライン基盤
+
+オンライン実装の初期基盤は次で固定する。
+
+| 項目 | 採用 |
+| --- | --- |
+| Nakama | 3.41.0 |
+| Nakama Common / nakama-runtime | 1.48.0 |
+| PostgreSQL | 16.8-alpine |
+| Server Runtime | TypeScript |
+| TypeScript compile target | ES5 |
+| ローカル起動 | Docker Compose |
+
+Nakama 3.41.0 と nakama-runtime 1.48.0 を対応組として固定し、どちらか一方だけを意図せず更新しない。
+
+ローカル構成は `docker-compose.yml` を正とし、PostgreSQL → Nakama migration → Nakama server の順で起動する。
+
+Nakamaのローカル公開ポート:
+
+- 7349: gRPC
+- 7350: HTTP / WebSocket API
+- 7351: Nakama Console
+
+TypeScript Runtimeは `server/nakama/src/` をソース、`server/nakama/build/index.js` を生成物とし、生成物はDocker build時に作成する。
+
+ローカル疎通確認用として `ahoge_health` RPCを登録する。
+
+```text
+ahoge_health
+→ service: ahoge-legend
+→ status: ok
+→ runtime: typescript
+```
+
+このRPCはゲームルールを持たず、サーバーRuntimeが正しく読み込まれていることだけを確認する。
+
+Godot Nakama SDK、ユーザー認証、WebSocket、Matchmaker、Authoritative Match Handlerはこの基盤より後のIssueで接続する。
+
 ### 14.1 サーバー権威で確定する対象
 
 採用構成では、少なくとも次をNakama側のサーバー権威で確定する。
