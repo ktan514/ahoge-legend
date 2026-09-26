@@ -24,7 +24,7 @@ jobs:
           godot --version
 
       - name: Load project
-        run: godot --headless --path . --quit
+        run: ./scripts/godot-strict.sh --headless --path . --quit
 
       - name: Run tests
-        run: godot --headless --path . --script res://tests/run_all.gd
+        run: ./scripts/godot-strict.sh --headless --path . --script res://tests/run_all.gd

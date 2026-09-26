@@ -9,7 +9,7 @@ run/main_scene="res://scenes/app/AppRoot.tscn"
 
 [autoload]
 
-Nakama="*res://addons/com.heroiclabs.nakama/Nakama.gd"
+Nakama="*res://src/online/nakama_bootstrap.gd"
 OnlineSession="*res://src/online/online_session.gd"
 
 [display]

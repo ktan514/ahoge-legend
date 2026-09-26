@@ -7,6 +7,8 @@ on:
       - "server/nakama/**"
       - "scripts/server-*.sh"
       - "scripts/client-online-smoke.sh"
+      - "scripts/godot-strict.sh"
+      - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
       - "src/online/**"
       - "src/config/online_config.gd"

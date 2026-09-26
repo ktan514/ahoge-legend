@@ -6,4 +6,4 @@ cd "$ROOT_DIR"
 
 ./scripts/server-health.sh >/dev/null
 
-godot --headless --path . --script res://tests/online_smoke.gd
+./scripts/godot-strict.sh --headless --path . --script res://tests/online_smoke.gd
