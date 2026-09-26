@@ -7,4 +7,19 @@ cd "$ROOT_DIR"
 ./scripts/server-health.sh >/dev/null
 ./scripts/godot-import.sh
 
-./scripts/godot-strict.sh --headless --path . --script res://tests/online_smoke.gd
+LOG_FILE="$(mktemp)"
+trap 'rm -f "$LOG_FILE"' EXIT
+
+set +e
+./scripts/godot-strict.sh --headless --path . --script res://tests/online_smoke.gd 2>&1 | tee "$LOG_FILE"
+STATUS=${PIPESTATUS[0]}
+set -e
+
+if [ "$STATUS" -ne 0 ]; then
+  exit "$STATUS"
+fi
+
+if grep -Eq 'Authorization[^\n]*Bearer|Bearer[[:space:]]+[A-Za-z0-9._-]+' "$LOG_FILE"; then
+  echo "認証tokenがログへ出力されています。" >&2
+  exit 1
+fi
