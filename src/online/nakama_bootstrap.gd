@@ -1,27 +1,33 @@
 extends Node
 
 # Fresh checkoutではGodotのglobal class cacheがまだ存在しないため、
-# 公式SDKのclass_name依存を明示的な依存順でpreloadする。
+# 公式SDKのclass_name依存を依存順に実行時load()して登録する。
 # SDK本体はvendorしたv3.4.0から変更しない。
-const _NakamaExceptionScript := preload("res://addons/com.heroiclabs.nakama/utils/NakamaException.gd")
-const _NakamaAsyncResultScript := preload("res://addons/com.heroiclabs.nakama/utils/NakamaAsyncResult.gd")
-const _NakamaLoggerScript := preload("res://addons/com.heroiclabs.nakama/utils/NakamaLogger.gd")
-const _NakamaSerializerScript := preload("res://addons/com.heroiclabs.nakama/utils/NakamaSerializer.gd")
-const _NakamaSessionScript := preload("res://addons/com.heroiclabs.nakama/api/NakamaSession.gd")
-const _NakamaRTAPIScript := preload("res://addons/com.heroiclabs.nakama/api/NakamaRTAPI.gd")
-const _NakamaRTMessageScript := preload("res://addons/com.heroiclabs.nakama/api/NakamaRTMessage.gd")
-const _NakamaAPIScript := preload("res://addons/com.heroiclabs.nakama/api/NakamaAPI.gd")
-const _NakamaStorageObjectIdScript := preload("res://addons/com.heroiclabs.nakama/api/NakamaStorageObjectId.gd")
-const _NakamaWriteStorageObjectScript := preload("res://addons/com.heroiclabs.nakama/api/NakamaWriteStorageObject.gd")
-const _NakamaHTTPAdapterScript := preload("res://addons/com.heroiclabs.nakama/client/NakamaHTTPAdapter.gd")
-const _NakamaClientScript := preload("res://addons/com.heroiclabs.nakama/client/NakamaClient.gd")
-const _NakamaSocketAdapterScript := preload("res://addons/com.heroiclabs.nakama/socket/NakamaSocketAdapter.gd")
-const _NakamaSocketScript := preload("res://addons/com.heroiclabs.nakama/socket/NakamaSocket.gd")
-const _NakamaMultiplayerPeerScript := preload("res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerPeer.gd")
-const _NakamaMultiplayerBridgeScript := preload("res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd")
-const _OfficialNakamaScript := preload("res://addons/com.heroiclabs.nakama/Nakama.gd")
+const _DEPENDENCY_PATHS := [
+	"res://addons/com.heroiclabs.nakama/utils/NakamaException.gd",
+	"res://addons/com.heroiclabs.nakama/utils/NakamaAsyncResult.gd",
+	"res://addons/com.heroiclabs.nakama/utils/NakamaLogger.gd",
+	"res://addons/com.heroiclabs.nakama/utils/NakamaSerializer.gd",
+	"res://addons/com.heroiclabs.nakama/api/NakamaSession.gd",
+	"res://addons/com.heroiclabs.nakama/api/NakamaRTAPI.gd",
+	"res://addons/com.heroiclabs.nakama/api/NakamaRTMessage.gd",
+	"res://addons/com.heroiclabs.nakama/api/NakamaAPI.gd",
+	"res://addons/com.heroiclabs.nakama/api/NakamaStorageObjectId.gd",
+	"res://addons/com.heroiclabs.nakama/api/NakamaWriteStorageObject.gd",
+	"res://addons/com.heroiclabs.nakama/client/NakamaHTTPAdapter.gd",
+	"res://addons/com.heroiclabs.nakama/client/NakamaClient.gd",
+	"res://addons/com.heroiclabs.nakama/socket/NakamaSocketAdapter.gd",
+	"res://addons/com.heroiclabs.nakama/socket/NakamaSocket.gd",
+	"res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerPeer.gd",
+	"res://addons/com.heroiclabs.nakama/utils/NakamaMultiplayerBridge.gd",
+]
 
+const _OFFICIAL_NAKAMA_PATH := "res://addons/com.heroiclabs.nakama/Nakama.gd"
+
+var _dependency_scripts: Array = []
+var _official_script = null
 var _implementation: Node = null
+var _load_error: String = ""
 
 
 func _ready() -> void:
@@ -36,7 +42,11 @@ func create_client(
 	timeout: int = 3,
 	log_level: int = 0
 ):
-	return _ensure_implementation().create_client(
+	var implementation := _ensure_implementation()
+	if implementation == null:
+		push_error("Nakama SDK bootstrap failed: %s" % _load_error)
+		return null
+	return implementation.create_client(
 		server_key,
 		host,
 		port,
@@ -51,16 +61,56 @@ func create_socket(
 	port: int = 7350,
 	scheme: String = "ws"
 ):
-	return _ensure_implementation().create_socket(host, port, scheme)
+	var implementation := _ensure_implementation()
+	if implementation == null:
+		push_error("Nakama SDK bootstrap failed: %s" % _load_error)
+		return null
+	return implementation.create_socket(host, port, scheme)
 
 
 func create_socket_from(client):
-	return _ensure_implementation().create_socket_from(client)
+	var implementation := _ensure_implementation()
+	if implementation == null:
+		push_error("Nakama SDK bootstrap failed: %s" % _load_error)
+		return null
+	return implementation.create_socket_from(client)
+
+
+func is_ready() -> bool:
+	return _ensure_implementation() != null
+
+
+func load_error() -> String:
+	return _load_error
 
 
 func _ensure_implementation() -> Node:
-	if _implementation == null:
-		_implementation = _OfficialNakamaScript.new()
-		_implementation.name = "OfficialNakama"
-		add_child(_implementation)
+	if _implementation != null:
+		return _implementation
+	if not _load_error.is_empty():
+		return null
+
+	for path in _DEPENDENCY_PATHS:
+		var script = load(path)
+		if script == null:
+			_load_error = "SDK dependencyをloadできません: %s" % path
+			push_error(_load_error)
+			return null
+		_dependency_scripts.append(script)
+
+	_official_script = load(_OFFICIAL_NAKAMA_PATH)
+	if _official_script == null:
+		_load_error = "公式Nakama.gdをloadできません。"
+		push_error(_load_error)
+		return null
+
+	var implementation = _official_script.new()
+	if not implementation is Node:
+		_load_error = "公式Nakama.gdをNodeとして生成できません。"
+		push_error(_load_error)
+		return null
+
+	_implementation = implementation
+	_implementation.name = "OfficialNakama"
+	add_child(_implementation)
 	return _implementation
