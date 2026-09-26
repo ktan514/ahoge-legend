@@ -14,6 +14,7 @@ AHOGE LEGENDの開発・公開環境は次とする。
 - 開発IDE: Godot Editor + VS Code
 - オンライン基盤: Nakama 3.41.0
 - Nakama Common / nakama-runtime: 1.48.0
+- Nakama Godot SDK: 3.4.0
 - DB: PostgreSQL 16.8-alpine
 - ローカルサーバー: Docker Compose
 - 本番サーバー: AWS 東京リージョン
@@ -49,6 +50,12 @@ godot --headless --path . --quit
 
 ```bash
 godot --headless --path . --script res://tests/run_all.gd
+```
+
+Godot → Nakama認証smoke test:
+
+```bash
+./scripts/client-online-smoke.sh
 ```
 
 オンライン基盤起動:
@@ -95,6 +102,9 @@ npm run build
 - `tests/`: headless実行できる回帰試験を置く。
 - `server/nakama/`: Nakama TypeScript Runtimeとローカル設定を置く。Godot UIやクライアント表示へ依存させない。
 - `scripts/server-*.sh`: Docker Composeの起動・停止・疎通確認だけを担当し、本番credentialを含めない。
+- `addons/com.heroiclabs.nakama/`: 公式Nakama Godot SDK 3.4.0をvendorし、原則として独自改変しない。
+- `src/online/`: Godotクライアント側のNakama接続・認証・Session管理を置き、UIや戦闘ルールへ依存させない。
+- `scripts/client-online-smoke.sh`: ローカルNakama起動確認後にGodot headless認証smoke testを実行する。
 
 ## アセット管理
 
