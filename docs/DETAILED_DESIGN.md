@@ -891,10 +891,49 @@ authoritative matchは戦闘入力に対して次を検証する。
 検証に成功した入力だけを `INPUT_ACCEPTED` としてmatch参加者へbroadcastする。
 重複・逆順sequence、不正payload、不正action、同一tickの2入力目は戦闘ロジックへ渡さず破棄する。
 
-この入力受付段階ではAttack state、Hit、Defense、Clash、勝敗はまだ確定しない。
-それらは受理済み入力を入力源として後続Issueでserver authoritative stateへ移管する。
+受理済みの `ATTACK_PRESS / ATTACK_RELEASE` はserver authoritativeな攻撃状態へ接続する。
 
-通信遅延を考慮したContactEventの時刻処理と100ms上限の具体的な補正方式は後続Issueで実装する。
+初期server攻撃状態:
+
+```text
+IDLE
+└─ ATTACK_PRESS → CHARGING
+
+CHARGING
+└─ ATTACK_RELEASE → WINDUP
+                   → STRIKE
+                   → CONTACT_REACHED
+                   → COOLDOWN
+                   → IDLE
+```
+
+`ATTACK_PRESS` を適用したserver tickをcharge開始tickとして保持する。
+`ATTACK_RELEASE` 時は経過tickからcharge ratioを `0.0 .. 1.0` で算出し、既存CombatConfigと同じ線形補間でWindup / Strike / Cooldown時間を決定する。
+
+authoritative matchは30Hzで進行するため、秒指定の戦闘時間は `ceil(seconds * 30)` でtickへ変換する。
+Contact tickは `Strike開始tick + ceil(strike_seconds * contact_ratio * 30)` とする。
+
+server戦闘値は `server/nakama/src/combat_config.ts` に集約し、Godot側 `src/config/combat_config.gd` の初期値と同じ値を使用する。
+値の最終調整は引き続きHuman Verification対象であり、この移管によって確定値へ昇格させない。
+
+server → client通知:
+
+- op code `102`: `COMBAT_STATE_CHANGED`
+  - `user_id`
+  - `state`
+  - `server_tick`
+  - `charge_ratio`
+- op code `103`: `CONTACT_REACHED`
+  - `attacker_id`
+  - `defender_id`
+  - `server_tick`
+  - `input_sequence`
+  - `charge_ratio`
+
+`DEFEND` はIssue #19時点では入力受付までとし、Parry / Dodge状態への適用は後続Issueで行う。
+Contact到達時点ではHitを確定しない。Defense / Clashを接続した後に最終結果をserver authoritativeで確定する。
+
+通信遅延を考慮したContactEventの時刻補正と100ms上限の具体的な補正方式は後続Issueで実装する。
 
 ## 15. マッチメイキング
 
@@ -1250,8 +1289,12 @@ SHORT_TEST
 - duplicate / out-of-order sequenceは破棄する
 - 同一tickの2入力目は破棄する
 - 受理入力はserver tick付き `INPUT_ACCEPTED` として両clientへ通知する
+- `ATTACK_PRESS / ATTACK_RELEASE` はserver authoritativeなIDLE / CHARGING / WINDUP / STRIKE / COOLDOWN状態へ適用する
+- 秒指定戦闘値は30Hz基準で `ceil(seconds * 30)` によりtickへ量子化する
+- charge ratioはserver tick差から算出する
+- ContactEventはStrike開始とstrike時間・contact ratioからserver tickで確定する
 - rollbackは初期実装では行わない
-- ジャスト判定、相殺、勝敗はサーバー権威で確定する
+- 防御、ジャスト判定、相殺、Hit、勝敗は後続Issueでサーバー権威へ接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続

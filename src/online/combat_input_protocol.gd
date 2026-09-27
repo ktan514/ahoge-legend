@@ -2,6 +2,8 @@ extends RefCounted
 
 const OPCODE_COMBAT_INPUT: int = 1
 const OPCODE_INPUT_ACCEPTED: int = 101
+const OPCODE_COMBAT_STATE_CHANGED: int = 102
+const OPCODE_CONTACT_REACHED: int = 103
 
 const ACTION_ATTACK_PRESS: String = "ATTACK_PRESS"
 const ACTION_ATTACK_RELEASE: String = "ATTACK_RELEASE"
@@ -11,6 +13,14 @@ const _ALLOWED_ACTIONS := {
 	ACTION_ATTACK_PRESS: true,
 	ACTION_ATTACK_RELEASE: true,
 	ACTION_DEFEND: true,
+}
+
+const _ALLOWED_ATTACK_STATES := {
+	"IDLE": true,
+	"CHARGING": true,
+	"WINDUP": true,
+	"STRIKE": true,
+	"COOLDOWN": true,
 }
 
 
@@ -34,6 +44,31 @@ static func parse_accepted_payload(payload: String) -> Dictionary:
 		return {}
 
 	if not is_allowed_action(str(parsed["action"])):
+		return {}
+
+	return parsed
+
+
+static func parse_combat_state_changed_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+
+	if not parsed.has("user_id") 			or not parsed.has("state") 			or not parsed.has("server_tick") 			or not parsed.has("charge_ratio"):
+		return {}
+
+	if not bool(_ALLOWED_ATTACK_STATES.get(str(parsed["state"]), false)):
+		return {}
+
+	return parsed
+
+
+static func parse_contact_reached_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+
+	if not parsed.has("attacker_id") 			or not parsed.has("defender_id") 			or not parsed.has("server_tick") 			or not parsed.has("input_sequence") 			or not parsed.has("charge_ratio"):
 		return {}
 
 	return parsed

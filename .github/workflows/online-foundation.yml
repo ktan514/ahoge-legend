@@ -10,6 +10,7 @@ on:
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-matchmaker-smoke.sh"
       - "scripts/client-combat-input-smoke.sh"
+      - "scripts/client-attack-state-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -19,6 +20,7 @@ on:
       - "tests/realtime_smoke.gd"
       - "tests/matchmaker_smoke.gd"
       - "tests/combat_input_smoke.gd"
+      - "tests/attack_state_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -28,12 +30,20 @@ on:
       - "server/nakama/**"
       - "scripts/server-*.sh"
       - "scripts/client-online-smoke.sh"
+      - "scripts/client-realtime-smoke.sh"
+      - "scripts/client-matchmaker-smoke.sh"
+      - "scripts/client-combat-input-smoke.sh"
+      - "scripts/client-attack-state-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
       - "src/online/**"
       - "src/config/online_config.gd"
       - "tests/online_smoke.gd"
+      - "tests/realtime_smoke.gd"
+      - "tests/matchmaker_smoke.gd"
+      - "tests/combat_input_smoke.gd"
+      - "tests/attack_state_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
 jobs:
@@ -96,6 +106,9 @@ jobs:
 
       - name: Godot authoritative combat input smoke
         run: ./scripts/client-combat-input-smoke.sh
+
+      - name: Godot authoritative attack state smoke
+        run: ./scripts/client-attack-state-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash

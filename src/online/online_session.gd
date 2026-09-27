@@ -16,6 +16,8 @@ signal ranked_match_found(match_id: String)
 signal ranked_match_joined(match_id: String)
 signal ranked_matchmaking_failed(step: String, message: String)
 signal combat_input_accepted(user_id: String, input_sequence: int, action: String, server_tick: int)
+signal combat_state_changed(user_id: String, state: String, server_tick: int, charge_ratio: float)
+signal contact_reached(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, charge_ratio: float)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -285,19 +287,50 @@ func _on_match_state_received(match_state, candidate) -> void:
 		return
 	if current_match_id.is_empty() or str(match_state.match_id) != current_match_id:
 		return
-	if int(match_state.op_code) != CombatInputProtocolScript.OPCODE_INPUT_ACCEPTED:
+
+	var op_code := int(match_state.op_code)
+	if op_code == CombatInputProtocolScript.OPCODE_INPUT_ACCEPTED:
+		var accepted := CombatInputProtocolScript.parse_accepted_payload(str(match_state.data))
+		if accepted.is_empty():
+			return
+
+		combat_input_accepted.emit(
+			str(accepted["user_id"]),
+			int(accepted["input_sequence"]),
+			str(accepted["action"]),
+			int(accepted["server_tick"])
+		)
 		return
 
-	var accepted := CombatInputProtocolScript.parse_accepted_payload(str(match_state.data))
-	if accepted.is_empty():
+	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
+		var state_event := CombatInputProtocolScript.parse_combat_state_changed_payload(
+			str(match_state.data)
+		)
+		if state_event.is_empty():
+			return
+
+		combat_state_changed.emit(
+			str(state_event["user_id"]),
+			str(state_event["state"]),
+			int(state_event["server_tick"]),
+			float(state_event["charge_ratio"])
+		)
 		return
 
-	combat_input_accepted.emit(
-		str(accepted["user_id"]),
-		int(accepted["input_sequence"]),
-		str(accepted["action"]),
-		int(accepted["server_tick"])
-	)
+	if op_code == CombatInputProtocolScript.OPCODE_CONTACT_REACHED:
+		var contact_event := CombatInputProtocolScript.parse_contact_reached_payload(
+			str(match_state.data)
+		)
+		if contact_event.is_empty():
+			return
+
+		contact_reached.emit(
+			str(contact_event["attacker_id"]),
+			str(contact_event["defender_id"]),
+			int(contact_event["server_tick"]),
+			int(contact_event["input_sequence"]),
+			float(contact_event["charge_ratio"])
+		)
 
 
 func is_realtime_connected() -> bool:

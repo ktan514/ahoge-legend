@@ -185,7 +185,25 @@ AHOGE LEGEND combat input smoke: PASS
 ```
 
 初期入力は `ATTACK_PRESS / ATTACK_RELEASE / DEFEND` の3種類です。
-この段階では入力受付だけをserver authoritativeにし、Hit / Defense / Clash / 85秒タイマー / BO3勝敗はまだserver判定へ移していません。
+入力受付に加え、ATTACK_PRESS / ATTACK_RELEASEはserver authoritativeな攻撃状態へ接続されています。
+
+## Authoritative attack state / ContactEvent
+
+Nakama 30Hz tickで `IDLE → CHARGING → WINDUP → STRIKE → COOLDOWN → IDLE` を進行し、Strike中の論理接触時刻でContactEventを生成します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-attack-state-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND attack state smoke: PASS
+```
+
+戦闘時間はserver側設定へ集約し、既存Godot CombatConfigと同じ暫定値を使用します。
+この段階ではContact到達までをserver authoritativeとし、Defense / Clash / Hit / 85秒タイマー / BO3勝敗は後続Issueで接続します。
 
 ## 設計正本
 
