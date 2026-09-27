@@ -121,6 +121,9 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	# authoritative Round Countdown完了後に戦闘を開始する。
+	await create_timer(3.5).timeout
+
 	var press_result: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_PRESS
 	)

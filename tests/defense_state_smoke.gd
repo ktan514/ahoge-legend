@@ -102,6 +102,9 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	# authoritative Round Countdown完了後に戦闘を開始する。
+	await create_timer(3.5).timeout
+
 	# IDLE → PARRY → IDLE
 	var start_index := _p1_states.size()
 	var defend_idle: Dictionary = await online_session.send_combat_input(

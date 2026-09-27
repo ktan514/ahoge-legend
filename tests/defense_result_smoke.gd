@@ -103,6 +103,9 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	# authoritative Round Countdown完了後に戦闘を開始する。
+	await create_timer(3.5).timeout
+
 	# DefenseなしContactはNONE。
 	var none_sequence := await _start_p1_attack(online_session, p1_user_id, 0.0)
 	if none_sequence <= 0:
