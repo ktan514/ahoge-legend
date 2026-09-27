@@ -10,6 +10,7 @@ on:
       - "scripts/client-online-smoke.sh"
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-reconnect-smoke.sh"
+      - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
       - "scripts/client-matchmaker-smoke.sh"
       - "scripts/client-combat-input-smoke.sh"
@@ -42,6 +43,7 @@ on:
       - "tests/online_smoke.gd"
       - "tests/realtime_smoke.gd"
       - "tests/reconnect_smoke.gd"
+      - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
       - "tests/matchmaker_smoke.gd"
       - "tests/combat_input_smoke.gd"
@@ -71,6 +73,7 @@ on:
       - "scripts/client-online-smoke.sh"
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-reconnect-smoke.sh"
+      - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
       - "scripts/client-matchmaker-smoke.sh"
       - "scripts/client-combat-input-smoke.sh"
@@ -103,6 +106,7 @@ on:
       - "tests/online_smoke.gd"
       - "tests/realtime_smoke.gd"
       - "tests/reconnect_smoke.gd"
+      - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
       - "tests/matchmaker_smoke.gd"
       - "tests/combat_input_smoke.gd"
@@ -241,6 +245,10 @@ jobs:
       - name: Godot authoritative Hit count smoke
         if: matrix.group == 'combat'
         run: ./scripts/client-hit-count-smoke.sh
+
+      - name: Godot auto reconnect smoke
+        if: matrix.group == 'round'
+        run: bash ./scripts/client-auto-reconnect-smoke.sh
 
       - name: Godot reconnect continuity smoke
         if: matrix.group == 'round'
