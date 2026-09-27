@@ -151,10 +151,10 @@ func _run() -> void:
 	var release_sequence := int(release_result.get("input_sequence", 0))
 
 	for expected_state in ["WINDUP", "STRIKE", "COOLDOWN", "IDLE"]:
-		if not await _wait_for_state(p1_states, p1_user_id, expected_state, 5000):
+		if not await _wait_for_state_from(p1_states, p1_user_id, expected_state, p1_state_start, 5000):
 			_fail("P1が%sを受信できませんでした。" % expected_state)
 			return
-		if not await _wait_for_state(_p2_states, p1_user_id, expected_state, 5000):
+		if not await _wait_for_state_from(_p2_states, p1_user_id, expected_state, p2_state_start, 5000):
 			_fail("P2がP1の%sを受信できませんでした。" % expected_state)
 			return
 
@@ -222,6 +222,23 @@ func _wait_for_state(
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
 		for event in events:
+			if str(event["user_id"]) == user_id and str(event["state"]) == state:
+				return true
+		await create_timer(0.05).timeout
+	return false
+
+
+func _wait_for_state_from(
+	events: Array[Dictionary],
+	user_id: String,
+	state: String,
+	start_index: int,
+	timeout_ms: int
+) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for index in range(maxi(start_index, 0), events.size()):
+			var event := events[index]
 			if str(event["user_id"]) == user_id and str(event["state"]) == state:
 				return true
 		await create_timer(0.05).timeout
