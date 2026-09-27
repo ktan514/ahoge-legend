@@ -181,7 +181,7 @@ const rankedMatchJoinAttempt: nkruntime.MatchJoinAttemptFunction<AhogeRankedMatc
   _logger,
   _nk,
   _dispatcher,
-  _tick,
+  tick,
   state,
   presence,
   _metadata
@@ -196,6 +196,11 @@ const rankedMatchJoinAttempt: nkruntime.MatchJoinAttemptFunction<AhogeRankedMatc
 
   if (state.matchFinished) {
     return {state: state, accept: false, rejectMessage: "match is finished"};
+  }
+
+  const reconnectDeadline = state.reconnectDeadlineTickByUser[presence.userId];
+  if (reconnectDeadline !== undefined && tick >= reconnectDeadline) {
+    return {state: state, accept: false, rejectMessage: "reconnect grace expired"};
   }
 
   if (!isSupportedCharacterId(state.characterIdByUser[presence.userId])) {
