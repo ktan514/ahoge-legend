@@ -714,6 +714,32 @@ else:
     overtime = true
 ```
 
+オンラインauthoritative matchでは、`remaining_seconds` が0へ変化したserver tickをtimeout境界とする。
+
+判定順序を次で固定する。
+
+1. match loop先頭でserver tickから `remaining_seconds` を更新する
+2. 0へ変化した場合、その時点までにserverが確定済みの `round_hit_count_by_user` を比較する
+3. Hit数に差があれば、多い側を `round_winner_user_id` として確定する
+4. `round_finished = true`
+5. `round_finish_cause = TIMEOUT`
+6. 両者を `ROUND_LOCKED` へ遷移させる
+7. 同じmatch loop内の新規combat入力・未確定Contactはtimeout後のHit数へ含めない
+
+0到達tickでまだContactEventとして確定していない攻撃は無効とする。85秒という終了境界を跨いだHitをtimeout比較へ後付けしない。
+
+同点の場合はこの段階で勝者を確定しない。
+
+```text
+round_finished = false
+round_winner_user_id = ""
+round_awaiting_overtime = true
+```
+
+Overtime開始処理が接続されるまでは両者を一旦 `ROUND_LOCKED` にして、timer 0のまま新規combatを停止する。次のOvertime実装で `round_awaiting_overtime` を解除し、サドンデス戦闘へ遷移させる。
+
+timeout確定後またはOvertime待ち中は、client側でHit数・勝者・timerを独自更新しない。
+
 ### 10.4 Overtime
 
 延長戦中は次の有効ヒットで即座にラウンド終了する。
@@ -1563,7 +1589,11 @@ SHORT_TEST
 - detach中DEFENDはDODGE / JUST_DODGE、regrow後DEFENDはPARRY / JUST_PARRYへ分岐する
 - 現在ラウンドHit数はuser IDごとにserver stateで保持し、HitConfirmed確定時だけ攻撃側を+1する
 - Hit数更新はRoundHitCountChangedEventとして両clientへ通知する
-- 5 Hit勝利、85秒timer、Round reset、勝敗は後続Issueでserver authoritative stateへ接続する
+- 85秒timerはserver tickで85→0を管理する
+- 5 Hit到達時は攻撃側をround winnerとして確定し、両者をROUND_LOCKEDへ遷移する
+- timer 0到達時はそのtickのcombat処理より先に確定済みHit数を比較する
+- timeout時にHit数差があれば多い側をwinner、同点ならround_awaiting_overtimeへ遷移する
+- timeout同点時のOvertime開始、Round Result、Round reset、BO3勝敗は後続Issueで接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続

@@ -33,8 +33,11 @@
 - authoritative Stagger
 - SHORT detach / Regrow
 - 工程1の2-client戦闘統合検証
+- authoritative現在ラウンドHit数
+- authoritative 85秒timer
+- 5 Hit到達によるauthoritativeラウンド終了
 
-現在は **工程2: authoritativeラウンド・BO3** の途中である。
+現在は **工程2: authoritativeラウンド・BO3** の途中で、timeout時のHit数比較を実装中である。
 
 ## 3. 製造工程
 
@@ -190,27 +193,24 @@ RC1
 
 現在からの優先順は次とする。
 
-1. server Hit数
-2. 85秒timer
-3. 5 Hitラウンド勝利
-4. timeout時のHit数比較
-5. Overtime
-6. Round result
-7. 2本先取BO3
-8. Match result
-9. Client Battle画面接続
-10. Disconnect / Reconnect
-11. Matchmaker検索幅拡大
-12. Ranking / Rating / Season
-13. Friend Match
-14. 全画面GameFlow
-15. 正式キャラクター
-16. 演出・音・台詞
-17. Steam認証
-18. AWS本番
-19. Windows実機・WAN試験
-20. balance / performance調整
-21. Release Candidate
+1. timeout時のHit数比較
+2. Overtime
+3. Round result
+4. 2本先取BO3
+5. Match result
+6. Client Battle画面接続
+7. Disconnect / Reconnect
+8. Matchmaker検索幅拡大
+9. Ranking / Rating / Season
+10. Friend Match
+11. 全画面GameFlow
+12. 正式キャラクター
+13. 演出・音・台詞
+14. Steam認証
+15. AWS本番
+16. Windows実機・WAN試験
+17. balance / performance調整
+18. Release Candidate
 
 ## 12. 計画変更ルール
 
