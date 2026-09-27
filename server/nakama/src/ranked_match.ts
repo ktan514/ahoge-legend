@@ -285,7 +285,7 @@ function broadcastContactReached(
 ): string {
   const defenderId = findOpponentUserId(state, attackerId);
   if (!defenderId) {
-    return;
+    return DEFENSE_RESULT_NONE;
   }
 
   const defenseResult = resolveDefenseResult(state, defenderId, contactTick);

@@ -12,6 +12,8 @@ var _p1_states: Array[Dictionary] = []
 var _p2_states: Array[Dictionary] = []
 var _p1_defense_results: Array[Dictionary] = []
 var _p2_defense_results: Array[Dictionary] = []
+var _p1_contacts: Array[Dictionary] = []
+var _p2_contacts: Array[Dictionary] = []
 var _p1_hits: Array[Dictionary] = []
 var _p2_hits: Array[Dictionary] = []
 var _p1_clashes: Array[Dictionary] = []
@@ -193,6 +195,18 @@ func _run() -> void:
 	if int(clash_p1.get("server_tick", -1)) != int(clash_p2.get("server_tick", -2)):
 		_fail("P1/P2でAttackClash server tickが一致しません。")
 		return
+	var p1_contact := _event_for_sequence(_p1_contacts, p1_clash_sequence)
+	var p2_contact := _event_for_sequence(_p1_contacts, p2_clash_sequence)
+	if p1_contact.is_empty() or p2_contact.is_empty():
+		_fail("Clash対象の両ContactEventを取得できませんでした。")
+		return
+	var later_contact_tick := maxi(
+		int(p1_contact.get("server_tick", -1)),
+		int(p2_contact.get("server_tick", -1))
+	)
+	if int(clash_p1.get("server_tick", -1)) < later_contact_tick:
+		_fail("AttackClashが遅い側Contact到達前に確定しました。")
+		return
 	await create_timer(0.25).timeout
 	if _has_event(_p1_hits, "input_sequence", p1_clash_sequence) 			or _has_event(_p1_hits, "input_sequence", p2_clash_sequence):
 		_fail("AttackClashでHITが発生しました。")
@@ -246,19 +260,20 @@ func _send_second_input(action: String) -> bool:
 
 
 func _on_first_match_state(match_state) -> void:
-	_collect_match_state(match_state, _p1_states, _p1_defense_results, _p1_hits, _p1_clashes)
+	_collect_match_state(match_state, _p1_states, _p1_defense_results, _p1_contacts, _p1_hits, _p1_clashes)
 
 
 func _on_second_match_state(match_state) -> void:
 	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
 		return
-	_collect_match_state(match_state, _p2_states, _p2_defense_results, _p2_hits, _p2_clashes)
+	_collect_match_state(match_state, _p2_states, _p2_defense_results, _p2_contacts, _p2_hits, _p2_clashes)
 
 
 func _collect_match_state(
 	match_state,
 	states: Array[Dictionary],
 	defense_results: Array[Dictionary],
+	contacts: Array[Dictionary],
 	hits: Array[Dictionary],
 	clashes: Array[Dictionary]
 ) -> void:
@@ -267,6 +282,11 @@ func _collect_match_state(
 		var state_event := CombatInputProtocolScript.parse_combat_state_changed_payload(str(match_state.data))
 		if not state_event.is_empty():
 			states.append(state_event)
+		return
+	if op_code == CombatInputProtocolScript.OPCODE_CONTACT_REACHED:
+		var contact_event := CombatInputProtocolScript.parse_contact_reached_payload(str(match_state.data))
+		if not contact_event.is_empty():
+			contacts.append(contact_event)
 		return
 	if op_code == CombatInputProtocolScript.OPCODE_DEFENSE_RESOLVED:
 		var defense_event := CombatInputProtocolScript.parse_defense_resolved_payload(str(match_state.data))
@@ -356,6 +376,13 @@ func _wait_for_clash(
 				return event
 		await create_timer(0.02).timeout
 	_fail("AttackClashを受信できませんでした。")
+	return {}
+
+
+func _event_for_sequence(events: Array[Dictionary], input_sequence: int) -> Dictionary:
+	for event in events:
+		if int(event.get("input_sequence", -1)) == input_sequence:
+			return event
 	return {}
 
 
