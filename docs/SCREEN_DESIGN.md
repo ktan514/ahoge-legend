@@ -642,6 +642,33 @@ BO3のため、各プレイヤーについて最大2つの取得マーカーを�
 
 必要な離脱操作はPauseではなく、対戦を継続したまま表示する確認Overlayとして別途設計する。
 
+
+### 15.9 M1 Battle Coreデバッグ表示
+
+M1 #53ではUI-10の本番導線完成を待たず、起動引数 `--m1-battle` でBattleへ直接入れる。
+
+M1では同一Godot実ウィンドウ内で2つのauthoritative clientを成立させ、P1をマウス、P2をQ/Eで操作する。画面は通常の `BattleHUD` と `FighterVisual` を再利用し、ローカル戦闘ロジックではなくNakamaから受信したauthoritative eventで更新する。
+
+初期M1レイアウトでは1280×720内の中央に約5:4の戦闘領域候補を置き、左右余白を残す。5:4はM1でHuman Verificationする候補値であり、M1 PASSだけで最終採用とはしない。
+
+M1で最低限表示するもの:
+
+- P1 / P2キャラクター名
+- Round取得数
+- Hit数
+- 85秒timer
+- Round番号
+- OVERTIME
+- PARRY / DODGE / JUST PARRY / JUST DODGE
+- CLASH
+- STAGGER
+- SHORT detach / regrow
+- Round winner
+- Match winner / final score
+- 接続中・接続失敗・操作可能状態
+
+M1専用表示やデバッグ操作は、工程4の正式UI導線・最終キー設定・最終レイアウトを確定するものではない。
+
 ## 16. UI-11 対戦結果
 
 ### 16.1 共通表示

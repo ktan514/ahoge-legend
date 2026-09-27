@@ -40,8 +40,9 @@
 - authoritative Overtime
 - authoritative Round Result
 - authoritative 2本先取BO3
+- authoritative Match Result
 
-現在は **工程2: authoritativeラウンド・BO3** の最後として、Match resultを実装中である。
+工程2は完了済みである。現在は工程3へ進む前のblocking gate **M1 Battle Core #53** として、UI-10へauthoritative戦闘状態を接続し、Godot実画面で早期確認する段階である。
 
 ## 3. 製造工程
 
@@ -49,7 +50,7 @@
 | --- | --- | --- | --- |
 | 0 | 設計・ローカル縦切り・オンライン基礎 | #1〜#19 | 完了 |
 | 1 | オンライン戦闘コア | #22 | 完了 |
-| 2 | authoritativeラウンド・BO3 | #23 | 進行中 |
+| 2 | authoritativeラウンド・BO3 | #23 | 完了 |
 | 3 | オンラインサービス | #24 | 未着手 |
 | 4 | GameFlow・主要12画面 | #25 | 未着手 |
 | 5 | 正式キャラクター・演出・素材 | #26 | 未着手 |
@@ -256,21 +257,20 @@ RC1
 
 現在からの優先順は次とする。
 
-1. Match result
-2. Client Battle画面接続
-3. M1 #53 Battle Core実画面確認
-4. Disconnect / Reconnect
-5. Matchmaker検索幅拡大
-6. Ranking / Rating / Season
-7. Friend Match
-8. 全画面GameFlow
-9. 正式キャラクター
-10. 演出・音・台詞
-11. Steam認証
-12. AWS本番
-13. Windows実機・WAN試験
-14. balance / performance調整
-15. Release Candidate
+1. Client Battle画面authoritative接続
+2. M1 #53 Battle Core実画面確認
+3. Disconnect / Reconnect
+4. Matchmaker検索幅拡大
+5. Ranking / Rating / Season
+6. Friend Match
+7. 全画面GameFlow
+8. 正式キャラクター
+9. 演出・音・台詞
+10. Steam認証
+11. AWS本番
+12. Windows実機・WAN試験
+13. balance / performance調整
+14. Release Candidate
 
 ## 12. 計画変更ルール
 

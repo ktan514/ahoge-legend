@@ -1373,6 +1373,60 @@ Contact到達時点ではまだPARRY / DODGE成功結果やHitを確定しない
 
 通信遅延を考慮したContactEventの時刻補正と100ms上限の具体的な補正方式は後続Issueで実装する。
 
+
+### 14.4 M1 Battle Core用authoritative実画面接続
+
+工程2完了直後のM1 #53では、工程4のGameFlow完成を待たず、UI-10 Battleへ直接入るデバッグ導線を用意する。
+
+M1用のデバッグ構成は次とする。
+
+```text
+Godot実ウィンドウ
+├─ P1: OnlineSession
+│   ├─ Device Authentication
+│   ├─ Realtime Socket
+│   └─ LONG_TEST / マウス操作
+└─ P2: M1デバッグ用Nakama client/socket
+    ├─ 実行ごとに別Device ID
+    ├─ Realtime Socket
+    └─ SHORT_TEST / Q・E操作
+
+P1 + P2
+→ 同一Ranked Matchmaker
+→ 同一authoritative match
+→ server確定event
+→ UI-10 HUD / FighterVisual
+```
+
+M1では1つのGodot process内に2つのNakama clientを保持してよい。これは操作・描画を1画面で早期確認するためのデバッグ構成であり、本番Ranked GameFlowで1processに2playerを保持する仕様ではない。
+
+操作:
+
+- P1 左クリック押下: `ATTACK_PRESS`
+- P1 左クリック解放: `ATTACK_RELEASE`
+- P1 右クリック: `DEFEND`
+- P2 Q押下: `ATTACK_PRESS`
+- P2 Q解放: `ATTACK_RELEASE`
+- P2 E: `DEFEND`
+
+M1のBattle表示はローカル `MatchCoordinator / CombatResolver` から勝敗を再計算しない。次のauthoritative eventを表示の正本として使用する。
+
+- `COMBAT_STATE_CHANGED`: Attack / Charge / Parry / Dodge / Stagger / ROUND_LOCKED
+- `DEFENSE_RESOLVED`: PARRY / DODGE / JUST_PARRY / JUST_DODGE
+- `ATTACK_CLASH`: CLASH
+- `HIT_CONFIRMED`: Hit演出
+- `ROUND_HIT_COUNT_CHANGED`: Hit数
+- `ROUND_TIMER_CHANGED`: 85秒timer
+- `ROUND_OVERTIME_STARTED`: OVERTIME
+- `ROUND_STARTED`: Round番号
+- `BO3_SCORE_CHANGED`: 取得Round数
+- `MATCH_RESULT`: Match終了・最終score
+- `ahoge_available`: SHORT detach / regrow表示
+
+見た目の頭部・アホ毛二次動作は引き続きGodot client側で行い、serverの戦闘判定へ逆流させない。
+
+M1デバッグ起動は通常GameFlowと分離し、起動引数 `--m1-battle` からUI-10へ直接入れる。M1用の内部2client構成、固定テストキャラクター、操作キーは検証専用であり、本番仕様へ昇格させない。
+
 ## 15. マッチメイキング
 
 ### 15.1 ランクマッチ
