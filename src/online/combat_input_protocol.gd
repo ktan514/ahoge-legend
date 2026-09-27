@@ -74,6 +74,9 @@ static func parse_combat_state_changed_payload(payload: String) -> Dictionary:
 	if not bool(_ALLOWED_COMBAT_STATES.get(str(parsed["state"]), false)):
 		return {}
 
+	if str(parsed["state"]) == "STAGGER" and not parsed.has("stagger_until_tick"):
+		return {}
+
 	return parsed
 
 
