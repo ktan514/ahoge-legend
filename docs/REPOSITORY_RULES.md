@@ -124,6 +124,12 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-combat-integration-smoke.sh
 ```
 
+2-client authoritative Hit count smoke test:
+
+```bash
+./scripts/client-hit-count-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -174,7 +180,7 @@ npm run build
 - `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 - `scripts/client-matchmaker-smoke.sh`: 2クライアントをDevice認証・Realtime接続し、Matchmaker成立から同一authoritative matchへのjoinまで検証する。
 - `server/nakama/src/combat_config.ts`: server authoritative戦闘の暫定時間値と30Hz tick換算・補間を一元管理する。
-- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrowを定義する。Hit数 / 勝敗等は後続Issueで追加する。
+- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数を定義する。5 Hit勝利 / timer / 勝敗等は後続Issueで追加する。
 - `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 - `scripts/client-attack-state-smoke.sh`: 2クライアントで同じauthoritative攻撃状態遷移とContactEventを受信できることを検証する。
 - `scripts/client-defense-state-smoke.sh`: 2クライアントでPARRY / DODGE状態、攻撃キャンセル、Defense終了後復帰、Cooldown一時停止・再開を検証する。
@@ -183,6 +189,7 @@ npm run build
 - `scripts/client-stagger-smoke.sh`: Just DefenseとAttackClashからのSTAGGER、14tick継続、入力抑止、IDLE復帰、両client状態一致を検証する。
 - `scripts/client-short-state-smoke.sh`: SHORT_TESTのcharacter_id引き渡し、detach、DODGE、JUST_DODGE、18tick Regrow、PARRY復帰、両client状態一致を検証する。
 - `scripts/client-combat-integration-smoke.sh`: 工程1の攻撃・Defense cancel・PARRY / DODGE / Just・Hit・Clash・Stagger・SHORT detach / Regrowを同一match内で連続実行し、両clientのイベント列・状態列一致を検証する。
+- `scripts/client-hit-count-smoke.sh`: 初期0、Hit加算、Defense / Clash非加算、複数Hit累積、両clientのHit count一致を検証する。
 
 ## アセット管理
 

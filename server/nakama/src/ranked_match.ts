@@ -5,6 +5,7 @@ const CONTACT_REACHED_OPCODE = 103;
 const DEFENSE_RESOLVED_OPCODE = 104;
 const HIT_CONFIRMED_OPCODE = 105;
 const ATTACK_CLASH_OPCODE = 106;
+const ROUND_HIT_COUNT_CHANGED_OPCODE = 107;
 
 const DEFENSE_RESULT_NONE = "NONE";
 const DEFENSE_RESULT_PARRY = "PARRY";
@@ -57,6 +58,7 @@ interface AhogeRankedMatchState {
   lastAcceptedTickByUser: {[key: string]: number};
   combatStateByUser: {[key: string]: AuthoritativeCombatState};
   characterIdByUser: {[key: string]: string};
+  roundHitCountByUser: {[key: string]: number};
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -95,7 +97,8 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       lastInputSequenceByUser: {},
       lastAcceptedTickByUser: {},
       combatStateByUser: {},
-      characterIdByUser: characterIdByUser
+      characterIdByUser: characterIdByUser,
+      roundHitCountByUser: {}
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -146,8 +149,8 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
   _ctx,
   logger,
   _nk,
-  _dispatcher,
-  _tick,
+  dispatcher,
+  tick,
   state,
   presences
 ) {
@@ -162,7 +165,17 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     if (!state.combatStateByUser[presence.userId]) {
       state.combatStateByUser[presence.userId] = createIdleCombatState(true);
     }
+    if (state.roundHitCountByUser[presence.userId] === undefined) {
+      state.roundHitCountByUser[presence.userId] = 0;
+    }
   });
+
+  if (Object.keys(state.presences).length === 2) {
+    Object.keys(state.presences).forEach(function (userId): void {
+      broadcastRoundHitCount(dispatcher, state, userId, tick, 0);
+    });
+  }
+
   logger.info("ahoge_ranked player joined. size=%d", Object.keys(state.presences).length);
   return {state: state};
 };
@@ -231,6 +244,38 @@ function broadcastCombatState(
     null,
     true
   );
+}
+
+function broadcastRoundHitCount(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  userId: string,
+  tick: number,
+  inputSequence: number
+): void {
+  dispatcher.broadcastMessage(
+    ROUND_HIT_COUNT_CHANGED_OPCODE,
+    JSON.stringify({
+      user_id: userId,
+      hit_count: state.roundHitCountByUser[userId] || 0,
+      server_tick: tick,
+      input_sequence: inputSequence
+    }),
+    null,
+    null,
+    true
+  );
+}
+
+function incrementRoundHitCount(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  userId: string,
+  tick: number,
+  inputSequence: number
+): void {
+  state.roundHitCountByUser[userId] = (state.roundHitCountByUser[userId] || 0) + 1;
+  broadcastRoundHitCount(dispatcher, state, userId, tick, inputSequence);
 }
 
 function isSupportedCharacterId(characterId: string): boolean {
@@ -446,6 +491,13 @@ function resolveDueContacts(
     const defenseResult = broadcastContactReached(dispatcher, state, attackerId, combatState, combatState.contactTick);
     if (defenseResult === DEFENSE_RESULT_NONE) {
       broadcastHitConfirmed(dispatcher, attackerId, defenderId, combatState, combatState.contactTick);
+      incrementRoundHitCount(
+        dispatcher,
+        state,
+        attackerId,
+        combatState.contactTick,
+        combatState.releaseSequence
+      );
     } else if (
       defenseResult === DEFENSE_RESULT_JUST_PARRY ||
       defenseResult === DEFENSE_RESULT_JUST_DODGE

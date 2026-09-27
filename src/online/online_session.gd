@@ -22,6 +22,7 @@ signal contact_reached(attacker_id: String, defender_id: String, server_tick: in
 signal defense_resolved(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, result: String)
 signal hit_confirmed(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int)
 signal attack_clash(attacker_a_id: String, attacker_b_id: String, attacker_a_input_sequence: int, attacker_b_input_sequence: int, server_tick: int)
+signal round_hit_count_changed(user_id: String, hit_count: int, server_tick: int, input_sequence: int)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -378,6 +379,18 @@ func _on_match_state_received(match_state, candidate) -> void:
 		if clash_event.is_empty():
 			return
 		attack_clash.emit(str(clash_event["attacker_a_id"]), str(clash_event["attacker_b_id"]), int(clash_event["attacker_a_input_sequence"]), int(clash_event["attacker_b_input_sequence"]), int(clash_event["server_tick"]))
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_HIT_COUNT_CHANGED:
+		var hit_count_event := CombatInputProtocolScript.parse_round_hit_count_changed_payload(str(match_state.data))
+		if hit_count_event.is_empty():
+			return
+		round_hit_count_changed.emit(
+			str(hit_count_event["user_id"]),
+			int(hit_count_event["hit_count"]),
+			int(hit_count_event["server_tick"]),
+			int(hit_count_event["input_sequence"])
+		)
 
 
 func is_realtime_connected() -> bool:

@@ -308,6 +308,23 @@ AHOGE LEGEND combat integration smoke: PASS
 
 LONG_TEST / SHORT_TESTを同じmatchへ参加させ、Hit、Defense cancel、Parry / Dodge / Just、Clash、Stagger、SHORT detach / Regrow、最終IDLE復帰までを通しで検証します。
 
+## Authoritative Round Hit count
+
+工程2の最初として、HitConfirmedが成立した攻撃側の現在ラウンドHit数をserver stateで加算し、両クライアントへ通知します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-hit-count-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND hit count smoke: PASS
+```
+
+PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝利やRound resetは後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`

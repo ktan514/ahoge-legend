@@ -17,6 +17,7 @@ on:
       - "scripts/client-stagger-smoke.sh"
       - "scripts/client-short-state-smoke.sh"
       - "scripts/client-combat-integration-smoke.sh"
+      - "scripts/client-hit-count-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -33,6 +34,7 @@ on:
       - "tests/stagger_smoke.gd"
       - "tests/short_state_smoke.gd"
       - "tests/combat_integration_smoke.gd"
+      - "tests/hit_count_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -52,6 +54,7 @@ on:
       - "scripts/client-stagger-smoke.sh"
       - "scripts/client-short-state-smoke.sh"
       - "scripts/client-combat-integration-smoke.sh"
+      - "scripts/client-hit-count-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -68,6 +71,7 @@ on:
       - "tests/stagger_smoke.gd"
       - "tests/short_state_smoke.gd"
       - "tests/combat_integration_smoke.gd"
+      - "tests/hit_count_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
 jobs:
@@ -151,6 +155,9 @@ jobs:
 
       - name: Godot 2-client combat integration smoke
         run: ./scripts/client-combat-integration-smoke.sh
+
+      - name: Godot authoritative Hit count smoke
+        run: ./scripts/client-hit-count-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash
