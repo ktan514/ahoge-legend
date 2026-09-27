@@ -80,7 +80,7 @@ func _run() -> void:
 		_fail("P1 Ranked Matchmakerを開始できませんでした。")
 		return
 
-	var query := online_session.build_ranked_matchmaker_query(1500)
+	var query: String = online_session.build_ranked_matchmaker_query(1500)
 	var second_ticket_result = await _second_socket.add_matchmaker_async(
 		query,
 		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
