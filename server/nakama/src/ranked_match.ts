@@ -1430,9 +1430,15 @@ function resolveReconnectTimeout(
   }
 
   const loserUserId = expiredUserIds[0];
-  const winnerUserId = participantUserIds(state).find(function (userId): boolean {
-    return userId !== loserUserId && !!state.presences[userId];
-  }) || "";
+  let winnerUserId = "";
+  const participantIds = participantUserIds(state);
+  for (let index = 0; index < participantIds.length; index += 1) {
+    const userId = participantIds[index];
+    if (userId !== loserUserId && state.presences[userId]) {
+      winnerUserId = userId;
+      break;
+    }
+  }
 
   if (!winnerUserId) {
     return;
