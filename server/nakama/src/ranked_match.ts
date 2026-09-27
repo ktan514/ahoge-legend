@@ -8,6 +8,7 @@ const ATTACK_CLASH_OPCODE = 106;
 const ROUND_HIT_COUNT_CHANGED_OPCODE = 107;
 const ROUND_TIMER_CHANGED_OPCODE = 108;
 const ROUND_OVERTIME_STARTED_OPCODE = 109;
+const ROUND_RESULT_OPCODE = 110;
 
 const DEFENSE_RESULT_NONE = "NONE";
 const DEFENSE_RESULT_PARRY = "PARRY";
@@ -76,6 +77,7 @@ interface AhogeRankedMatchState {
   roundFinishCause: string;
   roundAwaitingOvertime: boolean;
   roundOvertime: boolean;
+  roundNumber: number;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -124,7 +126,8 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundWinnerUserId: "",
       roundFinishCause: ROUND_FINISH_CAUSE_NONE,
       roundAwaitingOvertime: false,
-      roundOvertime: false
+      roundOvertime: false,
+      roundNumber: 1
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -320,6 +323,35 @@ function broadcastRoundOvertimeStarted(
   );
 }
 
+function broadcastRoundResult(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  winnerUserId: string,
+  finishCause: string,
+  tick: number
+): void {
+  const loserUserId = findOpponentUserId(state, winnerUserId);
+  if (!loserUserId) {
+    return;
+  }
+
+  dispatcher.broadcastMessage(
+    ROUND_RESULT_OPCODE,
+    JSON.stringify({
+      round_number: state.roundNumber,
+      winner_user_id: winnerUserId,
+      loser_user_id: loserUserId,
+      finish_cause: finishCause,
+      winner_hits: state.roundHitCountByUser[winnerUserId] || 0,
+      loser_hits: state.roundHitCountByUser[loserUserId] || 0,
+      server_tick: tick
+    }),
+    null,
+    null,
+    true
+  );
+}
+
 function lockRoundCombat(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -349,6 +381,7 @@ function finishRound(
   state.roundFinishCause = finishCause;
   state.roundOvertime = false;
   lockRoundCombat(dispatcher, state, tick);
+  broadcastRoundResult(dispatcher, state, winnerUserId, finishCause, tick);
 }
 
 function finishRoundByHitLimit(
