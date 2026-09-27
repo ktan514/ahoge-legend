@@ -25,6 +25,12 @@ on:
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
+      - "scripts/client-m1-battle.sh"
+      - "scripts/client-m1-battle-smoke.sh"
+      - "src/ui/app_root.gd"
+      - "src/ui/battle_hud.gd"
+      - "src/ui/battle_m1_debug.gd"
+      - "scenes/screens/battle/BattleM1Debug.tscn"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -76,6 +82,12 @@ on:
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
+      - "scripts/client-m1-battle.sh"
+      - "scripts/client-m1-battle-smoke.sh"
+      - "src/ui/app_root.gd"
+      - "src/ui/battle_hud.gd"
+      - "src/ui/battle_m1_debug.gd"
+      - "scenes/screens/battle/BattleM1Debug.tscn"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -207,6 +219,9 @@ jobs:
 
       - name: Godot authoritative Match Result smoke
         run: ./scripts/client-match-result-smoke.sh
+
+      - name: Godot M1 authoritative Battle UI smoke
+        run: ./scripts/client-m1-battle-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash

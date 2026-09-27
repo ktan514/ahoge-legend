@@ -172,6 +172,18 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-match-result-smoke.sh
 ```
 
+M1 authoritative Battle UI integration smoke test:
+
+```bash
+./scripts/client-m1-battle-smoke.sh
+```
+
+M1 Godot実ウィンドウ起動:
+
+```bash
+./scripts/client-m1-battle.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -239,6 +251,9 @@ npm run build
 - `scripts/client-round-result-smoke.sh`: HIT_LIMIT Round Resultのround番号、winner / loser、Hit数、finish cause、server tick、1回限り通知、両client一致を検証する。TIMEOUT / OVERTIME_HITは既存各smokeで同契約を回帰する。
 - `scripts/client-bo3-smoke.sh`: 1-0→1-1→2-1の最大3Roundを通し、Round Started、score、Hit数0 / timer85 / IDLE reset、input sequence継続、2勝後のmatch停止、Match Result、両client一致を検証する。
 - `scripts/client-match-result-smoke.sh`: 1勝・1-1ではMatch Result非通知、2勝確定時のwinner / loser / final score / final round / server tick、1回限り通知、終了後停止を検証する。
+- `src/ui/battle_m1_debug.gd`: M1専用にP1/P2の2つのNakama clientを同一Godot processで成立させ、authoritative eventをUI-10へ反映する。勝敗ルールは持たない。
+- `scripts/client-m1-battle-smoke.sh`: M1 Battle Sceneから2-client authoritative matchへjoinし、初期timer / Hit snapshotをHUD用stateへ受信できることをheadlessで検証する。
+- `scripts/client-m1-battle.sh`: M1 Human Verification用に `--m1-battle` でGodot実ウィンドウを起動する。
 
 ## アセット管理
 
