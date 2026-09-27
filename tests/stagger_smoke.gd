@@ -207,6 +207,8 @@ func _run() -> void:
 	# AttackClash → 両者STAGGER。
 	var p1_clash_start := _p1_states.size()
 	var p2_clash_start := _p2_states.size()
+	var p1_clash_event_start := _p1_clashes.size()
+	var p2_clash_event_start := _p2_clashes.size()
 
 	var p1_press: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_PRESS
@@ -233,8 +235,8 @@ func _run() -> void:
 	if not await _send_second_input(CombatInputProtocolScript.ACTION_ATTACK_RELEASE):
 		return
 
-	var clash_p1 := await _wait_for_any_clash(_p1_clashes, p1_clash_start, 5000)
-	var clash_p2 := await _wait_for_any_clash(_p2_clashes, p2_clash_start, 5000)
+	var clash_p1 := await _wait_for_any_clash(_p1_clashes, p1_clash_event_start, 5000)
+	var clash_p2 := await _wait_for_any_clash(_p2_clashes, p2_clash_event_start, 5000)
 	if clash_p1.is_empty() or clash_p2.is_empty():
 		return
 	if clash_p1 != clash_p2:
@@ -443,14 +445,13 @@ func _wait_for_defense_result(
 
 func _wait_for_any_clash(
 	events: Array[Dictionary],
-	_state_start_index: int,
+	start_index: int,
 	timeout_ms: int
 ) -> Dictionary:
-	var initial_size := events.size()
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		if events.size() > initial_size:
-			return events[initial_size]
+		if events.size() > start_index:
+			return events[start_index]
 		await create_timer(0.02).timeout
 	_fail("AttackClashを受信できませんでした。")
 	return {}
