@@ -160,8 +160,12 @@ func _run() -> void:
 		_fail("1勝時にMatch Resultが通知されました。")
 		return
 
+	var round_one_score := _find_score(_p1_scores, 1)
 	var countdown_two := await _wait_round_countdown_pair(2, 7000)
 	if countdown_two.is_empty():
+		return
+	if int(countdown_two.get("start_tick", -1)) - int(round_one_score.get("server_tick", -1)) != 60:
+		_fail("Round 1取得表示からRound 2 Countdown開始まで60tickではありません。")
 		return
 	if not await _assert_countdown_reset(countdown_two, p1_user_id, p2_user_id, 5000):
 		return
@@ -193,8 +197,12 @@ func _run() -> void:
 		_fail("1-1時にMatch Resultが通知されました。")
 		return
 
+	var round_two_score := _find_score(_p1_scores, 2)
 	var countdown_three := await _wait_round_countdown_pair(3, 7000)
 	if countdown_three.is_empty():
+		return
+	if int(countdown_three.get("start_tick", -1)) - int(round_two_score.get("server_tick", -1)) != 60:
+		_fail("Round 2取得表示からRound 3 Countdown開始まで60tickではありません。")
 		return
 	if not await _assert_countdown_reset(countdown_three, p1_user_id, p2_user_id, 5000):
 		return
