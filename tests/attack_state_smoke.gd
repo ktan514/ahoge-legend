@@ -123,6 +123,8 @@ func _run() -> void:
 
 	# authoritative Round Countdown完了後に戦闘を開始する。
 	await create_timer(3.5).timeout
+	var p1_state_start := p1_states.size()
+	var p2_state_start := _p2_states.size()
 
 	var press_result: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_PRESS
@@ -163,8 +165,8 @@ func _run() -> void:
 		_fail("P2がP1のContactEventを受信できませんでした。")
 		return
 
-	var p1_attack_states := _states_for_user(p1_states, p1_user_id)
-	var p2_attack_states := _states_for_user(_p2_states, p1_user_id)
+	var p1_attack_states := _states_for_user_from(p1_states, p1_user_id, p1_state_start)
+	var p2_attack_states := _states_for_user_from(_p2_states, p1_user_id, p2_state_start)
 	var expected_states := ["CHARGING", "WINDUP", "STRIKE", "COOLDOWN", "IDLE"]
 	if p1_attack_states != expected_states:
 		_fail("P1の攻撃状態順序が不正です: %s" % str(p1_attack_states))
@@ -195,7 +197,7 @@ func _run() -> void:
 		_fail("IDLE中のATTACK_RELEASE自体がtransport拒否されました。")
 		return
 	await create_timer(0.3).timeout
-	if _states_for_user(p1_states, p1_user_id).size() != states_before_invalid:
+	if _states_for_user_from(p1_states, p1_user_id, p1_state_start).size() != states_before_invalid:
 		_fail("IDLE中ATTACK_RELEASEが攻撃状態へ適用されました。")
 		return
 
@@ -243,6 +245,15 @@ func _wait_for_contact(
 func _states_for_user(events: Array[Dictionary], user_id: String) -> Array:
 	var states: Array = []
 	for event in events:
+		if str(event["user_id"]) == user_id:
+			states.append(str(event["state"]))
+	return states
+
+
+func _states_for_user_from(events: Array[Dictionary], user_id: String, start_index: int) -> Array:
+	var states: Array = []
+	for index in range(maxi(start_index, 0), events.size()):
+		var event := events[index]
 		if str(event["user_id"]) == user_id:
 			states.append(str(event["state"]))
 	return states
