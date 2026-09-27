@@ -123,6 +123,15 @@ func set_connection_status(text: String) -> void:
 	_connection.text = text
 
 
+func show_round_result(winner_label: String, round_number: int, p1_score: int, p2_score: int) -> void:
+	_countdown.text = "%s TAKES ROUND %d\nSCORE %d - %d" % [
+		winner_label,
+		round_number,
+		p1_score,
+		p2_score,
+	]
+
+
 func show_round_countdown(round_number: int, countdown_value: int) -> void:
 	if countdown_value > 0:
 		_countdown.text = "ROUND %d\n%d" % [round_number, countdown_value]
