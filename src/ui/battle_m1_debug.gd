@@ -341,14 +341,13 @@ func _on_bo3_score_changed(
 	_apply_round_wins(round_wins_by_user)
 	_snapshot["match_finished"] = match_finished
 	if not match_finished:
-		hud.flash_message(
-			"%s TAKES ROUND %d   SCORE %d - %d" % [
-				_player_label(round_winner_user_id),
-				completed_round_number,
-				int(_snapshot["player_one_rounds"]),
-				int(_snapshot["player_two_rounds"]),
-			]
+		hud.show_round_result(
+			_player_label(round_winner_user_id),
+			completed_round_number,
+			int(_snapshot["player_one_rounds"]),
+			int(_snapshot["player_two_rounds"])
 		)
+		hud.flash_message("")
 	_render()
 
 
