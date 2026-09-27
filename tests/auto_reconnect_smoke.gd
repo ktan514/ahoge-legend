@@ -36,6 +36,7 @@ func _run() -> void:
 
 	var p1_joined := [""]
 	var round_one_started := [false]
+	var p1_charging := [false]
 	var p1_idle_after_attack := [false]
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
@@ -47,7 +48,11 @@ func _run() -> void:
 	)
 	online_session.combat_state_changed.connect(
 		func(user_id: String, state_name: String, _server_tick: int, _charge_ratio: float) -> void:
-			if user_id == p1_user_id and state_name == "IDLE":
+			if user_id != p1_user_id:
+				return
+			if state_name == "CHARGING":
+				p1_charging[0] = true
+			elif state_name == "IDLE":
 				p1_idle_after_attack[0] = true
 	)
 	online_session.reconnect_started.connect(func(_grace_seconds: int) -> void:
@@ -137,6 +142,14 @@ func _run() -> void:
 	if int(press.get("input_sequence", -1)) != 1:
 		_fail("切断前ATTACK_PRESS sequenceが1ではありません。")
 		return
+
+	var charging_deadline := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < charging_deadline and not p1_charging[0]:
+		await create_timer(0.02).timeout
+	if not p1_charging[0]:
+		_fail("切断前ATTACK_PRESSがserverでCHARGINGへ適用されませんでした。")
+		return
+
 	var release: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_RELEASE
 	)
