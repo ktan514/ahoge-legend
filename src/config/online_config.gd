@@ -12,6 +12,8 @@ const CLIENT_LOG_LEVEL: int = 1
 
 const SOCKET_CONNECT_TIMEOUT_SECONDS: int = 3
 const SOCKET_APPEAR_ONLINE: bool = false
+const RECONNECT_GRACE_SECONDS: int = 15
+const RECONNECT_RETRY_SECONDS: float = 0.5
 
 const RANKED_MATCHMAKER_MODE: String = "ranked"
 const RANKED_MATCHMAKER_MIN_COUNT: int = 2
