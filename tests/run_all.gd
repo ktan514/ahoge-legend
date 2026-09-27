@@ -41,6 +41,7 @@ func _init() -> void:
 	_test_authoritative_contact_outcome_protocol()
 	_test_authoritative_stagger_protocol()
 	_test_authoritative_hit_count_protocol()
+	_test_authoritative_round_timer_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -459,6 +460,32 @@ func _test_authoritative_hit_count_protocol() -> void:
 		})
 	)
 	_expect_true(invalid.is_empty(), "負のRound Hit countを拒否する")
+
+
+func _test_authoritative_round_timer_protocol() -> void:
+	var start_payload := JSON.stringify({
+		"remaining_seconds": 85,
+		"server_tick": 700,
+	})
+	var start_event := CombatInputProtocolScript.parse_round_timer_changed_payload(start_payload)
+	_expect_equal(int(start_event["remaining_seconds"]), 85, "Round timer 85をdecodeできる")
+	_expect_equal(int(start_event["server_tick"]), 700, "Round timer server tickを保持する")
+
+	var zero_payload := JSON.stringify({
+		"remaining_seconds": 0,
+		"server_tick": 3250,
+	})
+	var zero_event := CombatInputProtocolScript.parse_round_timer_changed_payload(zero_payload)
+	_expect_equal(int(zero_event["remaining_seconds"]), 0, "Round timer 0をdecodeできる")
+
+	for invalid_seconds in [-1, 86]:
+		var invalid := CombatInputProtocolScript.parse_round_timer_changed_payload(
+			JSON.stringify({
+				"remaining_seconds": invalid_seconds,
+				"server_tick": 700,
+			})
+		)
+		_expect_true(invalid.is_empty(), "範囲外Round timerを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
