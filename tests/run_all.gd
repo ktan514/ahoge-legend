@@ -36,6 +36,7 @@ func _init() -> void:
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
 	_test_authoritative_defense_result_protocol()
+	_test_authoritative_contact_outcome_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -380,6 +381,31 @@ func _test_authoritative_defense_result_protocol() -> void:
 		})
 	)
 	_expect_true(invalid.is_empty(), "未知のDefenseResultを拒否する")
+
+
+func _test_authoritative_contact_outcome_protocol() -> void:
+	var hit_payload := JSON.stringify({
+		"attacker_id": "player-1",
+		"defender_id": "player-2",
+		"server_tick": 410,
+		"input_sequence": 12,
+	})
+	var hit_event := CombatInputProtocolScript.parse_hit_confirmed_payload(hit_payload)
+	_expect_equal(hit_event["attacker_id"], "player-1", "HitConfirmed attackerをdecodeできる")
+	_expect_equal(int(hit_event["input_sequence"]), 12, "HitConfirmed sequenceを保持する")
+
+	var clash_payload := JSON.stringify({
+		"attacker_a_id": "player-1",
+		"attacker_b_id": "player-2",
+		"attacker_a_input_sequence": 12,
+		"attacker_b_input_sequence": 8,
+		"server_tick": 411,
+	})
+	var clash_event := CombatInputProtocolScript.parse_attack_clash_payload(clash_payload)
+	_expect_equal(clash_event["attacker_a_id"], "player-1", "AttackClash attacker Aをdecodeできる")
+	_expect_equal(clash_event["attacker_b_id"], "player-2", "AttackClash attacker Bをdecodeできる")
+	_expect_equal(int(clash_event["attacker_a_input_sequence"]), 12, "AttackClash A sequenceを保持する")
+	_expect_equal(int(clash_event["attacker_b_input_sequence"]), 8, "AttackClash B sequenceを保持する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
