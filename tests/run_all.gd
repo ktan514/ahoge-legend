@@ -8,6 +8,7 @@ const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -31,6 +32,7 @@ func _init() -> void:
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
 	_test_ranked_matchmaker_query()
+	_test_combat_input_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -246,6 +248,30 @@ func _test_ranked_matchmaker_query() -> void:
 		"+properties.mode:ranked +properties.rating:>=1400 +properties.rating:<=1600",
 		"Ranked Matchmaker初期queryはRating ±100"
 	)
+
+
+func _test_combat_input_protocol() -> void:
+	_expect_true(
+		CombatInputProtocolScript.is_allowed_action("ATTACK_PRESS"),
+		"ATTACK_PRESSは許可された戦闘入力"
+	)
+	_expect_true(
+		CombatInputProtocolScript.is_allowed_action("ATTACK_RELEASE"),
+		"ATTACK_RELEASEは許可された戦闘入力"
+	)
+	_expect_true(
+		CombatInputProtocolScript.is_allowed_action("DEFEND"),
+		"DEFENDは許可された戦闘入力"
+	)
+	_expect_false(
+		CombatInputProtocolScript.is_allowed_action("UNKNOWN"),
+		"未知の戦闘入力は拒否する"
+	)
+
+	var payload := CombatInputProtocolScript.build_input_payload(7, "DEFEND")
+	var parsed = JSON.parse_string(payload)
+	_expect_equal(parsed["input_sequence"], 7.0, "input_sequenceをpayloadへ保持する")
+	_expect_equal(parsed["action"], "DEFEND", "actionをpayloadへ保持する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:

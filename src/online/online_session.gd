@@ -3,6 +3,7 @@ extends Node
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 signal authentication_succeeded(user_id: String, username: String)
 signal authentication_failed(step: String, message: String)
@@ -14,6 +15,8 @@ signal ranked_matchmaking_cancelled
 signal ranked_match_found(match_id: String)
 signal ranked_match_joined(match_id: String)
 signal ranked_matchmaking_failed(step: String, message: String)
+signal combat_input_accepted(user_id: String, input_sequence: int, action: String, server_tick: int)
+signal combat_input_failed(message: String)
 
 var client = null
 var session = null
@@ -22,6 +25,7 @@ var realtime_socket = null
 var matchmaker_ticket: String = ""
 var joined_match = null
 var current_match_id: String = ""
+var _next_input_sequence: int = 0
 var _identity_store = null
 
 
@@ -108,6 +112,7 @@ func connect_realtime_socket() -> Dictionary:
 	candidate.connection_error.connect(_on_realtime_connection_error.bind(candidate))
 	candidate.received_error.connect(_on_realtime_received_error.bind(candidate))
 	candidate.received_matchmaker_matched.connect(_on_matchmaker_matched.bind(candidate))
+	candidate.received_match_state.connect(_on_match_state_received.bind(candidate))
 	realtime_socket = candidate
 
 	var connect_result = await candidate.connect_async(
@@ -244,7 +249,55 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 
 	joined_match = join_result
 	current_match_id = str(join_result.match_id)
+	_next_input_sequence = 0
 	ranked_match_joined.emit(current_match_id)
+
+
+func send_combat_input(action: String) -> Dictionary:
+	if not is_in_authoritative_match():
+		return _combat_input_fail("authoritative matchへjoinしていません。")
+
+	if not CombatInputProtocolScript.is_allowed_action(action):
+		return _combat_input_fail("不正な戦闘actionです: %s" % action)
+
+	_next_input_sequence += 1
+	var sequence := _next_input_sequence
+	var payload := CombatInputProtocolScript.build_input_payload(sequence, action)
+	var result = await realtime_socket.send_match_state_async(
+		current_match_id,
+		CombatInputProtocolScript.OPCODE_COMBAT_INPUT,
+		payload
+	)
+
+	if result != null and result.has_method("is_exception") and result.is_exception():
+		return _combat_input_fail(
+			_result_error_message(result, "戦闘入力を送信できませんでした。")
+		)
+
+	return {
+		"ok": true,
+		"input_sequence": sequence,
+	}
+
+
+func _on_match_state_received(match_state, candidate) -> void:
+	if realtime_socket != candidate:
+		return
+	if current_match_id.is_empty() or str(match_state.match_id) != current_match_id:
+		return
+	if int(match_state.op_code) != CombatInputProtocolScript.OPCODE_INPUT_ACCEPTED:
+		return
+
+	var accepted := CombatInputProtocolScript.parse_accepted_payload(str(match_state.data))
+	if accepted.is_empty():
+		return
+
+	combat_input_accepted.emit(
+		str(accepted["user_id"]),
+		int(accepted["input_sequence"]),
+		str(accepted["action"]),
+		int(accepted["server_tick"])
+	)
 
 
 func is_realtime_connected() -> bool:
@@ -265,6 +318,7 @@ func clear_session() -> void:
 	matchmaker_ticket = ""
 	joined_match = null
 	current_match_id = ""
+	_next_input_sequence = 0
 	session = null
 	account = null
 
@@ -282,6 +336,7 @@ func _on_realtime_closed(candidate) -> void:
 		matchmaker_ticket = ""
 		joined_match = null
 		current_match_id = ""
+		_next_input_sequence = 0
 	realtime_disconnected.emit()
 
 
@@ -316,6 +371,15 @@ func _result_error_message(result, fallback: String) -> String:
 func _realtime_fail(message: String) -> Dictionary:
 	printerr("Nakama realtime connection failed: %s" % message)
 	realtime_connection_failed.emit(message)
+	return {
+		"ok": false,
+		"message": message,
+	}
+
+
+func _combat_input_fail(message: String) -> Dictionary:
+	printerr("Nakama combat input failed: %s" % message)
+	combat_input_failed.emit(message)
 	return {
 		"ok": false,
 		"message": message,

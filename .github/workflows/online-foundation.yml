@@ -9,6 +9,7 @@ on:
       - "scripts/client-online-smoke.sh"
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-matchmaker-smoke.sh"
+      - "scripts/client-combat-input-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -17,6 +18,7 @@ on:
       - "tests/online_smoke.gd"
       - "tests/realtime_smoke.gd"
       - "tests/matchmaker_smoke.gd"
+      - "tests/combat_input_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -91,6 +93,9 @@ jobs:
 
       - name: Godot ranked matchmaker smoke
         run: ./scripts/client-matchmaker-smoke.sh
+
+      - name: Godot authoritative combat input smoke
+        run: ./scripts/client-combat-input-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash

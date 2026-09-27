@@ -861,7 +861,40 @@ match成立前のticketはcancel可能とする。
 
 クライアントは入力または戦闘アクションを送信し、サーバー確定イベントを受信する方向を基本とする。
 
-通信遅延を考慮したContactEventの時刻処理、補正方式、tick rateは未決。
+最初の戦闘入力プロトコルは次で固定する。
+
+client → server:
+
+- op code `1`: `COMBAT_INPUT`
+- payload:
+  - `input_sequence`: 正の整数。プレイヤー単位で単調増加
+  - `action`: `ATTACK_PRESS / ATTACK_RELEASE / DEFEND`
+
+server → clients:
+
+- op code `101`: `INPUT_ACCEPTED`
+- payload:
+  - `user_id`
+  - `input_sequence`
+  - `action`
+  - `server_tick`
+
+authoritative matchは戦闘入力に対して次を検証する。
+
+1. senderが現在join中のpresenceである
+2. payloadがJSONとして解釈できる
+3. `action` が許可された戦闘入力である
+4. `input_sequence` が正の整数である
+5. 同一userの直前受理sequenceより大きい
+6. 同一userから同じserver tick内に既に入力を受理していない
+
+検証に成功した入力だけを `INPUT_ACCEPTED` としてmatch参加者へbroadcastする。
+重複・逆順sequence、不正payload、不正action、同一tickの2入力目は戦闘ロジックへ渡さず破棄する。
+
+この入力受付段階ではAttack state、Hit、Defense、Clash、勝敗はまだ確定しない。
+それらは受理済み入力を入力源として後続Issueでserver authoritative stateへ移管する。
+
+通信遅延を考慮したContactEventの時刻処理と100ms上限の具体的な補正方式は後続Issueで実装する。
 
 ## 15. マッチメイキング
 
@@ -1211,10 +1244,13 @@ SHORT_TEST
 
 - server runtime: TypeScript
 - match tick rate: 30Hz
-- クライアントからサーバーへの戦闘入力は原則1 tickあたり1メッセージ以下
+- クライアントからサーバーへの戦闘入力は1 playerあたり1 tickに1受理までとする
 - 各入力に単調増加する `input_sequence` を付与する
+- serverはplayerごとのlast accepted sequenceとlast accepted tickを保持する
+- duplicate / out-of-order sequenceは破棄する
+- 同一tickの2入力目は破棄する
+- 受理入力はserver tick付き `INPUT_ACCEPTED` として両clientへ通知する
 - rollbackは初期実装では行わない
-- サーバーは受信順だけでなく、match tickと入力sequenceを使用して重複・順序異常を検出する
 - ジャスト判定、相殺、勝敗はサーバー権威で確定する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 

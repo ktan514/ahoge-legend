@@ -167,7 +167,25 @@ AHOGE LEGEND matchmaker smoke: PASS
 ```
 
 初期検索は2人固定、`mode=ranked`、Rating ±100です。
-10秒ごとの検索幅拡大、戦闘入力、勝敗処理は後続Issueで実装します。
+10秒ごとの検索幅拡大、勝敗処理は後続Issueで実装します。
+
+## Authoritative combat input
+
+join済みauthoritative matchへ戦闘入力を送り、serverがsequence / tickを検証して受理入力だけを両クライアントへ返すことを確認します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-combat-input-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND combat input smoke: PASS
+```
+
+初期入力は `ATTACK_PRESS / ATTACK_RELEASE / DEFEND` の3種類です。
+この段階では入力受付だけをserver authoritativeにし、Hit / Defense / Clash / 85秒タイマー / BO3勝敗はまだserver判定へ移していません。
 
 ## 設計正本
 
