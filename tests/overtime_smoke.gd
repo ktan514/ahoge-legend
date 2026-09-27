@@ -23,6 +23,8 @@ var _p1_timers: Array[Dictionary] = []
 var _p2_timers: Array[Dictionary] = []
 var _p1_overtime: Array[Dictionary] = []
 var _p2_overtime: Array[Dictionary] = []
+var _p1_results: Array[Dictionary] = []
+var _p2_results: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -335,6 +337,19 @@ func _run() -> void:
 		_fail("Overtime勝利後にP2がROUND_LOCKEDへ遷移しませんでした。")
 		return
 
+	var p1_locked := _find_state(_p1_states, p1_user_id, "ROUND_LOCKED", final_state_start_p1)
+	var round_result := await _wait_round_result_pair(
+		"OVERTIME_HIT",
+		p1_user_id,
+		p2_user_id,
+		1,
+		0,
+		int(p1_locked.get("server_tick", -1)),
+		5000
+	)
+	if round_result.is_empty():
+		return
+
 	if _latest_count(_p1_counts, p1_user_id) != 1 			or _latest_count(_p1_counts, p2_user_id) != 0:
 		_fail("Overtime終了時Hit countが1-0ではありません。")
 		return
@@ -403,7 +418,8 @@ func _on_first_match_state(match_state) -> void:
 		_p1_counts,
 		_p1_clashes,
 		_p1_timers,
-		_p1_overtime
+		_p1_overtime,
+		_p1_results
 	)
 
 
@@ -418,7 +434,8 @@ func _on_second_match_state(match_state) -> void:
 		_p2_counts,
 		_p2_clashes,
 		_p2_timers,
-		_p2_overtime
+		_p2_overtime,
+		_p2_results
 	)
 
 
@@ -430,7 +447,8 @@ func _collect(
 	counts: Array[Dictionary],
 	clashes: Array[Dictionary],
 	timers: Array[Dictionary],
-	overtime: Array[Dictionary]
+	overtime: Array[Dictionary],
+	results: Array[Dictionary]
 ) -> void:
 	var op_code := int(match_state.op_code)
 	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
@@ -467,6 +485,11 @@ func _collect(
 		var event := CombatInputProtocolScript.parse_round_overtime_started_payload(str(match_state.data))
 		if not event.is_empty():
 			overtime.append(event)
+		return
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_RESULT:
+		var event := CombatInputProtocolScript.parse_round_result_payload(str(match_state.data))
+		if not event.is_empty():
+			results.append(event)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -645,6 +668,41 @@ func _wait_new_event(events: Array[Dictionary], start_index: int, timeout_ms: in
 		if events.size() > start_index:
 			return events[start_index]
 		await create_timer(0.02).timeout
+	return {}
+
+
+func _wait_round_result_pair(
+	expected_cause: String,
+	winner_user_id: String,
+	loser_user_id: String,
+	winner_hits: int,
+	loser_hits: int,
+	expected_server_tick: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if not _p1_results.is_empty() and not _p2_results.is_empty():
+			var first := _p1_results[0]
+			var second := _p2_results[0]
+			if first != second:
+				_fail("P1/P2でRound Result payloadが一致しません。")
+				return {}
+			if int(first.get("round_number", -1)) != 1 \
+					or str(first.get("winner_user_id", "")) != winner_user_id \
+					or str(first.get("loser_user_id", "")) != loser_user_id \
+					or str(first.get("finish_cause", "")) != expected_cause \
+					or int(first.get("winner_hits", -1)) != winner_hits \
+					or int(first.get("loser_hits", -1)) != loser_hits \
+					or int(first.get("server_tick", -1)) != expected_server_tick:
+				_fail("Round Result内容が期待値と一致しません。")
+				return {}
+			if _p1_results.size() != 1 or _p2_results.size() != 1:
+				_fail("Round Resultが1回だけではありません。")
+				return {}
+			return first
+		await create_timer(0.02).timeout
+	_fail("Round Resultを両clientで受信できませんでした。")
 	return {}
 
 
