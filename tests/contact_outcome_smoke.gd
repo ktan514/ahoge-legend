@@ -108,6 +108,7 @@ func _run() -> void:
 		return
 
 	# DefenseなしContactはHIT。
+	var hit_state_index := _p1_states.size()
 	var hit_sequence := await _p1_attack(online_session, p1_user_id, 0.0)
 	if hit_sequence <= 0:
 		return
@@ -115,11 +116,13 @@ func _run() -> void:
 	var hit_p2 := await _wait_for_event(_p2_hits, "input_sequence", hit_sequence, 5000)
 	if not _same_hit(hit_p1, hit_p2, p1_user_id, p2_user_id):
 		return
-	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", 0, 5000):
+	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", hit_state_index, 5000):
 		_fail("HIT検証後にP1がIDLEへ復帰しませんでした。")
 		return
 
 	# Defense成功時はHITを出さない。
+	var defense_p1_state_index := _p1_states.size()
+	var defense_p2_state_index := _p2_states.size()
 	var defended_sequence := await _p1_attack(online_session, p1_user_id, 0.65)
 	if defended_sequence <= 0:
 		return
@@ -138,10 +141,10 @@ func _run() -> void:
 	if _has_event(_p1_hits, "input_sequence", defended_sequence):
 		_fail("Defense成立ContactでHITが発生しました。")
 		return
-	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", 0, 5000):
+	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", defense_p1_state_index, 5000):
 		_fail("Defense検証後にP1がIDLEへ復帰しませんでした。")
 		return
-	if not await _wait_for_state(_p2_states, p2_user_id, "IDLE", 0, 5000):
+	if not await _wait_for_state(_p2_states, p2_user_id, "IDLE", defense_p2_state_index, 5000):
 		_fail("Defense検証後にP2がIDLEへ復帰しませんでした。")
 		return
 
