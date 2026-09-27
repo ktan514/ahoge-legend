@@ -421,6 +421,7 @@ function applyAttackInput(
       cooldownEndTick: -1,
       contactEmitted: false,
       releaseSequence: 0,
+      defenseStartTick: -1,
       defenseEndTick: -1,
       defenseJustUntilTick: -1,
       resumeState: COMBAT_STATE_IDLE,
