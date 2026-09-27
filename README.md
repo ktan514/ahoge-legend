@@ -323,7 +323,7 @@ LONG_TEST / SHORT_TESTを同じmatchへ参加させ、Hit、Defense cancel、Par
 AHOGE LEGEND hit count smoke: PASS
 ```
 
-PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝利やRound resetは後続Issueで接続します。
+PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝利は後続節で接続済みで、Round resetは後続Issueで接続します。
 
 ## Authoritative 85秒 Round timer
 
@@ -340,7 +340,7 @@ PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝�
 AHOGE LEGEND round timer smoke: PASS
 ```
 
-serverは85から0までの値が変化したときだけ両クライアントへ通知します。0到達時のHit数比較・Overtime・Round終了は後続Issueで接続します。
+serverは85から0までの値が変化したときだけ両クライアントへ通知します。0到達時のHit数比較とOvertimeは後続節で接続済みで、Round Result / resetは後続Issueで接続します。
 
 ## Authoritative 5 Hit Round win
 
@@ -357,7 +357,7 @@ serverは85から0までの値が変化したときだけ両クライアント�
 AHOGE LEGEND hit limit smoke: PASS
 ```
 
-Round Result通知・次ラウンドReset・timeout / Overtimeは後続Issueで接続します。
+Round Result通知・次ラウンドResetは後続Issueで接続します。
 
 ## Authoritative timeout Hit比較
 
@@ -374,7 +374,24 @@ Round Result通知・次ラウンドReset・timeout / Overtimeは後続Issueで�
 AHOGE LEGEND timeout winner smoke: PASS
 ```
 
-同点の場合は勝者を確定せずOvertime待ちとして一旦ROUND_LOCKEDへ遷移します。Overtime開始・次Hit勝利は後続Issueで接続します。
+同点の場合は勝者を確定せずOvertime待ちとして一旦ROUND_LOCKEDへ遷移します。
+
+## Authoritative Overtime
+
+timeout同点の次server tickでOvertimeを開始し、timer 0のまま両者をIDLEへ戻します。延長中は次の有効Hitで即ラウンド終了します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-overtime-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND overtime smoke: PASS
+```
+
+PARRY / DODGE / Just / AttackClashでは延長戦は終了しません。Round Result通知と次ラウンドResetは後続Issueで接続します。
 
 ## 設計・製造計画の正本
 

@@ -24,6 +24,7 @@ signal hit_confirmed(attacker_id: String, defender_id: String, server_tick: int,
 signal attack_clash(attacker_a_id: String, attacker_b_id: String, attacker_a_input_sequence: int, attacker_b_input_sequence: int, server_tick: int)
 signal round_hit_count_changed(user_id: String, hit_count: int, server_tick: int, input_sequence: int)
 signal round_timer_changed(remaining_seconds: int, server_tick: int)
+signal round_overtime_started(server_tick: int)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -402,6 +403,13 @@ func _on_match_state_received(match_state, candidate) -> void:
 			int(timer_event["remaining_seconds"]),
 			int(timer_event["server_tick"])
 		)
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_OVERTIME_STARTED:
+		var overtime_event := CombatInputProtocolScript.parse_round_overtime_started_payload(str(match_state.data))
+		if overtime_event.is_empty():
+			return
+		round_overtime_started.emit(int(overtime_event["server_tick"]))
 
 
 func is_realtime_connected() -> bool:
