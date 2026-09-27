@@ -1427,6 +1427,52 @@ M1のBattle表示はローカル `MatchCoordinator / CombatResolver` から勝�
 
 M1デバッグ起動は通常GameFlowと分離し、起動引数 `--m1-battle` からUI-10へ直接入れる。M1用の内部2client構成、固定テストキャラクター、操作キーは検証専用であり、本番仕様へ昇格させない。
 
+#### 14.4.1 authoritative Round開始Countdown
+
+M1 Human Verificationで、Round終了後の85秒reset・1本取得・次Round開始が視覚的に分かりにくいことをblocking findingとして確認したため、Round開始をserver authoritativeなCountdown stateへ分離する。
+
+対象はRound 1を含む全Roundとする。
+
+server stateへ次を追加する。
+
+```text
+round_countdown_active
+round_countdown_start_tick
+round_countdown_value
+```
+
+Countdownは30Hz server tickを基準に3秒間とし、表示値を `3 → 2 → 1 → GO` とする。
+
+新規server event:
+
+```text
+opcode 114: ROUND_COUNTDOWN_CHANGED
+- round_number
+- countdown_value
+- server_tick
+```
+
+`countdown_value` は `3 / 2 / 1 / 0` の整数とし、`0` を `GO!` と解釈する。
+
+Round準備時の順序:
+
+1. 次Round番号を確定する
+2. Hit数を両者0へresetする
+3. timer表示値を85へresetする
+4. 両者を `ROUND_LOCKED` にする
+5. `ROUND_COUNTDOWN_CHANGED(3)` を通知する
+6. 1秒ごとに `2`、`1` を通知する
+7. Countdown中はcombat inputを受理せず、85秒timerも進めない
+8. Countdown終了tickで `ROUND_COUNTDOWN_CHANGED(0 = GO!)` を通知する
+9. 同tickで `ROUND_STARTED`、Hit 0、timer 85、両者 `IDLE` を通知する
+10. そのtickから85秒timerと戦闘入力を有効にする
+
+Round終了から次Round Countdownへ移る際、前Roundの `BO3_SCORE_CHANGED` で取得Round数を先に確定する。clientはこのscoreを「1本取得」の表示正本とし、Countdownとは別表示する。
+
+Countdown中に届いたclient戦闘入力は `INPUT_ACCEPTED` を返さず破棄し、input sequenceも消費しない。
+
+`GO!` はserver上の入力解禁と同じtickを表す。clientは視認性のため `GO!` 表示を短時間残してよいが、その間もserver timerは開始済みとする。
+
 ## 15. マッチメイキング
 
 ### 15.1 ランクマッチ
