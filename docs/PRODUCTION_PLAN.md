@@ -29,16 +29,20 @@
 - authoritative攻撃状態
 - server tickからcharge ratio算出
 - ContactEvent生成と両client通知
+- authoritative Defense / Just / Hit / AttackClash
+- authoritative Stagger
+- SHORT detach / Regrow
+- 工程1の2-client戦闘統合検証
 
-現在は **工程1: オンライン戦闘コア** の途中である。
+現在は **工程2: authoritativeラウンド・BO3** の途中である。
 
 ## 3. 製造工程
 
 | 工程 | 内容 | 統括Issue | 状態 |
 | --- | --- | --- | --- |
 | 0 | 設計・ローカル縦切り・オンライン基礎 | #1〜#19 | 完了 |
-| 1 | オンライン戦闘コア | #22 | 進行中 |
-| 2 | authoritativeラウンド・BO3 | #23 | 未着手 |
+| 1 | オンライン戦闘コア | #22 | 完了 |
+| 2 | authoritativeラウンド・BO3 | #23 | 進行中 |
 | 3 | オンラインサービス | #24 | 未着手 |
 | 4 | GameFlow・主要12画面 | #25 | 未着手 |
 | 5 | 正式キャラクター・演出・素材 | #26 | 未着手 |
@@ -186,14 +190,14 @@ RC1
 
 現在からの優先順は次とする。
 
-1. authoritative Defense
-2. Parry / Dodge / Just
-3. Contact → Hit / Defense / Clash
-4. Stagger
-5. SHORT detach / regrow
-6. 85秒 / Hit数
-7. Round / Overtime
-8. BO3 Match
+1. server Hit数
+2. 85秒timer
+3. 5 Hitラウンド勝利
+4. timeout時のHit数比較
+5. Overtime
+6. Round result
+7. 2本先取BO3
+8. Match result
 9. Client Battle画面接続
 10. Disconnect / Reconnect
 11. Matchmaker検索幅拡大
