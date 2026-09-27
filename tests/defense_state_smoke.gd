@@ -185,14 +185,16 @@ func _run() -> void:
 	if not await _wait_for_state(_p1_states, p1_user_id, "PARRY", start_index, 5000):
 		_fail("WINDUPからPARRYへ遷移しませんでした。")
 		return
-	await create_timer(0.5).timeout
+	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", start_index, 5000):
+		_fail("WINDUP cancel後にIDLEへ復帰しませんでした。")
+		return
+	await create_timer(0.2).timeout
 	if _has_contact(_p1_contacts, p1_user_id, release_sequence):
 		_fail("WINDUP cancel後にContactEventが発生しました。")
 		return
 
 	# STRIKE中DEFENDで未到達Contactをキャンセル
 	start_index = _p1_states.size()
-	await _wait_until_idle(_p1_states, p1_user_id, start_index, 5000)
 	await online_session.send_combat_input(CombatInputProtocolScript.ACTION_ATTACK_PRESS)
 	if not await _wait_for_state(_p1_states, p1_user_id, "CHARGING", start_index, 5000):
 		_fail("STRIKE検証用CHARGINGを受信できませんでした。")
@@ -213,14 +215,16 @@ func _run() -> void:
 	if not await _wait_for_state(_p1_states, p1_user_id, "PARRY", start_index, 5000):
 		_fail("STRIKEからPARRYへ遷移しませんでした。")
 		return
-	await create_timer(0.4).timeout
+	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", start_index, 5000):
+		_fail("STRIKE cancel後にIDLEへ復帰しませんでした。")
+		return
+	await create_timer(0.2).timeout
 	if _has_contact(_p1_contacts, p1_user_id, release_sequence):
 		_fail("STRIKE cancel後に未到達ContactEventが発生しました。")
 		return
 
 	# COOLDOWN中DEFENDはPARRY後に残りCOOLDOWNへ復帰
 	start_index = _p1_states.size()
-	await _wait_until_idle(_p1_states, p1_user_id, start_index, 5000)
 	await online_session.send_combat_input(CombatInputProtocolScript.ACTION_ATTACK_PRESS)
 	if not await _wait_for_state(_p1_states, p1_user_id, "CHARGING", start_index, 5000):
 		_fail("COOLDOWN検証用CHARGINGを受信できませんでした。")
