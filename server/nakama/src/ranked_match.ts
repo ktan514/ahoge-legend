@@ -59,6 +59,7 @@ interface AhogeRankedMatchState {
   combatStateByUser: {[key: string]: AuthoritativeCombatState};
   characterIdByUser: {[key: string]: string};
   roundHitCountByUser: {[key: string]: number};
+  roundHitCountSnapshotBroadcast: boolean;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -98,7 +99,8 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       lastAcceptedTickByUser: {},
       combatStateByUser: {},
       characterIdByUser: characterIdByUser,
-      roundHitCountByUser: {}
+      roundHitCountByUser: {},
+      roundHitCountSnapshotBroadcast: false
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -170,12 +172,6 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     }
   });
 
-  if (Object.keys(state.presences).length === 2) {
-    Object.keys(state.presences).forEach(function (userId): void {
-      broadcastRoundHitCount(dispatcher, state, userId, tick, 0);
-    });
-  }
-
   logger.info("ahoge_ranked player joined. size=%d", Object.keys(state.presences).length);
   return {state: state};
 };
@@ -195,6 +191,9 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
     delete state.lastAcceptedTickByUser[presence.userId];
     delete state.combatStateByUser[presence.userId];
   });
+  if (Object.keys(state.presences).length < 2) {
+    state.roundHitCountSnapshotBroadcast = false;
+  }
   logger.info("ahoge_ranked player left. size=%d", Object.keys(state.presences).length);
   return {state: state};
 };
@@ -741,6 +740,17 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
+  if (
+    Object.keys(state.presences).length === 2 &&
+    !state.roundHitCountSnapshotBroadcast
+  ) {
+    Object.keys(state.presences).forEach(function (userId): void {
+      broadcastRoundHitCount(dispatcher, state, userId, tick, 0);
+    });
+    state.roundHitCountSnapshotBroadcast = true;
+  }
+
+
   messages.forEach(function (message): void {
     if (message.opCode !== COMBAT_INPUT_OPCODE) {
       return;
