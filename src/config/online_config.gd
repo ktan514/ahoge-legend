@@ -17,3 +17,14 @@ const RANKED_MATCHMAKER_MODE: String = "ranked"
 const RANKED_MATCHMAKER_MIN_COUNT: int = 2
 const RANKED_MATCHMAKER_MAX_COUNT: int = 2
 const RANKED_INITIAL_RATING_RANGE: int = 100
+
+const RANKED_CHARACTER_LONG_TEST: String = "LONG_TEST"
+const RANKED_CHARACTER_SHORT_TEST: String = "SHORT_TEST"
+const RANKED_SUPPORTED_CHARACTER_IDS := {
+	RANKED_CHARACTER_LONG_TEST: true,
+	RANKED_CHARACTER_SHORT_TEST: true,
+}
+
+
+static func is_supported_ranked_character_id(character_id: String) -> bool:
+	return bool(RANKED_SUPPORTED_CHARACTER_IDS.get(character_id, false))

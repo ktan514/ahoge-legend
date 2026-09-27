@@ -17,6 +17,7 @@ signal ranked_match_joined(match_id: String)
 signal ranked_matchmaking_failed(step: String, message: String)
 signal combat_input_accepted(user_id: String, input_sequence: int, action: String, server_tick: int)
 signal combat_state_changed(user_id: String, state: String, server_tick: int, charge_ratio: float)
+signal ahoge_state_changed(user_id: String, ahoge_available: bool, regrow_until_tick: int, server_tick: int)
 signal contact_reached(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, charge_ratio: float)
 signal defense_resolved(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, result: String)
 signal hit_confirmed(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int)
@@ -149,18 +150,24 @@ func build_ranked_matchmaker_query(rating: int) -> String:
 	return RankedMatchmakerQueryScript.build(rating)
 
 
-func start_ranked_matchmaking(rating: int) -> Dictionary:
+# CharacterSelectで確定したIDをMatchmaker propertyとしてserverへ渡す。
+# character_id自体は対戦相手の検索条件には使用しない。
+func start_ranked_matchmaking(rating: int, character_id: String) -> Dictionary:
 	if not is_realtime_connected():
 		return _matchmaking_fail("start", "Realtime Socket接続前はMatchmakerを開始できません。")
 
 	if not matchmaker_ticket.is_empty():
 		return _matchmaking_fail("start", "既にMatchmaker ticketがあります。")
 
+	if not OnlineConfigScript.is_supported_ranked_character_id(character_id):
+		return _matchmaking_fail("start", "未対応character_idです: %s" % character_id)
+
 	var min_rating := rating - OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
 	var max_rating := rating + OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
 	var query := build_ranked_matchmaker_query(rating)
 	var string_properties := {
 		"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
+		"character_id": character_id,
 	}
 	var numeric_properties := {
 		"rating": float(rating),
@@ -187,6 +194,7 @@ func start_ranked_matchmaking(rating: int) -> Dictionary:
 		"ok": true,
 		"min_rating": min_rating,
 		"max_rating": max_rating,
+		"character_id": character_id,
 	}
 
 
@@ -317,6 +325,12 @@ func _on_match_state_received(match_state, candidate) -> void:
 			str(state_event["state"]),
 			int(state_event["server_tick"]),
 			float(state_event["charge_ratio"])
+		)
+		ahoge_state_changed.emit(
+			str(state_event["user_id"]),
+			bool(state_event.get("ahoge_available", true)),
+			int(state_event.get("regrow_until_tick", -1)),
+			int(state_event["server_tick"])
 		)
 		return
 

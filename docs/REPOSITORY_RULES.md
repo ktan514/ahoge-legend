@@ -112,6 +112,12 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-stagger-smoke.sh
 ```
 
+2-client authoritative SHORT state smoke test:
+
+```bash
+./scripts/client-short-state-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -162,13 +168,14 @@ npm run build
 - `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 - `scripts/client-matchmaker-smoke.sh`: 2クライアントをDevice認証・Realtime接続し、Matchmaker成立から同一authoritative matchへのjoinまで検証する。
 - `server/nakama/src/combat_config.ts`: server authoritative戦闘の暫定時間値と30Hz tick換算・補間を一元管理する。
-- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent生成、DefenseResult、AttackClash、Hit、Stagger確定を定義する。Hit数 / SHORT / 勝敗等は後続Issueで追加する。
+- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrowを定義する。Hit数 / 勝敗等は後続Issueで追加する。
 - `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 - `scripts/client-attack-state-smoke.sh`: 2クライアントで同じauthoritative攻撃状態遷移とContactEventを受信できることを検証する。
 - `scripts/client-defense-state-smoke.sh`: 2クライアントでPARRY / DODGE状態、攻撃キャンセル、Defense終了後復帰、Cooldown一時停止・再開を検証する。
-- `scripts/client-defense-result-smoke.sh`: Contact到達時のNONE / PARRY / JUST_PARRY確定と、両クライアントのDefenseResult一致を検証する。DODGE / JUST_DODGEの実運用接続はSHORT detach / regrow後に行う。
+- `scripts/client-defense-result-smoke.sh`: Contact到達時のNONE / PARRY / JUST_PARRY確定と、両クライアントのDefenseResult一致を検証する。DODGE / JUST_DODGEの実運用経路は `scripts/client-short-state-smoke.sh` で検証する。
 - `scripts/client-contact-outcome-smoke.sh`: 2クライアントでHit、DefenseによるHit抑止、AttackClash確定と両client結果一致を検証する。
 - `scripts/client-stagger-smoke.sh`: Just DefenseとAttackClashからのSTAGGER、14tick継続、入力抑止、IDLE復帰、両client状態一致を検証する。
+- `scripts/client-short-state-smoke.sh`: SHORT_TESTのcharacter_id引き渡し、detach、DODGE、JUST_DODGE、18tick Regrow、PARRY復帰、両client状態一致を検証する。
 
 ## アセット管理
 

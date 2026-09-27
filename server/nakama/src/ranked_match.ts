@@ -21,6 +21,9 @@ const COMBAT_STATE_PARRY = "PARRY";
 const COMBAT_STATE_DODGE = "DODGE";
 const COMBAT_STATE_STAGGER = "STAGGER";
 
+const CHARACTER_LONG_TEST = "LONG_TEST";
+const CHARACTER_SHORT_TEST = "SHORT_TEST";
+
 const ALLOWED_COMBAT_ACTIONS: {[key: string]: boolean} = {
   ATTACK_PRESS: true,
   ATTACK_RELEASE: true,
@@ -44,6 +47,7 @@ interface AuthoritativeCombatState {
   resumeState: string;
   resumeRemainingTicks: number;
   staggerEndTick: number;
+  regrowEndTick: number;
 }
 
 interface AhogeRankedMatchState {
@@ -52,6 +56,7 @@ interface AhogeRankedMatchState {
   lastInputSequenceByUser: {[key: string]: number};
   lastAcceptedTickByUser: {[key: string]: number};
   combatStateByUser: {[key: string]: AuthoritativeCombatState};
+  characterIdByUser: {[key: string]: string};
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -61,7 +66,9 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
   params
 ) {
   const expectedUserIds: {[key: string]: boolean} = {};
+  const characterIdByUser: {[key: string]: string} = {};
   const rawExpected = params.expectedUserIds;
+  const rawCharacters = params.characterIds;
 
   if (Array.isArray(rawExpected)) {
     rawExpected.forEach(function (userId: any): void {
@@ -69,6 +76,13 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       if (id) {
         expectedUserIds[id] = true;
       }
+    });
+  }
+
+  if (rawCharacters && typeof rawCharacters === "object") {
+    Object.keys(rawCharacters).forEach(function (userId): void {
+      const characterId = String((rawCharacters as any)[userId] || "");
+      if (isSupportedCharacterId(characterId)) characterIdByUser[userId] = characterId;
     });
   }
 
@@ -80,7 +94,8 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       presences: {},
       lastInputSequenceByUser: {},
       lastAcceptedTickByUser: {},
-      combatStateByUser: {}
+      combatStateByUser: {},
+      characterIdByUser: characterIdByUser
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -106,6 +121,10 @@ const rankedMatchJoinAttempt: nkruntime.MatchJoinAttemptFunction<AhogeRankedMatc
       accept: false,
       rejectMessage: "user was not selected by matchmaker"
     };
+  }
+
+  if (!isSupportedCharacterId(state.characterIdByUser[presence.userId])) {
+    return {state: state, accept: false, rejectMessage: "character was not selected"};
   }
 
   const existing = state.presences[presence.userId];
@@ -184,7 +203,8 @@ function createIdleCombatState(ahogeAvailable: boolean): AuthoritativeCombatStat
     defenseJustUntilTick: -1,
     resumeState: COMBAT_STATE_IDLE,
     resumeRemainingTicks: 0,
-    staggerEndTick: -1
+    staggerEndTick: -1,
+    regrowEndTick: -1
   };
 }
 
@@ -204,12 +224,26 @@ function broadcastCombatState(
       ahoge_available: combatState.ahogeAvailable,
       defense_active_until_tick: combatState.defenseEndTick,
       defense_just_until_tick: combatState.defenseJustUntilTick,
-      stagger_until_tick: combatState.staggerEndTick
+      stagger_until_tick: combatState.staggerEndTick,
+      regrow_until_tick: combatState.regrowEndTick
     }),
     null,
     null,
     true
   );
+}
+
+function isSupportedCharacterId(characterId: string): boolean {
+  return characterId === CHARACTER_LONG_TEST || characterId === CHARACTER_SHORT_TEST;
+}
+
+function isShortCharacter(state: AhogeRankedMatchState, userId: string): boolean {
+  return state.characterIdByUser[userId] === CHARACTER_SHORT_TEST;
+}
+
+function preserveRegrow(source: AuthoritativeCombatState, target: AuthoritativeCombatState): AuthoritativeCombatState {
+  target.regrowEndTick = source.regrowEndTick;
+  return target;
 }
 
 function findOpponentUserId(
@@ -364,7 +398,7 @@ function applyStagger(
     return;
   }
 
-  const staggered = createIdleCombatState(current.ahogeAvailable);
+  const staggered = preserveRegrow(current, createIdleCombatState(current.ahogeAvailable));
   staggered.state = COMBAT_STATE_STAGGER;
   staggered.staggerEndTick = tick + combatStaggerTicks();
   state.combatStateByUser[userId] = staggered;
@@ -455,7 +489,8 @@ function applyAttackInput(
       defenseJustUntilTick: -1,
       resumeState: COMBAT_STATE_IDLE,
       resumeRemainingTicks: 0,
-      staggerEndTick: -1
+      staggerEndTick: -1,
+      regrowEndTick: combatState.regrowEndTick
     };
     broadcastCombatState(
       dispatcher,
@@ -491,7 +526,8 @@ function applyAttackInput(
     defenseJustUntilTick: -1,
     resumeState: COMBAT_STATE_IDLE,
     resumeRemainingTicks: 0,
-    staggerEndTick: -1
+    staggerEndTick: -1,
+    regrowEndTick: combatState.regrowEndTick
   };
   broadcastCombatState(
     dispatcher,
@@ -541,7 +577,8 @@ function applyDefenseInput(
     defenseJustUntilTick: tick + timing.justTicks,
     resumeState: resumeState,
     resumeRemainingTicks: resumeRemainingTicks,
-    staggerEndTick: -1
+    staggerEndTick: -1,
+    regrowEndTick: combatState.regrowEndTick
   };
 
   broadcastCombatState(
@@ -560,9 +597,15 @@ function advanceCombatStates(
   Object.keys(state.combatStateByUser).forEach(function (userId): void {
     const combatState = state.combatStateByUser[userId];
 
+    if (!combatState.ahogeAvailable && combatState.regrowEndTick >= 0 && tick >= combatState.regrowEndTick) {
+      combatState.ahogeAvailable = true;
+      combatState.regrowEndTick = -1;
+      broadcastCombatState(dispatcher, userId, combatState, tick);
+    }
+
     if (combatState.state === COMBAT_STATE_STAGGER) {
       if (tick >= combatState.staggerEndTick) {
-        state.combatStateByUser[userId] = createIdleCombatState(combatState.ahogeAvailable);
+        state.combatStateByUser[userId] = preserveRegrow(combatState, createIdleCombatState(combatState.ahogeAvailable));
         broadcastCombatState(dispatcher, userId, state.combatStateByUser[userId], tick);
       }
       return;
@@ -577,15 +620,16 @@ function advanceCombatStates(
         combatState.resumeState === COMBAT_STATE_COOLDOWN &&
         combatState.resumeRemainingTicks > 0
       ) {
-        const resumed = createIdleCombatState(combatState.ahogeAvailable);
+        const resumed = preserveRegrow(combatState, createIdleCombatState(combatState.ahogeAvailable));
         resumed.state = COMBAT_STATE_COOLDOWN;
         resumed.chargeRatio = combatState.chargeRatio;
         resumed.releaseSequence = combatState.releaseSequence;
         resumed.cooldownEndTick = tick + combatState.resumeRemainingTicks;
         state.combatStateByUser[userId] = resumed;
       } else {
-        state.combatStateByUser[userId] = createIdleCombatState(
-          combatState.ahogeAvailable
+        state.combatStateByUser[userId] = preserveRegrow(
+          combatState,
+          createIdleCombatState(combatState.ahogeAvailable)
         );
       }
 
@@ -603,6 +647,10 @@ function advanceCombatStates(
       tick >= combatState.strikeStartTick
     ) {
       combatState.state = COMBAT_STATE_STRIKE;
+      if (isShortCharacter(state, userId)) {
+        combatState.ahogeAvailable = false;
+        combatState.regrowEndTick = tick + combatShortAhogeRegrowTicks();
+      }
       broadcastCombatState(dispatcher, userId, combatState, tick);
     }
 
@@ -766,13 +814,21 @@ const rankedMatchmakerMatched: nkruntime.MatchmakerMatchedFunction = function (
     return;
   }
 
-  const expectedUserIds = [
-    matches[0].presence.userId,
-    matches[1].presence.userId
-  ];
+  const expectedUserIds = [matches[0].presence.userId, matches[1].presence.userId];
+  const characterIds: {[key: string]: string} = {};
+  for (let index = 0; index < matches.length; index += 1) {
+    const userId = matches[index].presence.userId;
+    const characterId = String(matches[index].properties.character_id || "");
+    if (!isSupportedCharacterId(characterId)) {
+      logger.warn("ahoge ranked matchmaker received unsupported character_id.");
+      return;
+    }
+    characterIds[userId] = characterId;
+  }
 
   const matchId = nk.matchCreate("ahoge_ranked", {
-    expectedUserIds: expectedUserIds
+    expectedUserIds: expectedUserIds,
+    characterIds: characterIds
   });
 
   logger.info("ahoge ranked authoritative match created.");

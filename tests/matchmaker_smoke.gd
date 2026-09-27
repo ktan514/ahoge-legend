@@ -29,7 +29,7 @@ func _run() -> void:
 		_fail("P1 Realtime Socket接続に失敗しました。")
 		return
 
-	var cancel_start: Dictionary = await online_session.start_ranked_matchmaking(1500)
+	var cancel_start: Dictionary = await online_session.start_ranked_matchmaking(1500, OnlineConfigScript.RANKED_CHARACTER_LONG_TEST)
 	if not bool(cancel_start.get("ok", false)):
 		_fail("取消検証用ticketを作成できませんでした。")
 		return
@@ -80,7 +80,7 @@ func _run() -> void:
 		p1_joined[0] = match_id
 	)
 
-	var p1_start: Dictionary = await online_session.start_ranked_matchmaking(1500)
+	var p1_start: Dictionary = await online_session.start_ranked_matchmaking(1500, OnlineConfigScript.RANKED_CHARACTER_LONG_TEST)
 	if not bool(p1_start.get("ok", false)):
 		_fail("P1 Ranked Matchmakerを開始できませんでした。")
 		return
@@ -90,7 +90,7 @@ func _run() -> void:
 		query,
 		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
 		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
-		{"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE},
+		{"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE, "character_id": OnlineConfigScript.RANKED_CHARACTER_LONG_TEST},
 		{"rating": 1500.0}
 	)
 	if second_ticket_result == null or second_ticket_result.is_exception():
