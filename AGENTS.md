@@ -9,11 +9,12 @@
 1. `docs/GITHUB_OPERATION_RULES.md`
 2. `docs/REPOSITORY_RULES.md`
 3. `AGENTS.md`
-4. `docs/BASIC_DESIGN.md`
-5. `docs/DETAILED_DESIGN.md`
-6. `docs/SCREEN_DESIGN.md`
-7. 対象Issue
-8. 対象コード・試験・既存PR
+4. `docs/PRODUCTION_PLAN.md`
+5. `docs/BASIC_DESIGN.md`
+6. `docs/DETAILED_DESIGN.md`
+7. `docs/SCREEN_DESIGN.md`
+8. 対象Issue
+9. 対象コード・試験・既存PR
 
 下位ディレクトリに追加の`AGENTS.md`がある場合は、そのディレクトリの作業であわせて確認する。
 
@@ -36,6 +37,8 @@
 - 本番サーバー: AWS 東京リージョン
 
 ## 3. 設計の正本
+
+製造順序・工程の正本は `docs/PRODUCTION_PLAN.md` とする。
 
 ゲーム仕様の正本は次とする。
 
