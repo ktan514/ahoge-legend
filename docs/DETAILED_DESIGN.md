@@ -659,8 +659,25 @@ Godotクライアントはこの通知を表示・同期用に受信するが、
 
 - 開始値: 85
 - UI表示: 整数秒
-- 内部ではフレーム時間またはサーバー時刻で管理し、表示時に整数へ変換する
-- 0到達時に勝敗を判定する
+- オンラインauthoritative matchではNakama server tickを正とする
+- match tick rateは30Hzのため、85秒は2550tickとして管理する
+- 2人がauthoritative matchへjoinし、最初のmatch loopへ入ったserver tickを `round_timer_start_tick` とする
+- `round_timer_end_tick = round_timer_start_tick + 2550`
+- 表示用 `remaining_seconds` は `ceil(max(0, round_timer_end_tick - server_tick) / 30)` で算出する
+- 初回は85を通知し、その後は表示値が変化したときだけ84、83、…、0を通知する
+- 0へ到達した後は0で停止し、負数へ進めない
+- クライアント側で独自カウントダウンを勝敗判定の正本にしない
+- 0到達時のHit数比較・Overtime・Round終了は後続Issueで接続する
+
+server → client通知:
+
+```text
+RoundTimerChangedEvent
+- remaining_seconds
+- server_tick
+```
+
+timer開始・更新・0到達はすべてserver tickから決定し、描画fps・Godot physics tick・ローカル時計は判定へ使用しない。
 
 ### 10.3 時間切れ処理
 
