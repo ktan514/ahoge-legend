@@ -516,8 +516,6 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
-  advanceCombatStates(dispatcher, state, tick);
-
   messages.forEach(function (message): void {
     if (message.opCode !== COMBAT_INPUT_OPCODE) {
       return;
@@ -582,6 +580,10 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
       applyAttackInput(dispatcher, state, userId, action, sequence, tick);
     }
   });
+
+  // 同一tickで受理した入力を、そのtickのContact/Defense判定へ先に反映する。
+  // Defense開始tickをactiveに含む設計のため、state advanceは入力処理後に行う。
+  advanceCombatStates(dispatcher, state, tick);
 
   return {state: state};
 };
