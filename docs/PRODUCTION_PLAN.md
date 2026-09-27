@@ -52,6 +52,32 @@
 | 6 | AWS・Steam・Windows・WAN QA | #27 | 未着手 |
 | 7 | Release Candidate | #28 | 未着手 |
 
+### 3.1 実画面目視マイルストーン
+
+機能実装と自動試験だけを連続して進め、最後に初めて実画面を確認する進め方は禁止する。
+
+目的は、完成後に大きな認識差・操作感の問題・画面設計の破綻が発覚して大規模な手戻りになることを防ぐことである。
+
+マイルストーンは通常の自動試験とは別の **blocking Human Verification** とする。各マイルストーンでは必ずGodotの実ウィンドウまたは実配布ビルドを起動し、人間が実際に操作して目視確認する。
+
+共通ルール:
+
+- headless試験、CI、smoke PASSだけではマイルストーン完了にしない
+- 実画面を起動し、操作感と見た目を両方確認する
+- 静止状態はスクリーンショット、動きが重要な箇所は短い画面録画を証跡として残す
+- 設計意図との大きな乖離、操作しにくさ、視認性問題、画面遷移の違和感があれば次工程へ進まない
+- 問題を見つけた場合は修正Issueを作り、必要なら BASIC / DETAILED / SCREEN DESIGN を先に更新してから修正する
+- マイルストーンPASS後も、最終Human Verificationを省略しない
+
+| Milestone | 実施位置 | 主な確認対象 | Issue |
+| --- | --- | --- | --- |
+| M1 Battle Core | 工程2完了直後 | UI-10 Battle、戦闘操作、HUD、85秒、Hit、Round / BO3、Overtime | #53 |
+| M2 Ranked主要導線 | 工程4前半 | TOP → Ranked → Character Select → Matching → Battle → Result | #54 |
+| M3 主要12画面 | 工程4完了時 | UI-01〜UI-12、Ranked / Friend全導線、Loading / Error | #55 |
+| M4 正式キャラクター初回品質 | 工程5前半 | 最初の正式キャラ、頭部・アホ毛、Motion、VFX、SE | #56 |
+| M5 実配布環境 | 工程6完了時 | Windows x86_64、AWS、Steam、WAN、実解像度・実通信 | #57 |
+
+
 ## 4. 工程1: オンライン戦闘コア
 
 目的は、ローカルで成立している戦闘ルールをNakama authoritative matchへ移管し、2クライアントが同じ戦闘結果を受信する状態にすること。
@@ -91,6 +117,14 @@
 - Match StartからMatch Resultまでserverだけで勝敗を確定できる
 - 2クライアントのRound / Match結果が一致する
 
+### 工程2完了ゲート: M1 Battle Core
+
+工程2のserver実装が完了したら、工程3へ進む前に #53 を実施する。
+
+この時点では工程4の全GameFlow完成を待たない。UI-10へ直接入れる最小のデバッグ導線を用意し、authoritativeなBattle状態を実画面へ接続して確認する。仮素材・仮レイアウトでよいが、実際に操作できることを必須とする。
+
+M1で重大な乖離が見つかった場合、工程3へ進む前に修正する。
+
 ## 6. 工程3: オンラインサービス
 
 実装順:
@@ -116,6 +150,17 @@
 
 `docs/SCREEN_DESIGN.md` のUI-01〜UI-12を実機能へ接続する。
 
+工程4は全12画面を一気に作り切らない。まずRankedの主要導線を完成させ、M2で方向性を確認してから残画面へ進む。
+
+工程4内の順序:
+
+1. UI-01 / UI-03 / UI-04 / UI-05 / UI-09 / UI-10 / UI-11 を実機能へ接続
+2. #54 M2 Ranked主要導線を実画面で確認
+3. UI-02 / UI-06 / UI-07 / UI-08 / UI-12 とFriend導線を接続
+4. Loading / Error / Back / Decide / Cancel等の共通挙動を統合
+5. #55 M3 主要12画面・全導線を実画面で確認
+6. M3 PASS後に工程5へ進む
+
 主な通し導線:
 
 ```text
@@ -132,6 +177,8 @@
 
 初期段階は機能・遷移・状態表示を優先し、見た目の仕上げを先行させない。
 
+ただし仮UIだから目視確認を省略してよいという意味ではない。M2 / M3では仮UIの段階で、画面構造・視線誘導・操作導線・情報量・5:4戦闘領域案を確認する。
+
 ## 8. 工程5: 正式キャラクター・演出・素材
 
 実装・制作対象:
@@ -145,6 +192,13 @@
 - 対戦前掛け合い
 - 勝利台詞
 - 権利状態管理
+
+工程5は、全正式キャラクターをまとめて量産しない。
+
+1. 代表となる最初の正式キャラクターをCharacter Select / Battleへ組み込む
+2. 可能ならLONG系とSHORT系を各1体まで先行して、頭部・アホ毛・Motion・VFX・SEを確認可能にする
+3. #56 M4 正式キャラクター初回品質を実画面で確認
+4. M4 PASS後に残りキャラクター・演出・素材を量産する
 
 未決事項は人間の判断を得てから設計へ反映する。
 `PENDING`素材は公開ビルドへ含めない。
@@ -164,6 +218,11 @@
 - performance / balance調整
 
 macOSは対応可能であれば維持する。
+
+工程6の完了時には #57 M5 を実施する。
+Windows x86_64の実ビルド、AWS東京、Steam認証、2地点WANを使い、実際の画面を起動してMatchmaking → Battle → Resultまで通し確認する。
+
+M5で重大な表示・操作・通信問題が残る場合はRelease Candidateへ進まない。
 
 ## 10. 工程7: Release Candidate
 
@@ -191,26 +250,32 @@ RC1
 
 ## 11. 当面の一本道
 
-現在からの優先順は次とする。
+現在からの優先順は次とする。マイルストーンは次の工程へ進むためのblocking gateであり、省略しない。
 
 1. timeout時のHit数比較
 2. Overtime
 3. Round result
 4. 2本先取BO3
 5. Match result
-6. Client Battle画面接続
-7. Disconnect / Reconnect
-8. Matchmaker検索幅拡大
-9. Ranking / Rating / Season
-10. Friend Match
-11. 全画面GameFlow
-12. 正式キャラクター
-13. 演出・音・台詞
-14. Steam認証
-15. AWS本番
-16. Windows実機・WAN試験
-17. balance / performance調整
-18. Release Candidate
+6. UI-10 Battle最小接続
+7. **M1 #53 Battle Core実画面確認**
+8. Disconnect / Reconnect
+9. Matchmaker検索幅拡大
+10. Ranking / Rating / Season
+11. Friend Match
+12. Ranked主要導線を実画面へ接続
+13. **M2 #54 Ranked主要導線実画面確認**
+14. 残り主要画面・Friend導線を接続
+15. **M3 #55 主要12画面・全導線実画面確認**
+16. 最初の正式キャラクター / Motion / VFX / SEを接続
+17. **M4 #56 正式キャラクター初回品質確認**
+18. 残り正式キャラクター・演出・音・台詞
+19. Steam認証
+20. AWS本番
+21. Windows実機・WAN試験
+22. **M5 #57 Windows・AWS・WAN実環境通し確認**
+23. balance / performance調整
+24. Release Candidate
 
 ## 12. 計画変更ルール
 
@@ -219,3 +284,6 @@ RC1
 - 未決事項を実装都合で確定しない
 - 計画変更はIssueで理由を記録し、この文書を先に更新する
 - 各実装はIssue → 設計更新 → commit → 実装 → 自動検証 → Human Verification → PR → main採用の順で進める
+- 指定された実画面マイルストーンはblocking gateとし、PASSするまで次の対象工程へ進まない
+- マイルストーンでは必ず実ウィンドウまたは実配布ビルドを起動し、headless試験だけで代替しない
+- マイルストーンで想定との大きな乖離を発見した場合は、後工程へ進む前に設計・実装を修正する
