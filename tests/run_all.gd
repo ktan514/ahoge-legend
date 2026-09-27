@@ -588,12 +588,26 @@ func _test_authoritative_match_result_protocol() -> void:
 		"loser_user_id": "player-2",
 		"round_wins_by_user": {"player-1": 2, "player-2": 1},
 		"final_round_number": 3,
+		"finish_cause": "BO3",
 		"server_tick": 1300,
 	})
 	var event := CombatInputProtocolScript.parse_match_result_payload(payload)
 	_expect_equal(event["winner_user_id"], "player-1", "Match Result winnerをdecodeできる")
 	_expect_equal(int(event["round_wins_by_user"]["player-1"]), 2, "Match Result winner scoreをdecodeできる")
 	_expect_equal(int(event["final_round_number"]), 3, "Match Result final roundをdecodeできる")
+	_expect_equal(str(event["finish_cause"]), "BO3", "Match Result finish causeをdecodeできる")
+
+	var disconnect_payload := JSON.stringify({
+		"winner_user_id": "player-1",
+		"loser_user_id": "player-2",
+		"round_wins_by_user": {"player-1": 0, "player-2": 0},
+		"final_round_number": 1,
+		"finish_cause": "DISCONNECT_TIMEOUT",
+		"server_tick": 700,
+	})
+	var disconnect_event := CombatInputProtocolScript.parse_match_result_payload(disconnect_payload)
+	_expect_equal(str(disconnect_event["finish_cause"]), "DISCONNECT_TIMEOUT", "切断敗北Match Resultをdecodeできる")
+	_expect_equal(int(disconnect_event["round_wins_by_user"]["player-1"]), 0, "切断敗北でRound scoreを改ざんしない")
 
 	var invalid := CombatInputProtocolScript.parse_match_result_payload(
 		JSON.stringify({
@@ -601,6 +615,7 @@ func _test_authoritative_match_result_protocol() -> void:
 			"loser_user_id": "player-2",
 			"round_wins_by_user": {"player-1": 1, "player-2": 1},
 			"final_round_number": 1,
+			"finish_cause": "BO3",
 			"server_tick": -1,
 		})
 	)
