@@ -205,8 +205,9 @@ AHOGE LEGEND attack state smoke: PASS
 戦闘時間はserver側設定へ集約し、既存Godot CombatConfigと同じ暫定値を使用します。
 この段階ではContact到達までをserver authoritativeとし、Defense / Clash / Hit / 85秒タイマー / BO3勝敗は後続Issueで接続します。
 
-## 設計正本
+## 設計・製造計画の正本
 
+- `docs/PRODUCTION_PLAN.md`
 - `docs/BASIC_DESIGN.md`
 - `docs/DETAILED_DESIGN.md`
 - `docs/SCREEN_DESIGN.md`
