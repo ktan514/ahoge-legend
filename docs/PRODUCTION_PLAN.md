@@ -14,7 +14,7 @@
 
 ## 2. 現在地
 
-2026-09-27時点のmainでは次まで完了している。
+2026-09-28時点のmainでは次まで完了している。
 
 - 初期設計文書
 - Godot 4.7.2ローカル1対1縦切り
@@ -41,8 +41,11 @@
 - authoritative Round Result
 - authoritative 2本先取BO3
 - authoritative Match Result
+- M1 Battle Core #53 Human Verification PASS
+- UI-10 M1 authoritative Battle接続
+- Round取得表示 → 3 / 2 / 1 / GO → 次Round開始
 
-工程2は完了済みである。現在は工程3へ進む前のblocking gate **M1 Battle Core #53** として、UI-10へauthoritative戦闘状態を接続し、Godot実画面で早期確認する段階である。
+工程2とM1 Battle Core #53は完了済みである。現在は **工程3: オンラインサービス #24** へ進行可能な状態である。M1で使用した仮UI・5:4候補・表示デザインは最終確定ではなく、工程4以降で他画面と合わせて見直す。
 
 ## 3. 製造工程
 
@@ -51,7 +54,7 @@
 | 0 | 設計・ローカル縦切り・オンライン基礎 | #1〜#19 | 完了 |
 | 1 | オンライン戦闘コア | #22 | 完了 |
 | 2 | authoritativeラウンド・BO3 | #23 | 完了 |
-| 3 | オンラインサービス | #24 | 未着手 |
+| 3 | オンラインサービス | #24 | 進行可能 |
 | 4 | GameFlow・主要12画面 | #25 | 未着手 |
 | 5 | 正式キャラクター・演出・素材 | #26 | 未着手 |
 | 6 | AWS・Steam・Windows・WAN QA | #27 | 未着手 |
@@ -257,20 +260,18 @@ RC1
 
 現在からの優先順は次とする。
 
-1. Client Battle画面authoritative接続
-2. M1 #53 Battle Core実画面確認
-3. Disconnect / Reconnect
-4. Matchmaker検索幅拡大
-5. Ranking / Rating / Season
-6. Friend Match
-7. 全画面GameFlow
-8. 正式キャラクター
-9. 演出・音・台詞
-10. Steam認証
-11. AWS本番
-12. Windows実機・WAN試験
-13. balance / performance調整
-14. Release Candidate
+1. Disconnect / Reconnect
+2. Matchmaker検索幅拡大
+3. Ranking / Rating / Season
+4. Friend Match
+5. 全画面GameFlow
+6. 正式キャラクター
+7. 演出・音・台詞
+8. Steam認証
+9. AWS本番
+10. Windows実機・WAN試験
+11. balance / performance調整
+12. Release Candidate
 
 ## 12. 計画変更ルール
 
