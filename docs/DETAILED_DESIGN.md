@@ -930,8 +930,40 @@ server → client通知:
   - `input_sequence`
   - `charge_ratio`
 
-`DEFEND` はIssue #19時点では入力受付までとし、Parry / Dodge状態への適用は後続Issueで行う。
-Contact到達時点ではHitを確定しない。Defense / Clashを接続した後に最終結果をserver authoritativeで確定する。
+`DEFEND` はserver authoritativeなDefense stateへ適用する。
+
+Defense適用時は `ahoge_available` を参照し、trueなら `PARRY`、falseなら `DODGE` へ遷移する。`ahoge_available=false` を発生させるSHORT detach / regrowは後続Issueで接続するが、Defense state自体は先に両分岐へ対応する。
+
+DefenseContextはserver tickで次を保持する。
+
+```text
+DefenseContext
+- state: PARRY / DODGE
+- started_tick
+- active_until_tick
+- just_until_tick
+- resume_state
+- resume_remaining_ticks
+```
+
+初期値:
+
+- PARRY active: 0.18秒 → `ceil(0.18 * 30)` tick
+- DODGE active: 0.22秒 → `ceil(0.22 * 30)` tick
+- Just window: 0.07秒 → `ceil(0.07 * 30)` tick
+
+Defense開始時の遷移:
+
+- `IDLE → PARRY / DODGE`
+- `CHARGING → PARRY / DODGE` とし、charge中攻撃は破棄する
+- `WINDUP → PARRY / DODGE` とし、予定済みStrike / Contactを破棄する
+- `STRIKE → PARRY / DODGE` とし、未到達Contactを破棄する
+- `COOLDOWN → PARRY / DODGE` の場合、残りCooldown tickを保存してDefense終了後に再開する
+- `PARRY / DODGE` 中の新しいDEFENDは新しい1回のDefenseとしてactive / just windowを再設定する
+
+Defense終了時は、保存済みCooldown残量がある場合だけ `COOLDOWN` へ戻し、それ以外は `IDLE` へ戻す。CooldownはDefense中に消費せず一時停止する。
+
+Contact到達時点ではまだPARRY / DODGE成功結果やHitを確定しない。次段階でContactEventとDefenseContextを照合し、通常防御・Just・Hitをserver authoritativeで確定する。
 
 通信遅延を考慮したContactEventの時刻補正と100ms上限の具体的な補正方式は後続Issueで実装する。
 
@@ -1294,7 +1326,11 @@ SHORT_TEST
 - charge ratioはserver tick差から算出する
 - ContactEventはStrike開始とstrike時間・contact ratioからserver tickで確定する
 - rollbackは初期実装では行わない
-- 防御、ジャスト判定、相殺、Hit、勝敗は後続Issueでサーバー権威へ接続する
+- `DEFEND` はserver authoritativeなPARRY / DODGE状態へ適用する
+- Defense active / Just受付時間はserver tickで保持する
+- 攻撃中DEFENDは予定済み攻撃・未到達Contactをキャンセルする
+- COOLDOWN中DEFENDは残りCooldownを一時停止してDefense終了後に再開する
+- Contact到達時の防御結果、ジャスト判定、相殺、Hit、勝敗は後続Issueでサーバー権威へ接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続

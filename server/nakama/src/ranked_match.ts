@@ -8,6 +8,8 @@ const COMBAT_STATE_CHARGING = "CHARGING";
 const COMBAT_STATE_WINDUP = "WINDUP";
 const COMBAT_STATE_STRIKE = "STRIKE";
 const COMBAT_STATE_COOLDOWN = "COOLDOWN";
+const COMBAT_STATE_PARRY = "PARRY";
+const COMBAT_STATE_DODGE = "DODGE";
 
 const ALLOWED_COMBAT_ACTIONS: {[key: string]: boolean} = {
   ATTACK_PRESS: true,
@@ -15,8 +17,9 @@ const ALLOWED_COMBAT_ACTIONS: {[key: string]: boolean} = {
   DEFEND: true
 };
 
-interface AuthoritativeAttackState {
+interface AuthoritativeCombatState {
   state: string;
+  ahogeAvailable: boolean;
   chargeStartTick: number;
   chargeRatio: number;
   strikeStartTick: number;
@@ -25,6 +28,10 @@ interface AuthoritativeAttackState {
   cooldownEndTick: number;
   contactEmitted: boolean;
   releaseSequence: number;
+  defenseEndTick: number;
+  defenseJustUntilTick: number;
+  resumeState: string;
+  resumeRemainingTicks: number;
 }
 
 interface AhogeRankedMatchState {
@@ -32,7 +39,7 @@ interface AhogeRankedMatchState {
   presences: {[key: string]: nkruntime.Presence};
   lastInputSequenceByUser: {[key: string]: number};
   lastAcceptedTickByUser: {[key: string]: number};
-  attackStateByUser: {[key: string]: AuthoritativeAttackState};
+  combatStateByUser: {[key: string]: AuthoritativeCombatState};
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -61,9 +68,9 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       presences: {},
       lastInputSequenceByUser: {},
       lastAcceptedTickByUser: {},
-      attackStateByUser: {}
+      combatStateByUser: {}
     },
-    tickRate: 30,
+    tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
       mode: "ranked",
       phase: "waiting"
@@ -121,8 +128,8 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     if (state.lastAcceptedTickByUser[presence.userId] === undefined) {
       state.lastAcceptedTickByUser[presence.userId] = -1;
     }
-    if (!state.attackStateByUser[presence.userId]) {
-      state.attackStateByUser[presence.userId] = createIdleAttackState();
+    if (!state.combatStateByUser[presence.userId]) {
+      state.combatStateByUser[presence.userId] = createIdleCombatState(true);
     }
   });
   logger.info("ahoge_ranked player joined. size=%d", Object.keys(state.presences).length);
@@ -142,15 +149,16 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
     delete state.presences[presence.userId];
     delete state.lastInputSequenceByUser[presence.userId];
     delete state.lastAcceptedTickByUser[presence.userId];
-    delete state.attackStateByUser[presence.userId];
+    delete state.combatStateByUser[presence.userId];
   });
   logger.info("ahoge_ranked player left. size=%d", Object.keys(state.presences).length);
   return {state: state};
 };
 
-function createIdleAttackState(): AuthoritativeAttackState {
+function createIdleCombatState(ahogeAvailable: boolean): AuthoritativeCombatState {
   return {
     state: COMBAT_STATE_IDLE,
+    ahogeAvailable: ahogeAvailable,
     chargeStartTick: -1,
     chargeRatio: 0,
     strikeStartTick: -1,
@@ -158,23 +166,30 @@ function createIdleAttackState(): AuthoritativeAttackState {
     strikeEndTick: -1,
     cooldownEndTick: -1,
     contactEmitted: false,
-    releaseSequence: 0
+    releaseSequence: 0,
+    defenseEndTick: -1,
+    defenseJustUntilTick: -1,
+    resumeState: COMBAT_STATE_IDLE,
+    resumeRemainingTicks: 0
   };
 }
 
 function broadcastCombatState(
   dispatcher: nkruntime.MatchDispatcher,
   userId: string,
-  attackState: AuthoritativeAttackState,
+  combatState: AuthoritativeCombatState,
   tick: number
 ): void {
   dispatcher.broadcastMessage(
     COMBAT_STATE_CHANGED_OPCODE,
     JSON.stringify({
       user_id: userId,
-      state: attackState.state,
+      state: combatState.state,
       server_tick: tick,
-      charge_ratio: attackState.chargeRatio
+      charge_ratio: combatState.chargeRatio,
+      ahoge_available: combatState.ahogeAvailable,
+      defense_active_until_tick: combatState.defenseEndTick,
+      defense_just_until_tick: combatState.defenseJustUntilTick
     }),
     null,
     null,
@@ -199,7 +214,7 @@ function broadcastContactReached(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
   attackerId: string,
-  attackState: AuthoritativeAttackState,
+  combatState: AuthoritativeCombatState,
   tick: number
 ): void {
   const defenderId = findOpponentUserId(state, attackerId);
@@ -213,8 +228,8 @@ function broadcastContactReached(
       attacker_id: attackerId,
       defender_id: defenderId,
       server_tick: tick,
-      input_sequence: attackState.releaseSequence,
-      charge_ratio: attackState.chargeRatio
+      input_sequence: combatState.releaseSequence,
+      charge_ratio: combatState.chargeRatio
     }),
     null,
     null,
@@ -230,18 +245,19 @@ function applyAttackInput(
   sequence: number,
   tick: number
 ): void {
-  const attackState = state.attackStateByUser[userId];
-  if (!attackState) {
+  const combatState = state.combatStateByUser[userId];
+  if (!combatState) {
     return;
   }
 
   if (action === "ATTACK_PRESS") {
-    if (attackState.state !== COMBAT_STATE_IDLE) {
+    if (combatState.state !== COMBAT_STATE_IDLE) {
       return;
     }
 
-    state.attackStateByUser[userId] = {
+    state.combatStateByUser[userId] = {
       state: COMBAT_STATE_CHARGING,
+      ahogeAvailable: combatState.ahogeAvailable,
       chargeStartTick: tick,
       chargeRatio: 0,
       strikeStartTick: -1,
@@ -249,82 +265,172 @@ function applyAttackInput(
       strikeEndTick: -1,
       cooldownEndTick: -1,
       contactEmitted: false,
-      releaseSequence: 0
+      releaseSequence: 0,
+      defenseEndTick: -1,
+      defenseJustUntilTick: -1,
+      resumeState: COMBAT_STATE_IDLE,
+      resumeRemainingTicks: 0
     };
     broadcastCombatState(
       dispatcher,
       userId,
-      state.attackStateByUser[userId],
+      state.combatStateByUser[userId],
       tick
     );
     return;
   }
 
-  if (action !== "ATTACK_RELEASE" || attackState.state !== COMBAT_STATE_CHARGING) {
+  if (action !== "ATTACK_RELEASE" || combatState.state !== COMBAT_STATE_CHARGING) {
     return;
   }
 
-  const chargeRatio = combatChargeRatio(attackState.chargeStartTick, tick);
+  const chargeRatio = combatChargeRatio(combatState.chargeStartTick, tick);
   const timing = combatAttackTiming(chargeRatio);
   const strikeStartTick = tick + timing.windupTicks;
   const strikeEndTick = strikeStartTick + timing.strikeTicks;
 
-  state.attackStateByUser[userId] = {
+  state.combatStateByUser[userId] = {
     state: COMBAT_STATE_WINDUP,
-    chargeStartTick: attackState.chargeStartTick,
+    ahogeAvailable: combatState.ahogeAvailable,
+    chargeStartTick: combatState.chargeStartTick,
     chargeRatio: chargeRatio,
     strikeStartTick: strikeStartTick,
     contactTick: strikeStartTick + timing.contactOffsetTicks,
     strikeEndTick: strikeEndTick,
     cooldownEndTick: strikeEndTick + timing.cooldownTicks,
     contactEmitted: false,
-    releaseSequence: sequence
+    releaseSequence: sequence,
+    defenseEndTick: -1,
+    defenseJustUntilTick: -1,
+    resumeState: COMBAT_STATE_IDLE,
+    resumeRemainingTicks: 0
   };
   broadcastCombatState(
     dispatcher,
     userId,
-    state.attackStateByUser[userId],
+    state.combatStateByUser[userId],
     tick
   );
 }
 
-function advanceAttackStates(
+function applyDefenseInput(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  userId: string,
+  tick: number
+): void {
+  const combatState = state.combatStateByUser[userId];
+  if (!combatState) {
+    return;
+  }
+
+  let resumeState = COMBAT_STATE_IDLE;
+  let resumeRemainingTicks = 0;
+  let preservedChargeRatio = 0;
+  let preservedReleaseSequence = 0;
+
+  if (combatState.state === COMBAT_STATE_COOLDOWN) {
+    resumeState = COMBAT_STATE_COOLDOWN;
+    resumeRemainingTicks = Math.max(0, combatState.cooldownEndTick - tick);
+    preservedChargeRatio = combatState.chargeRatio;
+    preservedReleaseSequence = combatState.releaseSequence;
+  }
+
+  const timing = combatDefenseTiming(combatState.ahogeAvailable);
+  state.combatStateByUser[userId] = {
+    state: combatState.ahogeAvailable ? COMBAT_STATE_PARRY : COMBAT_STATE_DODGE,
+    ahogeAvailable: combatState.ahogeAvailable,
+    chargeStartTick: -1,
+    chargeRatio: preservedChargeRatio,
+    strikeStartTick: -1,
+    contactTick: -1,
+    strikeEndTick: -1,
+    cooldownEndTick: -1,
+    contactEmitted: false,
+    releaseSequence: preservedReleaseSequence,
+    defenseEndTick: tick + timing.activeTicks,
+    defenseJustUntilTick: tick + timing.justTicks,
+    resumeState: resumeState,
+    resumeRemainingTicks: resumeRemainingTicks
+  };
+
+  broadcastCombatState(
+    dispatcher,
+    userId,
+    state.combatStateByUser[userId],
+    tick
+  );
+}
+
+function advanceCombatStates(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
   tick: number
 ): void {
-  Object.keys(state.attackStateByUser).forEach(function (userId): void {
-    const attackState = state.attackStateByUser[userId];
+  Object.keys(state.combatStateByUser).forEach(function (userId): void {
+    const combatState = state.combatStateByUser[userId];
 
     if (
-      attackState.state === COMBAT_STATE_WINDUP &&
-      tick >= attackState.strikeStartTick
+      (combatState.state === COMBAT_STATE_PARRY ||
+        combatState.state === COMBAT_STATE_DODGE) &&
+      tick >= combatState.defenseEndTick
     ) {
-      attackState.state = COMBAT_STATE_STRIKE;
-      broadcastCombatState(dispatcher, userId, attackState, tick);
-    }
-
-    if (attackState.state === COMBAT_STATE_STRIKE) {
-      if (!attackState.contactEmitted && tick >= attackState.contactTick) {
-        attackState.contactEmitted = true;
-        broadcastContactReached(dispatcher, state, userId, attackState, tick);
+      if (
+        combatState.resumeState === COMBAT_STATE_COOLDOWN &&
+        combatState.resumeRemainingTicks > 0
+      ) {
+        const resumed = createIdleCombatState(combatState.ahogeAvailable);
+        resumed.state = COMBAT_STATE_COOLDOWN;
+        resumed.chargeRatio = combatState.chargeRatio;
+        resumed.releaseSequence = combatState.releaseSequence;
+        resumed.cooldownEndTick = tick + combatState.resumeRemainingTicks;
+        state.combatStateByUser[userId] = resumed;
+      } else {
+        state.combatStateByUser[userId] = createIdleCombatState(
+          combatState.ahogeAvailable
+        );
       }
 
-      if (tick >= attackState.strikeEndTick) {
-        attackState.state = COMBAT_STATE_COOLDOWN;
-        broadcastCombatState(dispatcher, userId, attackState, tick);
-      }
-    }
-
-    if (
-      attackState.state === COMBAT_STATE_COOLDOWN &&
-      tick >= attackState.cooldownEndTick
-    ) {
-      state.attackStateByUser[userId] = createIdleAttackState();
       broadcastCombatState(
         dispatcher,
         userId,
-        state.attackStateByUser[userId],
+        state.combatStateByUser[userId],
+        tick
+      );
+      return;
+    }
+
+    if (
+      combatState.state === COMBAT_STATE_WINDUP &&
+      tick >= combatState.strikeStartTick
+    ) {
+      combatState.state = COMBAT_STATE_STRIKE;
+      broadcastCombatState(dispatcher, userId, combatState, tick);
+    }
+
+    if (combatState.state === COMBAT_STATE_STRIKE) {
+      if (!combatState.contactEmitted && tick >= combatState.contactTick) {
+        combatState.contactEmitted = true;
+        broadcastContactReached(dispatcher, state, userId, combatState, tick);
+      }
+
+      if (tick >= combatState.strikeEndTick) {
+        combatState.state = COMBAT_STATE_COOLDOWN;
+        broadcastCombatState(dispatcher, userId, combatState, tick);
+      }
+    }
+
+    if (
+      combatState.state === COMBAT_STATE_COOLDOWN &&
+      tick >= combatState.cooldownEndTick
+    ) {
+      state.combatStateByUser[userId] = createIdleCombatState(
+        combatState.ahogeAvailable
+      );
+      broadcastCombatState(
+        dispatcher,
+        userId,
+        state.combatStateByUser[userId],
         tick
       );
     }
@@ -340,7 +446,8 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
-  advanceAttackStates(dispatcher, state, tick);
+  advanceCombatStates(dispatcher, state, tick);
+
   messages.forEach(function (message): void {
     if (message.opCode !== COMBAT_INPUT_OPCODE) {
       return;
@@ -399,7 +506,11 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
       true
     );
 
-    applyAttackInput(dispatcher, state, userId, action, sequence, tick);
+    if (action === "DEFEND") {
+      applyDefenseInput(dispatcher, state, userId, tick);
+    } else {
+      applyAttackInput(dispatcher, state, userId, action, sequence, tick);
+    }
   });
 
   return {state: state};

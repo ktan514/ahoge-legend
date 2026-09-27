@@ -34,6 +34,7 @@ func _init() -> void:
 	_test_ranked_matchmaker_query()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
+	_test_authoritative_defense_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -312,6 +313,47 @@ func _test_authoritative_attack_protocol() -> void:
 	_expect_equal(contact_event["attacker_id"], "player-1", "ContactEvent attackerをdecodeできる")
 	_expect_equal(contact_event["defender_id"], "player-2", "ContactEvent defenderをdecodeできる")
 	_expect_equal(int(contact_event["input_sequence"]), 2, "ContactEvent release sequenceを保持する")
+
+
+func _test_authoritative_defense_protocol() -> void:
+	var parry_payload := JSON.stringify({
+		"user_id": "player-1",
+		"state": "PARRY",
+		"server_tick": 100,
+		"charge_ratio": 0.0,
+		"ahoge_available": true,
+		"defense_active_until_tick": 106,
+		"defense_just_until_tick": 103,
+	})
+	var parry_event := CombatInputProtocolScript.parse_combat_state_changed_payload(
+		parry_payload
+	)
+	_expect_equal(parry_event["state"], "PARRY", "authoritative PARRY状態をdecodeできる")
+	_expect_equal(
+		int(parry_event["defense_active_until_tick"]) - int(parry_event["server_tick"]),
+		6,
+		"PARRY active 0.18秒を30Hzで6tick保持する"
+	)
+	_expect_equal(
+		int(parry_event["defense_just_until_tick"]) - int(parry_event["server_tick"]),
+		3,
+		"Just受付0.07秒を30Hzで3tick保持する"
+	)
+
+	var dodge_payload := JSON.stringify({
+		"user_id": "player-1",
+		"state": "DODGE",
+		"server_tick": 200,
+		"charge_ratio": 0.0,
+		"ahoge_available": false,
+		"defense_active_until_tick": 207,
+		"defense_just_until_tick": 203,
+	})
+	var dodge_event := CombatInputProtocolScript.parse_combat_state_changed_payload(
+		dodge_payload
+	)
+	_expect_equal(dodge_event["state"], "DODGE", "authoritative DODGE状態をdecodeできる")
+	_expect_false(bool(dodge_event["ahoge_available"]), "DODGEはahoge unavailable状態を保持できる")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
