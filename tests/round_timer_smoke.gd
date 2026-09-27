@@ -9,6 +9,8 @@ var _second_match_id: String = ""
 var _second_failure: String = ""
 var _p1_timers: Array[Dictionary] = []
 var _p2_timers: Array[Dictionary] = []
+var _p1_states: Array[Dictionary] = []
+var _p2_states: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -26,6 +28,7 @@ func _run() -> void:
 	if not bool(auth_result.get("ok", false)):
 		_fail("P1 Device認証に失敗しました。")
 		return
+	var p1_user_id := str(auth_result.get("user_id", ""))
 
 	var realtime_result: Dictionary = await online_session.connect_realtime_socket()
 	if not bool(realtime_result.get("ok", false)):
@@ -46,6 +49,7 @@ func _run() -> void:
 	if second_session == null or second_session.is_exception():
 		_fail("P2 Device認証に失敗しました。")
 		return
+	var p2_user_id := str(second_session.user_id)
 
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
@@ -117,6 +121,8 @@ func _run() -> void:
 		_fail("85→84が30 server tickではありません。")
 		return
 
+	var lock_start_p1 := _p1_states.size()
+	var lock_start_p2 := _p2_states.size()
 	var zero_event := await _wait_for_timer_pair(0, 95000)
 	if zero_event.is_empty():
 		_fail("85秒timerが0へ到達しませんでした。")
@@ -124,6 +130,25 @@ func _run() -> void:
 
 	if int(zero_event["server_tick"]) - int(start_event["server_tick"]) != 2550:
 		_fail("85→0の経過が2550 server tickではありません。")
+		return
+
+	if not await _wait_for_state_pair(
+		p1_user_id,
+		"ROUND_LOCKED",
+		lock_start_p1,
+		lock_start_p2,
+		5000
+	):
+		_fail("timeout同点時にP1がROUND_LOCKEDへ遷移しませんでした。")
+		return
+	if not await _wait_for_state_pair(
+		p2_user_id,
+		"ROUND_LOCKED",
+		lock_start_p1,
+		lock_start_p2,
+		5000
+	):
+		_fail("timeout同点時にP2がROUND_LOCKEDへ遷移しませんでした。")
 		return
 
 	if _p1_timers != _p2_timers:
@@ -162,23 +187,34 @@ func _run() -> void:
 
 
 func _on_first_match_state(match_state) -> void:
-	_collect_timer(match_state, _p1_timers)
+	_collect_match_state(match_state, _p1_timers, _p1_states)
 
 
 func _on_second_match_state(match_state) -> void:
 	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
 		return
-	_collect_timer(match_state, _p2_timers)
+	_collect_match_state(match_state, _p2_timers, _p2_states)
 
 
-func _collect_timer(match_state, events: Array[Dictionary]) -> void:
-	if int(match_state.op_code) != CombatInputProtocolScript.OPCODE_ROUND_TIMER_CHANGED:
+func _collect_match_state(
+	match_state,
+	timers: Array[Dictionary],
+	states: Array[Dictionary]
+) -> void:
+	var op_code := int(match_state.op_code)
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_TIMER_CHANGED:
+		var timer_event := CombatInputProtocolScript.parse_round_timer_changed_payload(
+			str(match_state.data)
+		)
+		if not timer_event.is_empty():
+			timers.append(timer_event)
 		return
-	var event := CombatInputProtocolScript.parse_round_timer_changed_payload(
-		str(match_state.data)
-	)
-	if not event.is_empty():
-		events.append(event)
+	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
+		var state_event := CombatInputProtocolScript.parse_combat_state_changed_payload(
+			str(match_state.data)
+		)
+		if not state_event.is_empty():
+			states.append(state_event)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -196,6 +232,40 @@ func _on_second_matchmaker_matched(matched) -> void:
 		_second_failure = "P2 authoritative match joinに失敗しました。"
 		return
 	_second_match_id = str(join_result.match_id)
+
+
+func _wait_for_state_pair(
+	user_id: String,
+	state_name: String,
+	start_p1: int,
+	start_p2: int,
+	timeout_ms: int
+) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var first := _find_state(_p1_states, user_id, state_name, start_p1)
+		var second := _find_state(_p2_states, user_id, state_name, start_p2)
+		if not first.is_empty() and not second.is_empty():
+			if first != second:
+				_fail("P1/P2で%s stateが一致しません。" % state_name)
+				return false
+			return true
+		await create_timer(0.02).timeout
+	return false
+
+
+func _find_state(
+	events: Array[Dictionary],
+	user_id: String,
+	state_name: String,
+	start_index: int
+) -> Dictionary:
+	for index in range(maxi(start_index, 0), events.size()):
+		var event := events[index]
+		if str(event.get("user_id", "")) == user_id \
+				and str(event.get("state", "")) == state_name:
+			return event
+	return {}
 
 
 func _wait_for_timer_pair(remaining_seconds: int, timeout_ms: int) -> Dictionary:
