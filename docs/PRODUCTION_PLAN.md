@@ -36,8 +36,9 @@
 - authoritative現在ラウンドHit数
 - authoritative 85秒timer
 - 5 Hit到達によるauthoritativeラウンド終了
+- timeout時のauthoritative Hit数比較
 
-現在は **工程2: authoritativeラウンド・BO3** の途中で、timeout時のHit数比較を実装中である。
+現在は **工程2: authoritativeラウンド・BO3** の途中で、Overtimeを実装中である。
 
 ## 3. 製造工程
 
@@ -193,24 +194,23 @@ RC1
 
 現在からの優先順は次とする。
 
-1. timeout時のHit数比較
-2. Overtime
-3. Round result
-4. 2本先取BO3
-5. Match result
-6. Client Battle画面接続
-7. Disconnect / Reconnect
-8. Matchmaker検索幅拡大
-9. Ranking / Rating / Season
-10. Friend Match
-11. 全画面GameFlow
-12. 正式キャラクター
-13. 演出・音・台詞
-14. Steam認証
-15. AWS本番
-16. Windows実機・WAN試験
-17. balance / performance調整
-18. Release Candidate
+1. Overtime
+2. Round result
+3. 2本先取BO3
+4. Match result
+5. Client Battle画面接続
+6. Disconnect / Reconnect
+7. Matchmaker検索幅拡大
+8. Ranking / Rating / Season
+9. Friend Match
+10. 全画面GameFlow
+11. 正式キャラクター
+12. 演出・音・台詞
+13. Steam認証
+14. AWS本番
+15. Windows実機・WAN試験
+16. balance / performance調整
+17. Release Candidate
 
 ## 12. 計画変更ルール
 

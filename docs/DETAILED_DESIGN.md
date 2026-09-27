@@ -744,6 +744,43 @@ timeout確定後またはOvertime待ち中は、client側でHit数・勝者・ti
 
 延長戦中は次の有効ヒットで即座にラウンド終了する。
 
+オンラインauthoritative matchでは、timeout同点tickでは一旦 `round_awaiting_overtime = true` として両者を `ROUND_LOCKED` にする。timeout境界を跨いだ未確定入力・ContactをOvertimeへ持ち越さないため、このtickでは戦闘を再開しない。
+
+次のserver tick先頭でOvertimeを開始する。
+
+```text
+round_awaiting_overtime = false
+round_overtime = true
+round_finished = false
+round_winner_user_id = ""
+round_finish_cause = NONE
+```
+
+Overtime開始時は両者のcombat stateを新しい `IDLE` へ初期化する。timeout前のCHARGING / WINDUP / STRIKE / COOLDOWN / Defense / Stagger / pending Contactは復元しない。SHORTのdetach / regrow状態も持ち越さず、Overtime開始時は `ahoge_available = true` から再開する。
+
+server → client通知:
+
+```text
+RoundOvertimeStartedEvent
+- server_tick
+```
+
+Overtime開始tickで `RoundOvertimeStartedEvent` を両clientへ通知し、その後に両者の `COMBAT_STATE_CHANGED(IDLE)` を通知する。timerは0のまま再開せず、Overtime中は `ROUND_TIMER_CHANGED` を追加送信しない。
+
+Overtime中の勝敗規則:
+
+- PARRY / DODGE / JUST_PARRY / JUST_DODGEでは終了しない
+- AttackClashでは終了しない
+- `HitConfirmedEvent` が成立した場合だけ攻撃側Hit数を+1する
+- Hit count更新後、その攻撃側を `round_winner_user_id` として即座に確定する
+- `round_finish_cause = OVERTIME_HIT`
+- 両者を `ROUND_LOCKED` へ遷移する
+- 5 Hit規定数よりOvertimeの「次Hit」規則を優先する
+
+Overtime終了後は通常のラウンド終了と同様に新規combat / Contact / Hit / Hit count更新を停止する。
+
+Round Result通知、取得ラウンド数への反映、次ラウンドResetは後続工程で接続する。
+
 ## 11. マッチ管理
 
 ### 11.1 MatchState
@@ -1593,7 +1630,9 @@ SHORT_TEST
 - 5 Hit到達時は攻撃側をround winnerとして確定し、両者をROUND_LOCKEDへ遷移する
 - timer 0到達時はそのtickのcombat処理より先に確定済みHit数を比較する
 - timeout時にHit数差があれば多い側をwinner、同点ならround_awaiting_overtimeへ遷移する
-- timeout同点時のOvertime開始、Round Result、Round reset、BO3勝敗は後続Issueで接続する
+- timeout同点時は次server tickでOvertimeへ入り、timer 0のまま両者をIDLEへ戻す
+- Overtime中は次の有効Hitで即Round終了し、finish causeをOVERTIME_HITとする
+- Round Result、Round reset、BO3勝敗は後続Issueで接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続
