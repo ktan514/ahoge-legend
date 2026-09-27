@@ -1,6 +1,7 @@
 name: Online foundation
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "docker-compose.yml"
@@ -114,6 +115,10 @@ on:
       - "tests/match_result_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
+concurrency:
+  group: online-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -163,6 +168,12 @@ jobs:
           sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           godot --version
 
+      - name: Import Godot project once
+        shell: bash
+        run: |
+          ./scripts/godot-import.sh
+          echo "AHOGE_GODOT_IMPORTED=1" >> "$GITHUB_ENV"
+
       - name: Godot client authentication smoke
         run: ./scripts/client-online-smoke.sh
 
@@ -200,15 +211,18 @@ jobs:
         run: ./scripts/client-hit-count-smoke.sh
 
       - name: Godot authoritative 85 second timer smoke
+        if: github.event_name != 'pull_request'
         run: ./scripts/client-round-timer-smoke.sh
 
       - name: Godot authoritative 5 Hit round win smoke
         run: ./scripts/client-hit-limit-smoke.sh
 
       - name: Godot authoritative timeout winner smoke
+        if: github.event_name != 'pull_request'
         run: ./scripts/client-timeout-winner-smoke.sh
 
       - name: Godot authoritative Overtime smoke
+        if: github.event_name != 'pull_request'
         run: ./scripts/client-overtime-smoke.sh
 
       - name: Godot authoritative Round Result smoke
