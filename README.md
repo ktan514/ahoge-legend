@@ -393,6 +393,23 @@ AHOGE LEGEND overtime smoke: PASS
 
 PARRY / DODGE / Just / AttackClashでは延長戦は終了しません。Round Result通知と次ラウンドResetは後続Issueで接続します。
 
+## Authoritative Round Result
+
+5 Hit / timeout / Overtimeのどの終了経路でも、serverが同一契約のRound Resultを両クライアントへ通知します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-round-result-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND round result smoke: PASS
+```
+
+Round Resultは `round_number / winner_user_id / loser_user_id / finish_cause / winner_hits / loser_hits / server_tick` を含みます。次ラウンド開始・BO3取得数更新は後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`

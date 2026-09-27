@@ -22,6 +22,7 @@ on:
       - "scripts/client-hit-limit-smoke.sh"
       - "scripts/client-timeout-winner-smoke.sh"
       - "scripts/client-overtime-smoke.sh"
+      - "scripts/client-round-result-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -43,6 +44,7 @@ on:
       - "tests/hit_limit_smoke.gd"
       - "tests/timeout_winner_smoke.gd"
       - "tests/overtime_smoke.gd"
+      - "tests/round_result_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -67,6 +69,7 @@ on:
       - "scripts/client-hit-limit-smoke.sh"
       - "scripts/client-timeout-winner-smoke.sh"
       - "scripts/client-overtime-smoke.sh"
+      - "scripts/client-round-result-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -88,6 +91,7 @@ on:
       - "tests/hit_limit_smoke.gd"
       - "tests/timeout_winner_smoke.gd"
       - "tests/overtime_smoke.gd"
+      - "tests/round_result_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
 jobs:
@@ -186,6 +190,9 @@ jobs:
 
       - name: Godot authoritative Overtime smoke
         run: ./scripts/client-overtime-smoke.sh
+
+      - name: Godot authoritative Round Result smoke
+        run: ./scripts/client-round-result-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash
