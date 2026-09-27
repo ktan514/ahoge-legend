@@ -522,11 +522,42 @@ ContactEvent
 
 ### 9.2 判定
 
-両者のContactEventの `reached_at` を比較する。
+オンラインauthoritative matchでは、両者の未解決Contact予定tickをserver側で比較する。
 
-差分が相殺許容幅以内なら `AttackClash` とする。
+AttackClash許容差は実装開始用暫定値 `0.067秒` を使用し、30Hz server tickでは他の秒指定戦闘値と同じく `ceil(seconds * 30)` で量子化する。初期値は3tickとする。
 
-相殺許容幅は未決。
+判定順序は次で固定する。
+
+1. 両者に未解決Contact予定tickが存在する場合、tick差を比較する
+2. 差がAttackClash許容tick以内ならClash候補とする
+3. Clash候補は早い側Contactだけで結果を確定せず、遅い側Contact予定tickへ到達するまで待つ
+4. 遅い側Contact予定tick到達時点でも両攻撃が有効なら `AttackClash` を確定する
+5. Clash候補でないContactは、そのContact tickでDefenseResultを確認する
+6. DefenseResultが `NONE` なら `HIT`
+7. DefenseResultが `PARRY / JUST_PARRY / DODGE / JUST_DODGE` のいずれかならHitを発生させない
+
+Clash待機中にいずれかの攻撃がDefense cancel等で無効化された場合、残ったContactを通常のDefense / Hit判定へ戻す。
+
+serverは次の確定イベントを両クライアントへ通知する。
+
+```text
+HitConfirmedEvent
+- attacker_id
+- defender_id
+- input_sequence
+- server_tick
+```
+
+```text
+AttackClashEvent
+- attacker_a_id
+- attacker_b_id
+- attacker_a_input_sequence
+- attacker_b_input_sequence
+- server_tick
+```
+
+ContactEventとDefenseResultEventは既存どおり維持する。HitConfirmedEventはDefenseResultがNONEのContactだけに追加し、AttackClashEventではHitConfirmedEventを生成しない。
 
 ### 9.3 相殺結果
 
@@ -534,6 +565,8 @@ ContactEvent
 - 両者Stagger
 - ジャスト防御相当のエフェクト
 - 通常ヒット処理を実行しない
+
+authoritative化は段階的に行う。AttackClash確定時点ではClash結果を通知するところまでとし、両者をStaggerへ実遷移させる処理は後続Issueで接続する。
 
 ## 10. ラウンド管理
 
@@ -1363,7 +1396,12 @@ SHORT_TEST
 - Defense active / Just受付時間はserver tickで保持する
 - 攻撃中DEFENDは予定済み攻撃・未到達Contactをキャンセルする
 - COOLDOWN中DEFENDは残りCooldownを一時停止してDefense終了後に再開する
-- Contact到達時の防御結果、ジャスト判定、相殺、Hit、勝敗は後続Issueでサーバー権威へ接続する
+- Contact到達時のDefenseResultはserver tickで確定し、NONE / PARRY / JUST_PARRY / DODGE / JUST_DODGEを両clientへ通知する
+- AttackClash許容差0.067秒は30Hzで3tickへ量子化する
+- 両攻撃のContact予定tick差がClash許容tick以内なら遅い側Contact予定tickまで確定を待つ
+- Clash候補が成立した場合はAttackClashを確定し、Hitを発生させない
+- ClashでないContactはDefenseResultがNONEの場合だけHitを確定する
+- Hit数、Stagger、勝敗は後続Issueでserver authoritative stateへ接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続
