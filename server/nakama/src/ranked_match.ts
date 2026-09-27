@@ -454,7 +454,8 @@ function applyAttackInput(
       defenseEndTick: -1,
       defenseJustUntilTick: -1,
       resumeState: COMBAT_STATE_IDLE,
-      resumeRemainingTicks: 0
+      resumeRemainingTicks: 0,
+      staggerEndTick: -1
     };
     broadcastCombatState(
       dispatcher,
