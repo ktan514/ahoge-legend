@@ -16,7 +16,8 @@ signal ranked_match_found(match_id: String)
 signal ranked_match_joined(match_id: String)
 signal ranked_matchmaking_failed(step: String, message: String)
 signal combat_input_accepted(user_id: String, input_sequence: int, action: String, server_tick: int)
-signal combat_state_changed(user_id: String, state: String, server_tick: int, charge_ratio: float, ahoge_available: bool, regrow_until_tick: int)
+signal combat_state_changed(user_id: String, state: String, server_tick: int, charge_ratio: float)
+signal ahoge_state_changed(user_id: String, ahoge_available: bool, regrow_until_tick: int, server_tick: int)
 signal contact_reached(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, charge_ratio: float)
 signal defense_resolved(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, result: String)
 signal hit_confirmed(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int)
@@ -321,9 +322,13 @@ func _on_match_state_received(match_state, candidate) -> void:
 			str(state_event["user_id"]),
 			str(state_event["state"]),
 			int(state_event["server_tick"]),
-			float(state_event["charge_ratio"]),
+			float(state_event["charge_ratio"])
+		)
+		ahoge_state_changed.emit(
+			str(state_event["user_id"]),
 			bool(state_event.get("ahoge_available", true)),
-			int(state_event.get("regrow_until_tick", -1))
+			int(state_event.get("regrow_until_tick", -1)),
+			int(state_event["server_tick"])
 		)
 		return
 
