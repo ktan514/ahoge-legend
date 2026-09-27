@@ -8,6 +8,8 @@ var _second_ticket: String = ""
 var _second_match_id: String = ""
 var _second_failure: String = ""
 var _second_sequence: int = 0
+var _last_p1_release_sequence: int = 0
+var _last_p2_release_sequence: int = 0
 
 var _p1_states: Array[Dictionary] = []
 var _p2_states: Array[Dictionary] = []
@@ -251,11 +253,22 @@ func _play_round(
 	var loser_id := p2_user_id if p1_wins else p1_user_id
 
 	for hit_index in range(1, 6):
+		var state_start_p1 := _p1_states.size()
+		var state_start_p2 := _p2_states.size()
 		var sequence := -1
 		if p1_wins:
-			sequence = await _p1_attack(online_session, p1_user_id)
+			sequence = await _p1_attack(
+				online_session,
+				p1_user_id,
+				state_start_p1,
+				state_start_p2
+			)
 		else:
-			sequence = await _p2_attack(p2_user_id)
+			sequence = await _p2_attack(
+				p2_user_id,
+				state_start_p1,
+				state_start_p2
+			)
 		if sequence <= 0:
 			return false
 
@@ -266,7 +279,13 @@ func _play_round(
 			return false
 
 		if hit_index < 5:
-			if not await _wait_latest_idle(winner_id, 5000):
+			if not await _wait_state_pair(
+				winner_id,
+				"IDLE",
+				state_start_p1,
+				state_start_p2,
+				5000
+			):
 				_fail("Round %d / Hit %d後にwinnerがIDLEへ復帰しませんでした。" % [round_number, hit_index])
 				return false
 
@@ -302,9 +321,12 @@ func _play_round(
 	return true
 
 
-func _p1_attack(online_session, user_id: String) -> int:
-	var start_p1 := _p1_states.size()
-	var start_p2 := _p2_states.size()
+func _p1_attack(
+	online_session,
+	user_id: String,
+	start_p1: int,
+	start_p2: int
+) -> int:
 	var press: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_PRESS
 	)
@@ -322,15 +344,21 @@ func _p1_attack(online_session, user_id: String) -> int:
 		_fail("P1 ATTACK_RELEASEを送信できませんでした。")
 		return -1
 	var sequence := int(release.get("input_sequence", 0))
+	if sequence <= _last_p1_release_sequence:
+		_fail("P1 input sequenceがRound間で単調増加していません。")
+		return -1
+	_last_p1_release_sequence = sequence
 	if not await _wait_state_pair(user_id, "STRIKE", start_p1, start_p2, 5000):
 		_fail("P1 STRIKEを確認できませんでした。")
 		return -1
 	return sequence
 
 
-func _p2_attack(user_id: String) -> int:
-	var start_p1 := _p1_states.size()
-	var start_p2 := _p2_states.size()
+func _p2_attack(
+	user_id: String,
+	start_p1: int,
+	start_p2: int
+) -> int:
 	if not await _send_p2(CombatInputProtocolScript.ACTION_ATTACK_PRESS):
 		return -1
 	if not await _wait_state_pair(user_id, "CHARGING", start_p1, start_p2, 5000):
@@ -339,6 +367,10 @@ func _p2_attack(user_id: String) -> int:
 	if not await _send_p2(CombatInputProtocolScript.ACTION_ATTACK_RELEASE):
 		return -1
 	var sequence := _second_sequence
+	if sequence <= _last_p2_release_sequence:
+		_fail("P2 input sequenceがRound間で単調増加していません。")
+		return -1
+	_last_p2_release_sequence = sequence
 	if not await _wait_state_pair(user_id, "STRIKE", start_p1, start_p2, 5000):
 		_fail("P2 STRIKEを確認できませんでした。")
 		return -1
@@ -472,12 +504,6 @@ func _wait_state_pair(
 			return true
 		await create_timer(0.02).timeout
 	return false
-
-
-func _wait_latest_idle(user_id: String, timeout_ms: int) -> bool:
-	var start_p1 := maxi(_p1_states.size() - 4, 0)
-	var start_p2 := maxi(_p2_states.size() - 4, 0)
-	return await _wait_state_pair(user_id, "IDLE", start_p1, start_p2, timeout_ms)
 
 
 func _wait_state_at_tick_pair(
