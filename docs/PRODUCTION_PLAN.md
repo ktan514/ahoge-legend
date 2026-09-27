@@ -250,32 +250,26 @@ RC1
 
 ## 11. 当面の一本道
 
-現在からの優先順は次とする。マイルストーンは次の工程へ進むためのblocking gateであり、省略しない。
+現在からの優先順は次とする。
 
 1. timeout時のHit数比較
 2. Overtime
 3. Round result
 4. 2本先取BO3
 5. Match result
-6. UI-10 Battle最小接続
-7. **M1 #53 Battle Core実画面確認**
-8. Disconnect / Reconnect
-9. Matchmaker検索幅拡大
-10. Ranking / Rating / Season
-11. Friend Match
-12. Ranked主要導線を実画面へ接続
-13. **M2 #54 Ranked主要導線実画面確認**
-14. 残り主要画面・Friend導線を接続
-15. **M3 #55 主要12画面・全導線実画面確認**
-16. 最初の正式キャラクター / Motion / VFX / SEを接続
-17. **M4 #56 正式キャラクター初回品質確認**
-18. 残り正式キャラクター・演出・音・台詞
-19. Steam認証
-20. AWS本番
-21. Windows実機・WAN試験
-22. **M5 #57 Windows・AWS・WAN実環境通し確認**
-23. balance / performance調整
-24. Release Candidate
+6. Client Battle画面接続
+7. Disconnect / Reconnect
+8. Matchmaker検索幅拡大
+9. Ranking / Rating / Season
+10. Friend Match
+11. 全画面GameFlow
+12. 正式キャラクター
+13. 演出・音・台詞
+14. Steam認証
+15. AWS本番
+16. Windows実機・WAN試験
+17. balance / performance調整
+18. Release Candidate
 
 ## 12. 計画変更ルール
 
