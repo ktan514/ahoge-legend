@@ -3,6 +3,8 @@ const INPUT_ACCEPTED_OPCODE = 101;
 const COMBAT_STATE_CHANGED_OPCODE = 102;
 const CONTACT_REACHED_OPCODE = 103;
 const DEFENSE_RESOLVED_OPCODE = 104;
+const HIT_CONFIRMED_OPCODE = 105;
+const ATTACK_CLASH_OPCODE = 106;
 
 const DEFENSE_RESULT_NONE = "NONE";
 const DEFENSE_RESULT_PARRY = "PARRY";
@@ -35,6 +37,7 @@ interface AuthoritativeCombatState {
   cooldownEndTick: number;
   contactEmitted: boolean;
   releaseSequence: number;
+  defenseStartTick: number;
   defenseEndTick: number;
   defenseJustUntilTick: number;
   resumeState: string;
@@ -174,6 +177,7 @@ function createIdleCombatState(ahogeAvailable: boolean): AuthoritativeCombatStat
     cooldownEndTick: -1,
     contactEmitted: false,
     releaseSequence: 0,
+    defenseStartTick: -1,
     defenseEndTick: -1,
     defenseJustUntilTick: -1,
     resumeState: COMBAT_STATE_IDLE,
@@ -234,7 +238,10 @@ function resolveDefenseResult(
     return DEFENSE_RESULT_NONE;
   }
 
-  if (tick >= defenderState.defenseEndTick) {
+  if (
+    tick < defenderState.defenseStartTick ||
+    tick >= defenderState.defenseEndTick
+  ) {
     return DEFENSE_RESULT_NONE;
   }
 
@@ -274,21 +281,21 @@ function broadcastContactReached(
   state: AhogeRankedMatchState,
   attackerId: string,
   combatState: AuthoritativeCombatState,
-  tick: number
-): void {
+  contactTick: number
+): string {
   const defenderId = findOpponentUserId(state, attackerId);
   if (!defenderId) {
     return;
   }
 
-  const defenseResult = resolveDefenseResult(state, defenderId, tick);
+  const defenseResult = resolveDefenseResult(state, defenderId, contactTick);
 
   dispatcher.broadcastMessage(
     CONTACT_REACHED_OPCODE,
     JSON.stringify({
       attacker_id: attackerId,
       defender_id: defenderId,
-      server_tick: tick,
+      server_tick: contactTick,
       input_sequence: combatState.releaseSequence,
       charge_ratio: combatState.chargeRatio
     }),
@@ -302,9 +309,87 @@ function broadcastContactReached(
     attackerId,
     defenderId,
     combatState,
-    tick,
+    contactTick,
     defenseResult
   );
+
+  return defenseResult;
+}
+
+function broadcastHitConfirmed(
+  dispatcher: nkruntime.MatchDispatcher,
+  attackerId: string,
+  defenderId: string,
+  combatState: AuthoritativeCombatState,
+  contactTick: number
+): void {
+  dispatcher.broadcastMessage(
+    HIT_CONFIRMED_OPCODE,
+    JSON.stringify({attacker_id: attackerId, defender_id: defenderId, server_tick: contactTick, input_sequence: combatState.releaseSequence}),
+    null,
+    null,
+    true
+  );
+}
+
+function broadcastAttackClash(
+  dispatcher: nkruntime.MatchDispatcher,
+  attackerAId: string,
+  attackerAState: AuthoritativeCombatState,
+  attackerBId: string,
+  attackerBState: AuthoritativeCombatState,
+  tick: number
+): void {
+  dispatcher.broadcastMessage(
+    ATTACK_CLASH_OPCODE,
+    JSON.stringify({attacker_a_id: attackerAId, attacker_b_id: attackerBId, attacker_a_input_sequence: attackerAState.releaseSequence, attacker_b_input_sequence: attackerBState.releaseSequence, server_tick: tick}),
+    null,
+    null,
+    true
+  );
+}
+
+function hasPendingContact(combatState: AuthoritativeCombatState | undefined): boolean {
+  return !!combatState && combatState.contactTick >= 0 && !combatState.contactEmitted;
+}
+
+function resolveDueContacts(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  const userIds = Object.keys(state.presences);
+  if (userIds.length !== 2) return;
+  const firstId = userIds[0];
+  const secondId = userIds[1];
+  const first = state.combatStateByUser[firstId];
+  const second = state.combatStateByUser[secondId];
+
+  if (hasPendingContact(first) && hasPendingContact(second)) {
+    const contactDifference = Math.abs(first.contactTick - second.contactTick);
+    if (contactDifference <= combatAttackClashWindowTicks()) {
+      const clashTick = Math.max(first.contactTick, second.contactTick);
+      if (tick < clashTick) return;
+      first.contactEmitted = true;
+      second.contactEmitted = true;
+      broadcastContactReached(dispatcher, state, firstId, first, first.contactTick);
+      broadcastContactReached(dispatcher, state, secondId, second, second.contactTick);
+      broadcastAttackClash(dispatcher, firstId, first, secondId, second, tick);
+      return;
+    }
+  }
+
+  userIds.forEach(function (attackerId): void {
+    const combatState = state.combatStateByUser[attackerId];
+    if (!hasPendingContact(combatState) || tick < combatState.contactTick) return;
+    const defenderId = findOpponentUserId(state, attackerId);
+    if (!defenderId) return;
+    combatState.contactEmitted = true;
+    const defenseResult = broadcastContactReached(dispatcher, state, attackerId, combatState, combatState.contactTick);
+    if (defenseResult === DEFENSE_RESULT_NONE) {
+      broadcastHitConfirmed(dispatcher, attackerId, defenderId, combatState, combatState.contactTick);
+    }
+  });
 }
 
 function applyAttackInput(
@@ -370,6 +455,7 @@ function applyAttackInput(
     cooldownEndTick: strikeEndTick + timing.cooldownTicks,
     contactEmitted: false,
     releaseSequence: sequence,
+    defenseStartTick: -1,
     defenseEndTick: -1,
     defenseJustUntilTick: -1,
     resumeState: COMBAT_STATE_IDLE,
@@ -418,6 +504,7 @@ function applyDefenseInput(
     cooldownEndTick: -1,
     contactEmitted: false,
     releaseSequence: preservedReleaseSequence,
+    defenseStartTick: tick,
     defenseEndTick: tick + timing.activeTicks,
     defenseJustUntilTick: tick + timing.justTicks,
     resumeState: resumeState,
@@ -479,11 +566,6 @@ function advanceCombatStates(
     }
 
     if (combatState.state === COMBAT_STATE_STRIKE) {
-      if (!combatState.contactEmitted && tick >= combatState.contactTick) {
-        combatState.contactEmitted = true;
-        broadcastContactReached(dispatcher, state, userId, combatState, tick);
-      }
-
       if (tick >= combatState.strikeEndTick) {
         combatState.state = COMBAT_STATE_COOLDOWN;
         broadcastCombatState(dispatcher, userId, combatState, tick);
@@ -505,6 +587,8 @@ function advanceCombatStates(
       );
     }
   });
+
+  resolveDueContacts(dispatcher, state, tick);
 }
 
 const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = function (

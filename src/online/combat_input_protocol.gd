@@ -5,6 +5,8 @@ const OPCODE_INPUT_ACCEPTED: int = 101
 const OPCODE_COMBAT_STATE_CHANGED: int = 102
 const OPCODE_CONTACT_REACHED: int = 103
 const OPCODE_DEFENSE_RESOLVED: int = 104
+const OPCODE_HIT_CONFIRMED: int = 105
+const OPCODE_ATTACK_CLASH: int = 106
 
 const ACTION_ATTACK_PRESS: String = "ATTACK_PRESS"
 const ACTION_ATTACK_RELEASE: String = "ATTACK_RELEASE"
@@ -104,4 +106,29 @@ static func parse_defense_resolved_payload(payload: String) -> Dictionary:
 	if not is_allowed_defense_result(str(parsed["result"])):
 		return {}
 
+	return parsed
+
+
+static func parse_hit_confirmed_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	if not parsed.has("attacker_id") \
+			or not parsed.has("defender_id") \
+			or not parsed.has("server_tick") \
+			or not parsed.has("input_sequence"):
+		return {}
+	return parsed
+
+
+static func parse_attack_clash_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	if not parsed.has("attacker_a_id") \
+			or not parsed.has("attacker_b_id") \
+			or not parsed.has("attacker_a_input_sequence") \
+			or not parsed.has("attacker_b_input_sequence") \
+			or not parsed.has("server_tick"):
+		return {}
 	return parsed

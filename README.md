@@ -240,6 +240,23 @@ AHOGE LEGEND defense result smoke: PASS
 
 Defense active / Justの終了tickは排他的境界として扱います。Attack Clash / Hit / Stagger実適用は後続Issueで接続します。
 
+## Authoritative Contact outcome
+
+両者のContact予定tick差がAttackClash許容幅内なら遅い側Contactまで確定を待ってClashとし、それ以外はDefenseResultがNONEのContactだけをHitとして確定します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-contact-outcome-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND contact outcome smoke: PASS
+```
+
+AttackClash許容差0.067秒は30Hzで3tickへ量子化します。Hit数加算とStagger実適用は後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`
