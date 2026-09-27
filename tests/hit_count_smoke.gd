@@ -123,15 +123,23 @@ func _run() -> void:
 		return
 
 	# P1 1Hit。
+	var p1_first_state_start_p1 := _p1_states.size()
+	var p1_first_state_start_p2 := _p2_states.size()
 	var p1_first_sequence := await _p1_attack(online_session, p1_user_id)
 	if p1_first_sequence <= 0:
 		return
-	if not await _wait_for_hit_pair(p1_first_sequence, 5000):
+	if not await _wait_for_hit_pair(p1_user_id, p1_first_sequence, 5000):
 		return
 	if not await _wait_for_count_pair(p1_user_id, 1, p1_first_sequence, 5000):
 		_fail("P1 1Hit目のcount=1を受信できませんでした。")
 		return
-	if not await _wait_for_state_pair(p1_user_id, "IDLE", 0, 0, 5000):
+	if not await _wait_for_state_pair(
+		p1_user_id,
+		"IDLE",
+		p1_first_state_start_p1,
+		p1_first_state_start_p2,
+		5000
+	):
 		_fail("P1 1Hit後にIDLEへ復帰しませんでした。")
 		return
 
@@ -214,15 +222,23 @@ func _run() -> void:
 		return
 
 	# P1 2Hit目。
+	var p1_second_state_start_p1 := _p1_states.size()
+	var p1_second_state_start_p2 := _p2_states.size()
 	var p1_second_sequence := await _p1_attack(online_session, p1_user_id)
 	if p1_second_sequence <= 0:
 		return
-	if not await _wait_for_hit_pair(p1_second_sequence, 5000):
+	if not await _wait_for_hit_pair(p1_user_id, p1_second_sequence, 5000):
 		return
 	if not await _wait_for_count_pair(p1_user_id, 2, p1_second_sequence, 5000):
 		_fail("P1 2Hit目のcount=2を受信できませんでした。")
 		return
-	if not await _wait_for_state_pair(p1_user_id, "IDLE", 0, 0, 5000):
+	if not await _wait_for_state_pair(
+		p1_user_id,
+		"IDLE",
+		p1_second_state_start_p1,
+		p1_second_state_start_p2,
+		5000
+	):
 		_fail("P1 2Hit後にIDLEへ復帰しませんでした。")
 		return
 
@@ -230,7 +246,7 @@ func _run() -> void:
 	var p2_sequence := await _p2_attack(p2_user_id)
 	if p2_sequence <= 0:
 		return
-	if not await _wait_for_hit_pair(p2_sequence, 5000):
+	if not await _wait_for_hit_pair(p2_user_id, p2_sequence, 5000):
 		return
 	if not await _wait_for_count_pair(p2_user_id, 1, p2_sequence, 5000):
 		_fail("P2 1Hit目のcount=1を受信できませんでした。")
@@ -402,9 +418,9 @@ func _find_state(
 	return {}
 
 
-func _wait_for_hit_pair(input_sequence: int, timeout_ms: int) -> bool:
-	var first := await _wait_sequence(_p1_hits, input_sequence, timeout_ms)
-	var second := await _wait_sequence(_p2_hits, input_sequence, timeout_ms)
+func _wait_for_hit_pair(attacker_id: String, input_sequence: int, timeout_ms: int) -> bool:
+	var first := await _wait_sequence(_p1_hits, attacker_id, input_sequence, timeout_ms)
+	var second := await _wait_sequence(_p2_hits, attacker_id, input_sequence, timeout_ms)
 	if first.is_empty() or second.is_empty() or first != second:
 		_fail("HitConfirmedを両clientで同一受信できませんでした。")
 		return false
@@ -464,11 +480,17 @@ func _find_count(
 	return {}
 
 
-func _wait_sequence(events: Array[Dictionary], input_sequence: int, timeout_ms: int) -> Dictionary:
+func _wait_sequence(
+	events: Array[Dictionary],
+	attacker_id: String,
+	input_sequence: int,
+	timeout_ms: int
+) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
 		for event in events:
-			if int(event.get("input_sequence", -1)) == input_sequence:
+			if str(event.get("attacker_id", "")) == attacker_id \
+					and int(event.get("input_sequence", -1)) == input_sequence:
 				return event
 		await create_timer(0.02).timeout
 	return {}
