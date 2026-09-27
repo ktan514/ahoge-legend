@@ -22,6 +22,10 @@ const COMBAT_STATE_COOLDOWN = "COOLDOWN";
 const COMBAT_STATE_PARRY = "PARRY";
 const COMBAT_STATE_DODGE = "DODGE";
 const COMBAT_STATE_STAGGER = "STAGGER";
+const COMBAT_STATE_ROUND_LOCKED = "ROUND_LOCKED";
+
+const ROUND_FINISH_CAUSE_NONE = "NONE";
+const ROUND_FINISH_CAUSE_HIT_LIMIT = "HIT_LIMIT";
 
 const CHARACTER_LONG_TEST = "LONG_TEST";
 const CHARACTER_SHORT_TEST = "SHORT_TEST";
@@ -64,6 +68,9 @@ interface AhogeRankedMatchState {
   roundTimerStartTick: number;
   roundTimerEndTick: number;
   roundRemainingSeconds: number;
+  roundFinished: boolean;
+  roundWinnerUserId: string;
+  roundFinishCause: string;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -107,7 +114,10 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundHitCountSnapshotBroadcast: false,
       roundTimerStartTick: -1,
       roundTimerEndTick: -1,
-      roundRemainingSeconds: ROUND_DURATION_SECONDS
+      roundRemainingSeconds: ROUND_DURATION_SECONDS,
+      roundFinished: false,
+      roundWinnerUserId: "",
+      roundFinishCause: ROUND_FINISH_CAUSE_NONE
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -290,6 +300,35 @@ function broadcastRoundTimer(
   );
 }
 
+function lockRoundCombat(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  Object.keys(state.combatStateByUser).forEach(function (userId): void {
+    const current = state.combatStateByUser[userId];
+    const locked = createIdleCombatState(current ? current.ahogeAvailable : true);
+    locked.state = COMBAT_STATE_ROUND_LOCKED;
+    state.combatStateByUser[userId] = locked;
+    broadcastCombatState(dispatcher, userId, locked, tick);
+  });
+}
+
+function finishRoundByHitLimit(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  winnerUserId: string,
+  tick: number
+): void {
+  if (state.roundFinished) {
+    return;
+  }
+  state.roundFinished = true;
+  state.roundWinnerUserId = winnerUserId;
+  state.roundFinishCause = ROUND_FINISH_CAUSE_HIT_LIMIT;
+  lockRoundCombat(dispatcher, state, tick);
+}
+
 function incrementRoundHitCount(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -297,8 +336,14 @@ function incrementRoundHitCount(
   tick: number,
   inputSequence: number
 ): void {
+  if (state.roundFinished) {
+    return;
+  }
   state.roundHitCountByUser[userId] = (state.roundHitCountByUser[userId] || 0) + 1;
   broadcastRoundHitCount(dispatcher, state, userId, tick, inputSequence);
+  if (roundReachedHitLimit(state.roundHitCountByUser[userId])) {
+    finishRoundByHitLimit(dispatcher, state, userId, tick);
+  }
 }
 
 function isSupportedCharacterId(characterId: string): boolean {
@@ -482,6 +527,9 @@ function resolveDueContacts(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
+  if (state.roundFinished) {
+    return;
+  }
   const userIds = Object.keys(state.presences);
   if (userIds.length !== 2) return;
   const firstId = userIds[0];
@@ -506,6 +554,9 @@ function resolveDueContacts(
   }
 
   userIds.forEach(function (attackerId): void {
+    if (state.roundFinished) {
+      return;
+    }
     const combatState = state.combatStateByUser[attackerId];
     if (!hasPendingContact(combatState) || tick < combatState.contactTick) return;
     const defenderId = findOpponentUserId(state, attackerId);
@@ -538,6 +589,9 @@ function applyAttackInput(
   sequence: number,
   tick: number
 ): void {
+  if (state.roundFinished) {
+    return;
+  }
   const combatState = state.combatStateByUser[userId];
   if (!combatState) {
     return;
@@ -618,6 +672,9 @@ function applyDefenseInput(
   userId: string,
   tick: number
 ): void {
+  if (state.roundFinished) {
+    return;
+  }
   const combatState = state.combatStateByUser[userId];
   if (!combatState || combatState.state === COMBAT_STATE_STAGGER) {
     return;
@@ -669,6 +726,9 @@ function advanceCombatStates(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
+  if (state.roundFinished) {
+    return;
+  }
   Object.keys(state.combatStateByUser).forEach(function (userId): void {
     const combatState = state.combatStateByUser[userId];
 
@@ -774,7 +834,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
     broadcastRoundTimer(dispatcher, state.roundRemainingSeconds, tick);
   }
 
-  if (state.roundTimerStartTick >= 0 && state.roundRemainingSeconds > 0) {
+  if (!state.roundFinished && state.roundTimerStartTick >= 0 && state.roundRemainingSeconds > 0) {
     const remainingSeconds = roundRemainingSeconds(state.roundTimerEndTick, tick);
     if (remainingSeconds !== state.roundRemainingSeconds) {
       state.roundRemainingSeconds = remainingSeconds;
@@ -794,6 +854,9 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
 
 
   messages.forEach(function (message): void {
+    if (state.roundFinished) {
+      return;
+    }
     if (message.opCode !== COMBAT_INPUT_OPCODE) {
       return;
     }
