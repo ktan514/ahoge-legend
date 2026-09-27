@@ -1917,6 +1917,87 @@ SHORT_TEST
 - 15秒以内に復帰しなければ切断側のマッチ敗北とする
 - サーバー障害や両者同時切断は別途エラー終了として扱い、Rating更新を行わない方向で実装する
 
+#### 21.5.1 片側切断時の進行
+
+Round進行中に片側だけが切断した場合、match全体は停止しない。
+
+- 接続中プレイヤーのcombat inputは通常どおり受理する
+- 85秒timerは停止しない
+- Overtimeへ到達した場合も通常どおり進行する
+- 切断プレイヤーは新規inputを送信できない
+- 切断前にserverが受理済みのWINDUP / STRIKE / COOLDOWN / Defense / Stagger / SHORT Regrow等はserver tick基準で通常どおり進行する
+- 切断を理由に受理済みactionを巻き戻さない
+- 接続中プレイヤーから切断プレイヤーへの有効Hit判定もserver authoritativeに継続する
+
+ただし、Round境界では両者が揃うまで進行を待つ。
+
+- Round 1開始前に片側が不在ならCountdownを開始しない
+- Round Countdown中に片側が切断した場合はCountdownを停止し、復帰後に残りCountdownから再開する
+- Round終了後に片側が不在ならRound Result / BO3 scoreは確定するが、次Round Countdownへ進まない
+- Round進行中の切断後、そのまま5 Hit / TIMEOUT / OVERTIME_HITでRoundが終了した場合も、Round終了地点で再接続待ちへ入る
+- Round Result表示hold中に切断した場合、holdの残り時間を停止し、復帰後に残り時間から再開する
+- Match自体が通常勝敗で終了した場合は次Round待機へ移らずMatch Resultを確定する
+
+#### 21.5.2 再接続成功時の同期
+
+serverは切断でplayer stateを破棄しない。presenceだけを切断状態へ変更し、少なくとも次を15秒間保持する。
+
+- user ID / character ID
+- last accepted input sequence
+- combat state / charge ratio
+- ahoge availability / regrow tick
+- Hit数
+- Round番号
+- Round取得数
+- Round timer
+- Overtime state
+- Round Result / Match Result state
+- Round Countdown state
+- reconnect deadline
+
+同じNakama user IDが同一matchへ再joinした場合、serverは再接続playerへ最新authoritative snapshotを送信する。
+
+snapshotには少なくとも次を含める。
+
+```text
+server_tick
+round_number
+round_wins_by_user
+round_hit_count_by_user
+remaining_seconds
+round_finished
+round_winner_user_id
+round_finish_cause
+round_overtime
+round_countdown_active
+round_countdown_value
+match_finished
+match_winner_user_id
+last_input_sequence
+combat_state_by_user
+```
+
+clientはsnapshotを正本として現在表示・入力sequenceを更新する。切断中に受信できなかったeventをclient側で再計算・再生して追いつこうとしない。
+
+#### 21.5.3 再接続待機中のフェーズ管理
+
+serverは「active Round」と「Round境界」を区別する。
+
+```text
+active Round
+  → 片側切断でも進行継続
+
+pre-Round / Countdown
+  → 両者が揃うまで開始・Countdown進行を待機
+
+post-Round / Result hold
+  → Resultは確定
+  → 両者が揃うまで次Roundへ進まない
+```
+
+15秒猶予はRound phaseの停止とは独立して実時間相当server tickで進行する。
+
+
 ### 21.6 プレイヤーランキング初期値
 
 Eloの暫定式を使用する。
@@ -1965,7 +2046,7 @@ K = 32
 - 正式キャラクターごとの攻撃タイプ
 - 暫定戦闘値の最終調整
 - 遅延補正方式の最終調整
-- 切断・再接続ルールの最終調整
+- 両者同時切断・意図的退出を含む切断例外時ルールの最終調整
 - Rating方式・ランク帯の最終調整
 - AWS内の具体的なリソース構成
 - macOSリリース
