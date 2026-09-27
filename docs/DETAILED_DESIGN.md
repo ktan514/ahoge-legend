@@ -503,7 +503,7 @@ DODGE / JUST_DODGEは `ahoge_available = false` のDefenseContextに対して同
 - 攻撃側をStaggerへ遷移
 - 視覚・UI上で通常防御と区別する
 
-authoritative化は段階的に行う。DefenseResultの確定時点ではJust成功を結果として通知するところまでとし、攻撃側をStaggerへ実遷移させる処理は後続Issueで接続する。
+オンラインauthoritative matchでは、`JUST_PARRY / JUST_DODGE` を確定したtickで攻撃側を `STAGGER` へ遷移させる。
 
 ## 9. 攻撃相殺
 
@@ -566,7 +566,27 @@ ContactEventとDefenseResultEventは既存どおり維持する。HitConfirmedEv
 - ジャスト防御相当のエフェクト
 - 通常ヒット処理を実行しない
 
-authoritative化は段階的に行う。AttackClash確定時点ではClash結果を通知するところまでとし、両者をStaggerへ実遷移させる処理は後続Issueで接続する。
+オンラインauthoritative matchでは、AttackClashを確定したtickで両者を `STAGGER` へ遷移させる。
+
+### 9.4 Stagger
+
+StaggerはNakama authoritative matchのserver stateとして管理する。
+
+初期値は実装開始用暫定値 `0.45秒` を使用し、30Hzでは他の秒指定戦闘値と同じく `ceil(seconds * 30)` で量子化する。初期値は14tickとする。
+
+Stagger開始時は次を行う。
+
+- stateを `STAGGER` へ変更する
+- `stagger_until_tick = start_tick + stagger_ticks` を保持する
+- 進行中の攻撃予定、未到達Contact、Defense active / Just、Defense後のCooldown復帰情報を破棄する
+- `ahoge_available` は現在値を維持する
+- `COMBAT_STATE_CHANGED` で両クライアントへ通知する
+
+Stagger中は `ATTACK_PRESS / ATTACK_RELEASE / DEFEND` による戦闘状態遷移を行わない。
+
+`server_tick >= stagger_until_tick` でStaggerを終了し、初期authoritative実装では現在のローカル戦闘 `CombatantState.apply_stagger()` と同じく `IDLE` へ復帰する。Stagger前のCooldownは再開しない。
+
+Just DefenseとAttackClashの発生通知は既存イベントを維持し、Stagger状態は `COMBAT_STATE_CHANGED` を正とする。
 
 ## 10. ラウンド管理
 
@@ -1401,7 +1421,10 @@ SHORT_TEST
 - 両攻撃のContact予定tick差がClash許容tick以内なら遅い側Contact予定tickまで確定を待つ
 - Clash候補が成立した場合はAttackClashを確定し、Hitを発生させない
 - ClashでないContactはDefenseResultがNONEの場合だけHitを確定する
-- Hit数、Stagger、勝敗は後続Issueでserver authoritative stateへ接続する
+- Just Defense成功時は攻撃側をSTAGGERへ遷移させる
+- AttackClash確定時は両者をSTAGGERへ遷移させる
+- Stagger 0.45秒は30Hzで14tickへ量子化し、終了後はIDLEへ復帰する
+- Hit数、勝敗は後続Issueでserver authoritative stateへ接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続
