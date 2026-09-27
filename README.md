@@ -291,6 +291,23 @@ AHOGE LEGEND short state smoke: PASS
 
 Detach中のDEFENDはDODGEへ切り替わり、regrow後はPARRYへ戻ります。Projectileの見た目はGodot側で後続接続します。
 
+## 工程1 2-client戦闘統合検証
+
+工程1の戦闘機能を同一authoritative match内で連続実行し、個別smokeでは検出しにくい状態残留や順序依存を確認します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-combat-integration-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND combat integration smoke: PASS
+```
+
+LONG_TEST / SHORT_TESTを同じmatchへ参加させ、Hit、Defense cancel、Parry / Dodge / Just、Clash、Stagger、SHORT detach / Regrow、最終IDLE復帰までを通しで検証します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`
