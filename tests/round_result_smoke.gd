@@ -261,7 +261,7 @@ func _run() -> void:
 	online_session.disconnect_realtime_socket()
 	_second_socket.close()
 
-	print("AHOGE LEGEND hit limit smoke: PASS match_id=%s" % p1_joined[0])
+	print("AHOGE LEGEND round result smoke: PASS match_id=%s" % p1_joined[0])
 	quit(0)
 
 
@@ -501,5 +501,5 @@ func _fail(message: String) -> void:
 	if _second_socket != null:
 		_second_socket.close()
 	push_error(message)
-	print("AHOGE LEGEND hit limit smoke: FAIL")
+	print("AHOGE LEGEND round result smoke: FAIL")
 	quit(1)

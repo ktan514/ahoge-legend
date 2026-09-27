@@ -154,6 +154,12 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-overtime-smoke.sh
 ```
 
+2-client authoritative Round Result smoke test:
+
+```bash
+./scripts/client-round-result-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -204,7 +210,7 @@ npm run build
 - `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 - `scripts/client-matchmaker-smoke.sh`: 2クライアントをDevice認証・Realtime接続し、Matchmaker成立から同一authoritative matchへのjoinまで検証する。
 - `server/nakama/src/combat_config.ts`: server authoritative戦闘の暫定時間値と30Hz tick換算・補間を一元管理する。
-- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数、85秒timer、5 Hitラウンド終了、timeout Hit数比較、Overtime次Hit終了を定義する。Round Result等は後続Issueで追加する。
+- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数、85秒timer、5 Hitラウンド終了、timeout Hit数比較、Overtime次Hit終了、Round Result通知を定義する。次ラウンド / BO3 / Match Resultは後続Issueで追加する。
 - `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 - `scripts/client-attack-state-smoke.sh`: 2クライアントで同じauthoritative攻撃状態遷移とContactEventを受信できることを検証する。
 - `scripts/client-defense-state-smoke.sh`: 2クライアントでPARRY / DODGE状態、攻撃キャンセル、Defense終了後復帰、Cooldown一時停止・再開を検証する。
@@ -218,6 +224,7 @@ npm run build
 - `scripts/client-hit-limit-smoke.sh`: 1〜4 Hit継続、5 Hit目のcount=5、両者ROUND_LOCKED、timer停止、終了後のcombat / Hit / count停止を検証する。
 - `scripts/client-timeout-winner-smoke.sh`: 1-0のHit数で85秒を完走し、timer 0、両者ROUND_LOCKED、timeout後のcombat / Hit / count / timer停止、両client event一致を検証する。
 - `scripts/client-overtime-smoke.sh`: 0-0 timeout、次tick Overtime開始、timer 0維持、PARRY / Clash継続、次の有効Hitでcount更新後ROUND_LOCKED、両client一致を検証する。
+- `scripts/client-round-result-smoke.sh`: HIT_LIMIT Round Resultのround番号、winner / loser、Hit数、finish cause、server tick、1回限り通知、両client一致を検証する。TIMEOUT / OVERTIME_HITは既存各smokeで同契約を回帰する。
 
 ## アセット管理
 

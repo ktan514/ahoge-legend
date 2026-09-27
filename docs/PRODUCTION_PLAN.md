@@ -37,8 +37,9 @@
 - authoritative 85秒timer
 - 5 Hit到達によるauthoritativeラウンド終了
 - timeout時のauthoritative Hit数比較
+- authoritative Overtime
 
-現在は **工程2: authoritativeラウンド・BO3** の途中で、Overtimeを実装中である。
+現在は **工程2: authoritativeラウンド・BO3** の途中で、Round resultを実装中である。
 
 ## 3. 製造工程
 
@@ -253,11 +254,11 @@ RC1
 
 現在からの優先順は次とする。
 
-1. Overtime
-2. Round result
-3. 2本先取BO3
-4. Match result
-5. Client Battle画面接続
+1. Round result
+2. 2本先取BO3
+3. Match result
+4. Client Battle画面接続
+5. M1 #53 Battle Core実画面確認
 6. Disconnect / Reconnect
 7. Matchmaker検索幅拡大
 8. Ranking / Rating / Season
