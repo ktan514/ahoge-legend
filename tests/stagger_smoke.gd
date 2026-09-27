@@ -71,6 +71,13 @@ func _run() -> void:
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
+	var round_one_started := [false]
+	online_session.round_started.connect(
+		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
+			if round_number == 1:
+				round_one_started[0] = true
+	)
+
 
 	var p1_start: Dictionary = await online_session.start_ranked_matchmaking(1500, OnlineConfigScript.RANKED_CHARACTER_LONG_TEST)
 	if not bool(p1_start.get("ok", false)):
@@ -106,8 +113,13 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
-	# authoritative Round Countdown完了後に戦闘を開始する。
-	await create_timer(3.5).timeout
+	# 固定時間ではなくauthoritative ROUND_STARTEDを待ってから戦闘を開始する。
+	var round_start_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < round_start_deadline and not round_one_started[0]:
+		await create_timer(0.02).timeout
+	if not round_one_started[0]:
+		_fail("Round 1のauthoritative開始を受信できませんでした。")
+		return
 
 	# JUST_PARRY → 攻撃側STAGGER。
 	var p1_just_start := _p1_states.size()
