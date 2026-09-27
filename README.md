@@ -151,6 +151,24 @@ AHOGE LEGEND realtime smoke: PASS
 この段階では接続・接続状態確認・明示切断までを対象とし、Matchmakerや対戦同期は後続Issueで実装します。
 Socket接続時もraw auth tokenはログへ出力しません。
 
+## Ranked Matchmaker → authoritative match
+
+2クライアントがRanked Matchmakerで組み合わされ、同じauthoritative matchへjoinできることを確認します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-matchmaker-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND matchmaker smoke: PASS
+```
+
+初期検索は2人固定、`mode=ranked`、Rating ±100です。
+10秒ごとの検索幅拡大、戦闘入力、勝敗処理は後続Issueで実装します。
+
 ## 設計正本
 
 - `docs/BASIC_DESIGN.md`

@@ -792,6 +792,45 @@ AUTHENTICATED
 Socket接続URLにはSession tokenが含まれるため、Nakama SDKのDEBUGログを通常運用で有効にしない。
 HTTP認証と同様、raw tokenをログへ出力しない。
 
+### 14.0.3 Ranked Matchmakerとauthoritative match骨格
+
+ランクマッチの最小オンライン縦切りは次の順で成立させる。
+
+```text
+2 clients AUTHENTICATED
+→ 2 clients REALTIME_CONNECTED
+→ add_matchmaker_async
+→ Nakama Matchmaker matched
+→ server Matchmaker Matched hook
+→ nk.matchCreate("ahoge_ranked", matched users)
+→ matched event with match_id
+→ both clients join_match_async(match_id)
+→ same authoritative match
+```
+
+サーバーは `ahoge_ranked` Match Handlerを登録する。
+
+初期Match Handler:
+- tick rate: 30Hz
+- expected user IDs: Matchmaker matched結果の2人
+- join可能人数: 2人
+- expected user以外のjoinを拒否
+- join / leave presenceをstateへ保持
+- この段階では戦闘入力・タイマー・勝敗を処理しない
+
+クライアントはMatchmaker ticket、matched結果、joined match IDを保持する。
+Matchmakerを開始するには認証済みRealtime Socketが必要とする。
+match成立前のticketはcancel可能とする。
+
+初期検索条件:
+- min count = 2
+- max count = 2
+- string property: `mode=ranked`
+- numeric property: `rating`
+- 初期Rating範囲: 自分のRating ±100
+
+この骨格上へ後続Issueで85秒タイマー、戦闘入力、ContactEvent、防御、相殺、BO3勝敗を順次移管する。
+
 ### 14.1 サーバー権威で確定する対象
 
 採用構成では、少なくとも次をNakama側のサーバー権威で確定する。
@@ -829,9 +868,16 @@ HTTP認証と同様、raw tokenをログへ出力しない。
 ### 15.1 ランクマッチ
 
 - キャラクター選択後にマッチングへ入る
-- Ranking/Ratingに近い相手を優先する方向
-- 待ち時間に応じた検索範囲拡大は候補
+- 2人固定で検索する
+- Matchmaker propertyに `mode=ranked` と数値 `rating` を付与する
+- 初期queryは `+properties.mode:ranked +properties.rating:>=MIN +properties.rating:<=MAX`
+- 初期検索幅は自分のRating ±100
+- Matchmaker Matched hookが authoritative match `ahoge_ranked` を生成する
+- matched通知で受け取った `match_id` へ両クライアントがjoinする
 - 試合後は再戦させない
+
+検索幅拡大の正式初期値は、10秒ごとに±100ずつ広げ、最大±500とする。60秒経過後も検索を継続しUIへ待機延長を表示する。
+初期Matchmaker接続Issueではまず±100の単一ticketまでを実装し、この段階的拡大は後続Issueで接続する。
 
 ### 15.2 フレンドマッチ
 

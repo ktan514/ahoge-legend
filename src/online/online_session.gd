@@ -2,17 +2,26 @@ extends Node
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
+const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 
 signal authentication_succeeded(user_id: String, username: String)
 signal authentication_failed(step: String, message: String)
 signal realtime_connected(user_id: String)
 signal realtime_disconnected
 signal realtime_connection_failed(message: String)
+signal ranked_matchmaking_started(min_rating: int, max_rating: int)
+signal ranked_matchmaking_cancelled
+signal ranked_match_found(match_id: String)
+signal ranked_match_joined(match_id: String)
+signal ranked_matchmaking_failed(step: String, message: String)
 
 var client = null
 var session = null
 var account = null
 var realtime_socket = null
+var matchmaker_ticket: String = ""
+var joined_match = null
+var current_match_id: String = ""
 var _identity_store = null
 
 
@@ -98,6 +107,7 @@ func connect_realtime_socket() -> Dictionary:
 	candidate.closed.connect(_on_realtime_closed.bind(candidate))
 	candidate.connection_error.connect(_on_realtime_connection_error.bind(candidate))
 	candidate.received_error.connect(_on_realtime_received_error.bind(candidate))
+	candidate.received_matchmaker_matched.connect(_on_matchmaker_matched.bind(candidate))
 	realtime_socket = candidate
 
 	var connect_result = await candidate.connect_async(
@@ -125,6 +135,118 @@ func connect_realtime_socket() -> Dictionary:
 	}
 
 
+func build_ranked_matchmaker_query(rating: int) -> String:
+	return RankedMatchmakerQueryScript.build(rating)
+
+
+func start_ranked_matchmaking(rating: int) -> Dictionary:
+	if not is_realtime_connected():
+		return _matchmaking_fail("start", "Realtime Socket接続前はMatchmakerを開始できません。")
+
+	if not matchmaker_ticket.is_empty():
+		return _matchmaking_fail("start", "既にMatchmaker ticketがあります。")
+
+	var min_rating := rating - OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
+	var max_rating := rating + OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
+	var query := build_ranked_matchmaker_query(rating)
+	var string_properties := {
+		"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
+	}
+	var numeric_properties := {
+		"rating": float(rating),
+	}
+
+	var ticket_result = await realtime_socket.add_matchmaker_async(
+		query,
+		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
+		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
+		string_properties,
+		numeric_properties
+	)
+
+	if ticket_result == null or ticket_result.is_exception():
+		return _matchmaking_fail(
+			"add_matchmaker",
+			_result_error_message(ticket_result, "Matchmaker ticketを作成できませんでした。")
+		)
+
+	matchmaker_ticket = str(ticket_result.ticket)
+	ranked_matchmaking_started.emit(min_rating, max_rating)
+
+	return {
+		"ok": true,
+		"min_rating": min_rating,
+		"max_rating": max_rating,
+	}
+
+
+func cancel_ranked_matchmaking() -> Dictionary:
+	if matchmaker_ticket.is_empty():
+		return _matchmaking_fail("cancel", "取消対象のMatchmaker ticketがありません。")
+
+	if not is_realtime_connected():
+		matchmaker_ticket = ""
+		return _matchmaking_fail("cancel", "Realtime Socketが切断されています。")
+
+	var ticket_to_remove := matchmaker_ticket
+	var result = await realtime_socket.remove_matchmaker_async(ticket_to_remove)
+	if result == null or result.is_exception():
+		return _matchmaking_fail(
+			"remove_matchmaker",
+			_result_error_message(result, "Matchmaker ticketを取消できませんでした。")
+		)
+
+	if matchmaker_ticket == ticket_to_remove:
+		matchmaker_ticket = ""
+	ranked_matchmaking_cancelled.emit()
+	return {"ok": true}
+
+
+func is_matchmaking() -> bool:
+	return not matchmaker_ticket.is_empty()
+
+
+func is_in_authoritative_match() -> bool:
+	return joined_match != null and bool(joined_match.authoritative) and not current_match_id.is_empty()
+
+
+func _on_matchmaker_matched(matched, candidate) -> void:
+	if realtime_socket != candidate:
+		return
+
+	if matched == null or matched.is_exception():
+		_matchmaking_fail("matched", "Matchmaker matched通知を処理できませんでした。")
+		return
+
+	var matched_ticket := str(matched.ticket)
+	if matchmaker_ticket.is_empty() or matched_ticket != matchmaker_ticket:
+		return
+
+	matchmaker_ticket = ""
+	var match_id := str(matched.match_id)
+	if match_id.is_empty():
+		_matchmaking_fail("matched", "authoritative match IDがありません。")
+		return
+
+	ranked_match_found.emit(match_id)
+
+	var join_result = await candidate.join_match_async(match_id)
+	if join_result == null or join_result.is_exception():
+		_matchmaking_fail(
+			"join_match",
+			_result_error_message(join_result, "authoritative matchへjoinできませんでした。")
+		)
+		return
+
+	if not bool(join_result.authoritative):
+		_matchmaking_fail("join_match", "join先がauthoritative matchではありません。")
+		return
+
+	joined_match = join_result
+	current_match_id = str(join_result.match_id)
+	ranked_match_joined.emit(current_match_id)
+
+
 func is_realtime_connected() -> bool:
 	return realtime_socket != null and realtime_socket.is_connected_to_host()
 
@@ -140,6 +262,9 @@ func disconnect_realtime_socket() -> bool:
 
 func clear_session() -> void:
 	disconnect_realtime_socket()
+	matchmaker_ticket = ""
+	joined_match = null
+	current_match_id = ""
 	session = null
 	account = null
 
@@ -154,6 +279,9 @@ func _on_realtime_connected(candidate) -> void:
 func _on_realtime_closed(candidate) -> void:
 	if realtime_socket == candidate:
 		realtime_socket = null
+		matchmaker_ticket = ""
+		joined_match = null
+		current_match_id = ""
 	realtime_disconnected.emit()
 
 
@@ -190,6 +318,16 @@ func _realtime_fail(message: String) -> Dictionary:
 	realtime_connection_failed.emit(message)
 	return {
 		"ok": false,
+		"message": message,
+	}
+
+
+func _matchmaking_fail(step: String, message: String) -> Dictionary:
+	printerr("Nakama ranked matchmaking failed: step=%s message=%s" % [step, message])
+	ranked_matchmaking_failed.emit(step, message)
+	return {
+		"ok": false,
+		"step": step,
 		"message": message,
 	}
 

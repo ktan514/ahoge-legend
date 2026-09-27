@@ -7,6 +7,7 @@ const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
+const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -29,6 +30,7 @@ func _init() -> void:
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
+	_test_ranked_matchmaker_query()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -235,6 +237,15 @@ func _test_device_identity_persists() -> void:
 	var absolute_path := ProjectSettings.globalize_path(test_path)
 	if FileAccess.file_exists(test_path):
 		DirAccess.remove_absolute(absolute_path)
+
+
+func _test_ranked_matchmaker_query() -> void:
+	var query: String = RankedMatchmakerQueryScript.build(1500)
+	_expect_equal(
+		query,
+		"+properties.mode:ranked +properties.rating:>=1400 +properties.rating:<=1600",
+		"Ranked Matchmaker初期queryはRating ±100"
+	)
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:

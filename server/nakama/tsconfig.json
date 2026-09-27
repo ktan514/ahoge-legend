@@ -1,6 +1,7 @@
 {
   "files": [
     "./node_modules/nakama-runtime/index.d.ts",
+    "./src/ranked_match.ts",
     "./src/main.ts"
   ],
   "compilerOptions": {
