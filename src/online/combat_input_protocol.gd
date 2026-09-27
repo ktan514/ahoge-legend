@@ -26,6 +26,7 @@ const _ALLOWED_COMBAT_STATES := {
 	"COOLDOWN": true,
 	"PARRY": true,
 	"DODGE": true,
+	"STAGGER": true,
 }
 
 const _ALLOWED_DEFENSE_RESULTS := {

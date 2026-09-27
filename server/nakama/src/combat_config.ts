@@ -12,7 +12,8 @@ const SERVER_COMBAT_CONFIG = {
   parryActiveSeconds: 0.18,
   dodgeActiveSeconds: 0.22,
   justDefenseSeconds: 0.07,
-  attackClashWindowSeconds: 0.067
+  attackClashWindowSeconds: 0.067,
+  staggerSeconds: 0.45
 };
 
 interface ServerAttackTiming {
@@ -97,4 +98,9 @@ function combatDefenseTiming(ahogeAvailable: boolean): ServerDefenseTiming {
 
 function combatAttackClashWindowTicks(): number {
   return combatSecondsToTicks(SERVER_COMBAT_CONFIG.attackClashWindowSeconds);
+}
+
+
+function combatStaggerTicks(): number {
+  return combatSecondsToTicks(SERVER_COMBAT_CONFIG.staggerSeconds);
 }

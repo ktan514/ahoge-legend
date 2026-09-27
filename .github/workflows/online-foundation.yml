@@ -14,6 +14,7 @@ on:
       - "scripts/client-defense-state-smoke.sh"
       - "scripts/client-defense-result-smoke.sh"
       - "scripts/client-contact-outcome-smoke.sh"
+      - "scripts/client-stagger-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -27,6 +28,7 @@ on:
       - "tests/defense_state_smoke.gd"
       - "tests/defense_result_smoke.gd"
       - "tests/contact_outcome_smoke.gd"
+      - "tests/stagger_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -43,6 +45,7 @@ on:
       - "scripts/client-defense-state-smoke.sh"
       - "scripts/client-defense-result-smoke.sh"
       - "scripts/client-contact-outcome-smoke.sh"
+      - "scripts/client-stagger-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -56,6 +59,7 @@ on:
       - "tests/defense_state_smoke.gd"
       - "tests/defense_result_smoke.gd"
       - "tests/contact_outcome_smoke.gd"
+      - "tests/stagger_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
 jobs:
@@ -130,6 +134,9 @@ jobs:
 
       - name: Godot authoritative Contact outcome smoke
         run: ./scripts/client-contact-outcome-smoke.sh
+
+      - name: Godot authoritative Stagger smoke
+        run: ./scripts/client-stagger-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash

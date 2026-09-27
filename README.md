@@ -255,7 +255,24 @@ Defense active / Justの終了tickは排他的境界として扱います。Atta
 AHOGE LEGEND contact outcome smoke: PASS
 ```
 
-AttackClash許容差0.067秒は30Hzで3tickへ量子化します。Hit数加算とStagger実適用は後続Issueで接続します。
+AttackClash許容差0.067秒は30Hzで3tickへ量子化します。Hit数加算は後続Issueで接続します。
+
+## Authoritative Stagger
+
+Just Parry / Just Dodge成功時は攻撃側、AttackClash時は両者をserver authoritativeなSTAGGERへ遷移させます。Stagger 0.45秒は30Hzで14tickへ量子化し、終了後はIDLEへ復帰します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-stagger-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND stagger smoke: PASS
+```
+
+Stagger中はAttack / Defenseによる状態遷移を行いません。見た目のStaggerモーション仕上げは後続の画面・演出工程で行います。
 
 ## 設計・製造計画の正本
 

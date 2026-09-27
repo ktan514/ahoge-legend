@@ -37,6 +37,7 @@ func _init() -> void:
 	_test_authoritative_defense_protocol()
 	_test_authoritative_defense_result_protocol()
 	_test_authoritative_contact_outcome_protocol()
+	_test_authoritative_stagger_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -406,6 +407,26 @@ func _test_authoritative_contact_outcome_protocol() -> void:
 	_expect_equal(clash_event["attacker_b_id"], "player-2", "AttackClash attacker Bをdecodeできる")
 	_expect_equal(int(clash_event["attacker_a_input_sequence"]), 12, "AttackClash A sequenceを保持する")
 	_expect_equal(int(clash_event["attacker_b_input_sequence"]), 8, "AttackClash B sequenceを保持する")
+
+
+func _test_authoritative_stagger_protocol() -> void:
+	var stagger_payload := JSON.stringify({
+		"user_id": "player-1",
+		"state": "STAGGER",
+		"server_tick": 500,
+		"charge_ratio": 0.0,
+		"ahoge_available": true,
+		"defense_active_until_tick": -1,
+		"defense_just_until_tick": -1,
+		"stagger_until_tick": 514,
+	})
+	var event := CombatInputProtocolScript.parse_combat_state_changed_payload(stagger_payload)
+	_expect_equal(event["state"], "STAGGER", "authoritative STAGGER状態をdecodeできる")
+	_expect_equal(
+		int(event["stagger_until_tick"]) - int(event["server_tick"]),
+		14,
+		"Stagger 0.45秒を30Hzで14tick保持する"
+	)
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
