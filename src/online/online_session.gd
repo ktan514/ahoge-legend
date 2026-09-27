@@ -30,6 +30,11 @@ signal bo3_score_changed(completed_round_number: int, round_winner_user_id: Stri
 signal round_started(round_number: int, round_wins_by_user: Dictionary, server_tick: int)
 signal match_result(winner_user_id: String, loser_user_id: String, round_wins_by_user: Dictionary, final_round_number: int, server_tick: int)
 signal round_countdown_changed(round_number: int, countdown_value: int, server_tick: int)
+signal match_snapshot_received(snapshot: Dictionary)
+signal player_connection_changed(user_id: String, connected: bool, reconnect_deadline_tick: int, server_tick: int)
+signal reconnect_started(grace_seconds: int)
+signal reconnect_succeeded(match_id: String)
+signal reconnect_failed(message: String)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -41,6 +46,10 @@ var joined_match = null
 var current_match_id: String = ""
 var _next_input_sequence: int = 0
 var _identity_store = null
+var _intentional_disconnect: bool = false
+var _reconnect_in_progress: bool = false
+var _reconnect_generation: int = 0
+var _reconnect_deadline_msec: int = 0
 
 
 func _ready() -> void:
@@ -105,6 +114,7 @@ func is_authenticated() -> bool:
 
 
 func connect_realtime_socket() -> Dictionary:
+	_intentional_disconnect = false
 	if not is_authenticated():
 		return _realtime_fail("Nakama認証前はRealtime Socketへ接続できません。")
 
@@ -482,6 +492,34 @@ func _on_match_state_received(match_state, candidate) -> void:
 			int(countdown_event["server_tick"])
 		)
 
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_MATCH_SNAPSHOT:
+		var snapshot := CombatInputProtocolScript.parse_match_snapshot_payload(
+			str(match_state.data)
+		)
+		if snapshot.is_empty():
+			return
+		_next_input_sequence = int(snapshot["last_input_sequence"])
+		match_snapshot_received.emit(snapshot)
+		if _reconnect_in_progress:
+			_reconnect_in_progress = false
+			reconnect_succeeded.emit(current_match_id)
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_PLAYER_CONNECTION_CHANGED:
+		var connection_event := CombatInputProtocolScript.parse_player_connection_changed_payload(
+			str(match_state.data)
+		)
+		if connection_event.is_empty():
+			return
+		player_connection_changed.emit(
+			str(connection_event["user_id"]),
+			bool(connection_event["connected"]),
+			int(connection_event["reconnect_deadline_tick"]),
+			int(connection_event["server_tick"])
+		)
+
 
 func is_realtime_connected() -> bool:
 	return realtime_socket != null and realtime_socket.is_connected_to_host()
@@ -491,12 +529,16 @@ func disconnect_realtime_socket() -> bool:
 	if realtime_socket == null:
 		return false
 
+	_intentional_disconnect = true
+	_cancel_reconnect()
 	var candidate = realtime_socket
 	candidate.close()
 	return true
 
 
 func clear_session() -> void:
+	_intentional_disconnect = true
+	_cancel_reconnect()
 	disconnect_realtime_socket()
 	matchmaker_ticket = ""
 	joined_match = null
@@ -504,6 +546,17 @@ func clear_session() -> void:
 	_next_input_sequence = 0
 	session = null
 	account = null
+
+
+func is_reconnecting() -> bool:
+	return _reconnect_in_progress
+
+
+func reconnect_remaining_seconds() -> int:
+	if not _reconnect_in_progress:
+		return 0
+	var remaining_ms := maxi(0, _reconnect_deadline_msec - Time.get_ticks_msec())
+	return int(ceil(float(remaining_ms) / 1000.0))
 
 
 func _on_realtime_connected(candidate) -> void:
@@ -514,18 +567,79 @@ func _on_realtime_connected(candidate) -> void:
 
 
 func _on_realtime_closed(candidate) -> void:
-	if realtime_socket == candidate:
-		realtime_socket = null
-		matchmaker_ticket = ""
-		joined_match = null
-		current_match_id = ""
-		_next_input_sequence = 0
+	if realtime_socket != candidate:
+		return
+
+	realtime_socket = null
+	matchmaker_ticket = ""
+	joined_match = null
 	realtime_disconnected.emit()
+
+	if _intentional_disconnect:
+		_intentional_disconnect = false
+		return
+
+	if current_match_id.is_empty() or not is_authenticated():
+		return
+
+	_begin_reconnect()
+
+
+func _begin_reconnect() -> void:
+	if _reconnect_in_progress:
+		return
+	if current_match_id.is_empty() or not is_authenticated():
+		return
+
+	_reconnect_in_progress = true
+	_reconnect_generation += 1
+	var generation := _reconnect_generation
+	_reconnect_deadline_msec = Time.get_ticks_msec() + OnlineConfigScript.RECONNECT_GRACE_SECONDS * 1000
+	reconnect_started.emit(OnlineConfigScript.RECONNECT_GRACE_SECONDS)
+	call_deferred("_run_reconnect_loop", generation)
+
+
+func _cancel_reconnect() -> void:
+	_reconnect_generation += 1
+	_reconnect_in_progress = false
+	_reconnect_deadline_msec = 0
+
+
+func _run_reconnect_loop(generation: int) -> void:
+	while (
+		_reconnect_in_progress
+		and generation == _reconnect_generation
+		and Time.get_ticks_msec() < _reconnect_deadline_msec
+	):
+		var connect_result: Dictionary = await connect_realtime_socket()
+		if bool(connect_result.get("ok", false)) and realtime_socket != null:
+			var reconnect_match_id := current_match_id
+			var join_result = await realtime_socket.join_match_async(reconnect_match_id)
+			if join_result != null and not join_result.is_exception() and bool(join_result.authoritative):
+				joined_match = join_result
+				current_match_id = str(join_result.match_id)
+				# serverからMATCH_SNAPSHOTを受信した時点でreconnect_succeededとする。
+				return
+
+			var failed_socket = realtime_socket
+			realtime_socket = null
+			if failed_socket != null:
+				failed_socket.close()
+
+		await get_tree().create_timer(OnlineConfigScript.RECONNECT_RETRY_SECONDS).timeout
+
+	if not _reconnect_in_progress or generation != _reconnect_generation:
+		return
+
+	_reconnect_in_progress = false
+	var message := "15秒以内にauthoritative matchへ再接続できませんでした。"
+	reconnect_failed.emit(message)
+	realtime_connection_failed.emit(message)
 
 
 func _on_realtime_connection_error(error, candidate) -> void:
-	if realtime_socket == candidate:
-		realtime_socket = null
+	if realtime_socket != candidate:
+		return
 	var message := "Realtime Socket connection error: %s" % str(error)
 	printerr(message)
 	realtime_connection_failed.emit(message)
