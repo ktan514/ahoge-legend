@@ -38,6 +38,8 @@ var _has_p1_count: bool = false
 var _has_p2_count: bool = false
 var _has_countdown: bool = false
 var _has_round_started: bool = false
+var _round_finished: bool = false
+var _p2_connected: bool = true
 
 var _snapshot := {
 	"round_number": 1,
@@ -85,6 +87,11 @@ func _connect_online_signals() -> void:
 	OnlineSession.round_started.connect(_on_round_started)
 	OnlineSession.match_result.connect(_on_match_result)
 	OnlineSession.round_countdown_changed.connect(_on_round_countdown_changed)
+	OnlineSession.match_snapshot_received.connect(_on_match_snapshot_received)
+	OnlineSession.player_connection_changed.connect(_on_player_connection_changed)
+	OnlineSession.reconnect_started.connect(_on_reconnect_started)
+	OnlineSession.reconnect_succeeded.connect(_on_reconnect_succeeded)
+	OnlineSession.reconnect_failed.connect(_on_reconnect_failed)
 
 
 func _start_authoritative_match() -> void:
@@ -172,6 +179,13 @@ func _start_authoritative_match() -> void:
 	hud.flash_message("P1/P2 ONLINE READY")
 	_render()
 	_maybe_finish_ci_smoke()
+
+
+func _process(_delta: float) -> void:
+	if OnlineSession.is_reconnecting():
+		hud.show_network_overlay(
+			"RECONNECTING...\n%d" % OnlineSession.reconnect_remaining_seconds()
+		)
 
 
 func _input(event: InputEvent) -> void:
@@ -328,7 +342,10 @@ func _on_round_result(
 	_loser_hits: int,
 	_server_tick: int
 ) -> void:
+	_round_finished = true
 	hud.flash_message("ROUND %d WINNER: %s" % [round_number, _player_label(winner_user_id)])
+	if not _p2_connected:
+		hud.show_network_overlay("WAITING FOR OPPONENT...")
 
 
 func _on_bo3_score_changed(
@@ -358,6 +375,7 @@ func _on_round_started(round_number: int, round_wins_by_user: Dictionary, _serve
 	_snapshot["player_two_hits"] = 0
 	_snapshot["overtime"] = false
 	_round_countdown_active = false
+	_round_finished = false
 	_has_round_started = true
 	_p1_attack_held = false
 	_p2_attack_held = false
@@ -394,6 +412,83 @@ func _clear_go_after_delay(generation: int) -> void:
 	await get_tree().create_timer(0.45).timeout
 	if generation == _go_clear_generation:
 		hud.clear_round_countdown()
+
+
+func _on_reconnect_started(_grace_seconds: int) -> void:
+	_input_ready = false
+	hud.set_connection_status("M1 AUTHORITATIVE: RECONNECTING")
+	hud.show_network_overlay(
+		"RECONNECTING...\n%d" % OnlineSession.reconnect_remaining_seconds()
+	)
+
+
+func _on_reconnect_succeeded(_match_id: String) -> void:
+	hud.clear_network_overlay()
+	hud.set_connection_status("M1 AUTHORITATIVE: READY")
+	_input_ready = not _match_finished and not _round_countdown_active
+
+
+func _on_reconnect_failed(message: String) -> void:
+	_input_ready = false
+	hud.set_connection_status("M1 AUTHORITATIVE: RECONNECT FAILED")
+	hud.show_network_overlay(message)
+
+
+func _on_player_connection_changed(
+	user_id: String,
+	connected: bool,
+	_reconnect_deadline_tick: int,
+	_server_tick: int
+) -> void:
+	if user_id != _p2_user_id:
+		return
+
+	_p2_connected = connected
+	if connected:
+		hud.clear_network_overlay()
+		hud.set_connection_status("M1 AUTHORITATIVE: READY")
+		return
+
+	if _round_finished or _round_countdown_active or not _has_round_started:
+		hud.show_network_overlay("WAITING FOR OPPONENT...")
+	else:
+		hud.set_connection_status("M1 AUTHORITATIVE: OPPONENT RECONNECTING")
+
+
+func _on_match_snapshot_received(snapshot: Dictionary) -> void:
+	_snapshot["round_number"] = int(snapshot.get("round_number", 1))
+	_snapshot["remaining_seconds"] = int(snapshot.get("remaining_seconds", 85))
+	_snapshot["overtime"] = bool(snapshot.get("round_overtime", false))
+	_snapshot["match_finished"] = bool(snapshot.get("match_finished", false))
+	_snapshot["player_one_hits"] = int(
+		snapshot.get("round_hit_count_by_user", {}).get(_p1_user_id, 0)
+	)
+	_snapshot["player_two_hits"] = int(
+		snapshot.get("round_hit_count_by_user", {}).get(_p2_user_id, 0)
+	)
+	_apply_round_wins(snapshot.get("round_wins_by_user", {}))
+	_round_finished = bool(snapshot.get("round_finished", false))
+	_round_countdown_active = bool(snapshot.get("round_countdown_active", false))
+	_match_finished = bool(snapshot.get("match_finished", false))
+
+	var combat_states: Dictionary = snapshot.get("combat_state_by_user", {})
+	_apply_snapshot_combat_state(_p1_user_id, combat_states.get(_p1_user_id, {}))
+	_apply_snapshot_combat_state(_p2_user_id, combat_states.get(_p2_user_id, {}))
+
+	_render()
+
+
+func _apply_snapshot_combat_state(user_id: String, value) -> void:
+	if not value is Dictionary:
+		return
+	var target = _state_for_user(user_id)
+	if target == null:
+		return
+	var mapped := _action_state_from_name(str(value.get("state", "")))
+	if mapped >= 0:
+		target.action_state = mapped
+	target.attack_charge_ratio = float(value.get("charge_ratio", 0.0))
+	target.set_ahoge_available(bool(value.get("ahoge_available", true)))
 
 
 func _on_match_result(
