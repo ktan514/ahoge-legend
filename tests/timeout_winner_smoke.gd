@@ -17,6 +17,8 @@ var _p1_counts: Array[Dictionary] = []
 var _p2_counts: Array[Dictionary] = []
 var _p1_timers: Array[Dictionary] = []
 var _p2_timers: Array[Dictionary] = []
+var _p1_results: Array[Dictionary] = []
+var _p2_results: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -198,6 +200,18 @@ func _run() -> void:
 		_fail("timeout勝者確定後にP2がROUND_LOCKEDへ遷移しませんでした。")
 		return
 
+	var round_result := await _wait_round_result_pair(
+		"TIMEOUT",
+		p1_user_id,
+		p2_user_id,
+		1,
+		0,
+		int(zero_timer.get("server_tick", -1)),
+		5000
+	)
+	if round_result.is_empty():
+		return
+
 	if _latest_count(_p1_counts, p1_user_id) != 1:
 		_fail("timeout時P1 Hit数が1ではありません。")
 		return
@@ -265,13 +279,13 @@ func _send_p2(action: String) -> bool:
 
 
 func _on_first_match_state(match_state) -> void:
-	_collect(match_state, _p1_states, _p1_hits, _p1_counts, _p1_timers)
+	_collect(match_state, _p1_states, _p1_hits, _p1_counts, _p1_timers, _p1_results)
 
 
 func _on_second_match_state(match_state) -> void:
 	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
 		return
-	_collect(match_state, _p2_states, _p2_hits, _p2_counts, _p2_timers)
+	_collect(match_state, _p2_states, _p2_hits, _p2_counts, _p2_timers, _p2_results)
 
 
 func _collect(
@@ -279,7 +293,8 @@ func _collect(
 	states: Array[Dictionary],
 	hits: Array[Dictionary],
 	counts: Array[Dictionary],
-	timers: Array[Dictionary]
+	timers: Array[Dictionary],
+	results: Array[Dictionary]
 ) -> void:
 	var op_code := int(match_state.op_code)
 	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
@@ -307,6 +322,13 @@ func _collect(
 		)
 		if not timer_event.is_empty():
 			timers.append(timer_event)
+		return
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_RESULT:
+		var result_event := CombatInputProtocolScript.parse_round_result_payload(
+			str(match_state.data)
+		)
+		if not result_event.is_empty():
+			results.append(result_event)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -438,6 +460,41 @@ func _find_timer(events: Array[Dictionary], remaining_seconds: int) -> Dictionar
 	for event in events:
 		if int(event.get("remaining_seconds", -1)) == remaining_seconds:
 			return event
+	return {}
+
+
+func _wait_round_result_pair(
+	expected_cause: String,
+	winner_user_id: String,
+	loser_user_id: String,
+	winner_hits: int,
+	loser_hits: int,
+	expected_server_tick: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if not _p1_results.is_empty() and not _p2_results.is_empty():
+			var first := _p1_results[0]
+			var second := _p2_results[0]
+			if first != second:
+				_fail("P1/P2でRound Result payloadが一致しません。")
+				return {}
+			if int(first.get("round_number", -1)) != 1 \
+					or str(first.get("winner_user_id", "")) != winner_user_id \
+					or str(first.get("loser_user_id", "")) != loser_user_id \
+					or str(first.get("finish_cause", "")) != expected_cause \
+					or int(first.get("winner_hits", -1)) != winner_hits \
+					or int(first.get("loser_hits", -1)) != loser_hits \
+					or int(first.get("server_tick", -1)) != expected_server_tick:
+				_fail("Round Result内容が期待値と一致しません。")
+				return {}
+			if _p1_results.size() != 1 or _p2_results.size() != 1:
+				_fail("Round Resultが1回だけではありません。")
+				return {}
+			return first
+		await create_timer(0.02).timeout
+	_fail("Round Resultを両clientで受信できませんでした。")
 	return {}
 
 
