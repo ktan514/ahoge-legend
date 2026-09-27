@@ -36,6 +36,8 @@ var _ci_completed: bool = false
 var _has_timer: bool = false
 var _has_p1_count: bool = false
 var _has_p2_count: bool = false
+var _has_countdown: bool = false
+var _has_round_started: bool = false
 
 var _snapshot := {
 	"round_number": 1,
@@ -357,9 +359,13 @@ func _on_round_started(round_number: int, round_wins_by_user: Dictionary, _serve
 	_snapshot["player_two_hits"] = 0
 	_snapshot["overtime"] = false
 	_round_countdown_active = false
+	_has_round_started = true
+	_p1_attack_held = false
+	_p2_attack_held = false
 	_apply_round_wins(round_wins_by_user)
 	hud.flash_message("")
 	_render()
+	_maybe_finish_ci_smoke()
 
 
 func _on_round_countdown_changed(round_number: int, countdown_value: int, _server_tick: int) -> void:
@@ -370,6 +376,9 @@ func _on_round_countdown_changed(round_number: int, countdown_value: int, _serve
 	_snapshot["overtime"] = false
 	_round_countdown_active = countdown_value > 0
 	if countdown_value > 0:
+		_has_countdown = true
+		_p1_attack_held = false
+		_p2_attack_held = false
 		_p1_state.action_state = CombatantStateScript.ActionState.ROUND_LOCKED
 		_p2_state.action_state = CombatantStateScript.ActionState.ROUND_LOCKED
 	hud.show_round_countdown(round_number, countdown_value)
@@ -463,6 +472,8 @@ func _maybe_finish_ci_smoke() -> void:
 	if not _ci_smoke or _ci_completed or not _input_ready:
 		return
 	if not _has_timer or not _has_p1_count or not _has_p2_count:
+		return
+	if not _has_countdown or not _has_round_started:
 		return
 	_ci_completed = true
 	print("AHOGE LEGEND M1 battle smoke: PASS")
