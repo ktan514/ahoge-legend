@@ -6,6 +6,13 @@ on:
       - "docker-compose.yml"
       - "server/nakama/**"
       - "scripts/server-*.sh"
+      - "scripts/client-online-smoke.sh"
+      - "scripts/godot-import.sh"
+      - "scripts/godot-strict.sh"
+      - "addons/com.heroiclabs.nakama/**"
+      - "src/online/**"
+      - "src/config/online_config.gd"
+      - "tests/online_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -14,6 +21,13 @@ on:
       - "docker-compose.yml"
       - "server/nakama/**"
       - "scripts/server-*.sh"
+      - "scripts/client-online-smoke.sh"
+      - "scripts/godot-import.sh"
+      - "scripts/godot-strict.sh"
+      - "addons/com.heroiclabs.nakama/**"
+      - "src/online/**"
+      - "src/config/online_config.gd"
+      - "tests/online_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
 jobs:
@@ -56,6 +70,17 @@ jobs:
           docker compose ps
           docker compose logs
           exit 1
+
+      - name: Install Godot 4.7.2
+        shell: bash
+        run: |
+          curl -L --fail --retry 3             -o godot.zip             https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          godot --version
+
+      - name: Godot client authentication smoke
+        run: ./scripts/client-online-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash

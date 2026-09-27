@@ -7,6 +7,11 @@ config_version=5
 config/name="AHOGE LEGEND"
 run/main_scene="res://scenes/app/AppRoot.tscn"
 
+[autoload]
+
+Nakama="*res://addons/com.heroiclabs.nakama/Nakama.gd"
+OnlineSession="*res://src/online/online_session.gd"
+
 [display]
 
 window/size/viewport_width=1280

@@ -23,8 +23,11 @@ jobs:
           sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           godot --version
 
+      - name: Import Godot project
+        run: ./scripts/godot-import.sh
+
       - name: Load project
-        run: godot --headless --path . --quit
+        run: ./scripts/godot-strict.sh --headless --path . --quit
 
       - name: Run tests
-        run: godot --headless --path . --script res://tests/run_all.gd
+        run: ./scripts/godot-strict.sh --headless --path . --script res://tests/run_all.gd
