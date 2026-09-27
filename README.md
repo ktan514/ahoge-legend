@@ -359,6 +359,23 @@ AHOGE LEGEND hit limit smoke: PASS
 
 Round Result通知・次ラウンドReset・timeout / Overtimeは後続Issueで接続します。
 
+## Authoritative timeout Hit比較
+
+85秒timerが0へ到達したserver tickで、それまでに確定済みのHit数を比較します。差がある場合は多い側をserver内部のラウンド勝者として確定し、両者をROUND_LOCKEDへ遷移させます。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-timeout-winner-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND timeout winner smoke: PASS
+```
+
+同点の場合は勝者を確定せずOvertime待ちとして一旦ROUND_LOCKEDへ遷移します。Overtime開始・次Hit勝利は後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`
