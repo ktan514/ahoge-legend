@@ -459,6 +459,10 @@ M1画面は同一process内で2つのNakama clientを成立させます。P1はL
 - P2: Q Attack/Charge、E Parry/Dodge
 - 85秒timer / Hit数 / Round数 / Overtime / Match Resultはserver eventを表示
 - 中央戦闘領域は5:4候補で表示し、Human Verificationで見え方を確認
+- Round 1を含む各Round開始前に `3 → 2 → 1 → GO!` を表示
+- Countdown中はtimerを85で保持し、戦闘入力をserver側で受理しない
+- 1本取得時は `P1/P2 TAKES ROUND N` と現在のBO3 scoreを表示
+- GOと同じserver tickから85秒timerと戦闘を開始
 
 CIでは次のheadless smokeで、M1 Sceneから2-client joinと初期HUD state受信までを回帰確認します。
 
