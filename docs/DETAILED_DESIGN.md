@@ -1469,6 +1469,23 @@ Round準備時の順序:
 
 Round終了から次Round Countdownへ移る際、前Roundの `BO3_SCORE_CHANGED` で取得Round数を先に確定する。clientはこのscoreを「1本取得」の表示正本とし、Countdownとは別表示する。
 
+Round終了後は `Round Result表示フェーズ` を挟み、次Round Countdownへ即時遷移しない。
+
+M1の暫定値として、Round Result表示フェーズは2秒（30Hzで60tick）とする。これはM1 Human Verification用の暫定演出時間であり、正式UIの最終演出時間を確定するものではない。
+
+非最終Roundの順序:
+
+1. 5 Hit / TIMEOUT / OVERTIME_HITでRound勝者を確定
+2. 両者を `ROUND_LOCKED` にする
+3. `ROUND_RESULT` を通知する
+4. `BO3_SCORE_CHANGED` を通知し、取得Round数を更新する
+5. 2秒間は戦闘入力・timer進行・次Round Countdownを開始しない
+6. 2秒経過後に次Round番号へ進める
+7. 次Roundの `3 → 2 → 1 → GO!` Countdownを開始する
+8. `GO!` と同tickで戦闘と85秒timerを開始する
+
+Match終了Roundでは次Round Countdownへ進まず、`MATCH_RESULT` へ接続する。
+
 Countdown中に届いたclient戦闘入力は `INPUT_ACCEPTED` を返さず破棄し、input sequenceも消費しない。
 
 `GO!` はserver上の入力解禁と同じtickを表す。clientは視認性のため `GO!` 表示を短時間残してよいが、その間もserver timerは開始済みとする。
