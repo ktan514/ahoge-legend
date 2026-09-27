@@ -408,7 +408,24 @@ PARRY / DODGE / Just / AttackClashでは延長戦は終了しません。Round R
 AHOGE LEGEND round result smoke: PASS
 ```
 
-Round Resultは `round_number / winner_user_id / loser_user_id / finish_cause / winner_hits / loser_hits / server_tick` を含みます。次ラウンド開始・BO3取得数更新は後続Issueで接続します。
+Round Resultは `round_number / winner_user_id / loser_user_id / finish_cause / winner_hits / loser_hits / server_tick` を含みます。
+
+## Authoritative BO3
+
+Round Result確定後にserverが取得ラウンド数を更新し、2勝未満なら次server tickで次ラウンドを開始します。2勝到達時はmatchをserver内部で終了し、次ラウンドを開始しません。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-bo3-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND BO3 smoke: PASS
+```
+
+smokeでは最大構成の1-1→2-1まで3ラウンドを実行し、各RoundのHit数 / timer / combat reset、score一致、Round Started、2勝後の停止を確認します。正式なMatch Result通知は後続Issueで接続します。
 
 ## 設計・製造計画の正本
 
