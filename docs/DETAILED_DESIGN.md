@@ -916,7 +916,44 @@ match_winner_user_id = P1
 
 2勝確定後は新規combat / Contact / Hit / Hit count / timer更新を停止する。
 
-### 11.2 対戦前掛け合い
+### 11.2 Match Result
+
+BO3でいずれかの取得ラウンド数が2へ到達した場合、serverはauthoritativeなMatch Resultを両クライアントへ1回だけ通知する。
+
+server → client:
+
+```text
+MatchResultEvent
+- winner_user_id
+- loser_user_id
+- round_wins_by_user
+- final_round_number
+- server_tick
+```
+
+通知条件:
+
+- `match_finished = true`
+- `match_winner_user_id` が空でない
+- Match Result未通知
+
+通知順序:
+
+1. 最終Roundの `RoundResultEvent`
+2. 最終Roundの `BO3ScoreChangedEvent(match_finished=true)`
+3. `MatchResultEvent`
+
+3イベントの `server_tick` は同じ最終Round終了tickとする。
+
+`round_wins_by_user` は最終scoreをそのまま通知し、winner側は必ず2、loser側は0または1とする。`final_round_number` は最終Round番号で、2-0なら2、2-1なら3となる。
+
+クライアントは `MatchResultEvent` をMatch勝敗の正本として扱い、Round Result列やscoreから独自にMatch勝者を再計算しない。
+
+Match Result通知後もauthoritative matchは即座に破棄せず、両者は `ROUND_LOCKED` のままとする。新規Round / combat / Contact / Hit / Hit count / timer更新は行わない。
+
+Rating / Ranking更新、UI-11表示、Matchmaker再検索、Friend Match再戦は後続工程で接続する。
+
+### 11.3 対戦前掛け合い
 
 ```text
 DialogueDefinition
@@ -928,7 +965,7 @@ DialogueDefinition
 
 専用掛け合いが存在しない場合は各キャラクターの汎用台詞から組み合わせる。
 
-### 11.3 勝利台詞
+### 11.4 勝利台詞
 
 ```text
 VictoryLineDefinition

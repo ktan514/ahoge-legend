@@ -39,8 +39,9 @@
 - timeout時のauthoritative Hit数比較
 - authoritative Overtime
 - authoritative Round Result
+- authoritative 2本先取BO3
 
-現在は **工程2: authoritativeラウンド・BO3** の途中で、2本先取BO3を実装中である。
+現在は **工程2: authoritativeラウンド・BO3** の最後として、Match resultを実装中である。
 
 ## 3. 製造工程
 
@@ -255,22 +256,21 @@ RC1
 
 現在からの優先順は次とする。
 
-1. 2本先取BO3
-2. Match result
-3. Client Battle画面接続
-4. M1 #53 Battle Core実画面確認
-6. Disconnect / Reconnect
-7. Matchmaker検索幅拡大
-8. Ranking / Rating / Season
-9. Friend Match
-10. 全画面GameFlow
-11. 正式キャラクター
-12. 演出・音・台詞
-13. Steam認証
-14. AWS本番
-15. Windows実機・WAN試験
-16. balance / performance調整
-17. Release Candidate
+1. Match result
+2. Client Battle画面接続
+3. M1 #53 Battle Core実画面確認
+4. Disconnect / Reconnect
+5. Matchmaker検索幅拡大
+6. Ranking / Rating / Season
+7. Friend Match
+8. 全画面GameFlow
+9. 正式キャラクター
+10. 演出・音・台詞
+11. Steam認証
+12. AWS本番
+13. Windows実機・WAN試験
+14. balance / performance調整
+15. Release Candidate
 
 ## 12. 計画変更ルール
 

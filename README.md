@@ -357,7 +357,7 @@ serverは85から0までの値が変化したときだけ両クライアント�
 AHOGE LEGEND hit limit smoke: PASS
 ```
 
-Round Result通知・次ラウンドResetは後続Issueで接続します。
+Round Result / BO3 / 次ラウンドResetは後続節で接続済みです。
 
 ## Authoritative timeout Hit比較
 
@@ -391,7 +391,7 @@ timeout同点の次server tickでOvertimeを開始し、timer 0のまま両者�
 AHOGE LEGEND overtime smoke: PASS
 ```
 
-PARRY / DODGE / Just / AttackClashでは延長戦は終了しません。Round Result通知と次ラウンドResetは後続Issueで接続します。
+PARRY / DODGE / Just / AttackClashでは延長戦は終了しません。Round Result / BO3 / 次ラウンドResetは後続節で接続済みです。
 
 ## Authoritative Round Result
 
@@ -425,7 +425,24 @@ Round Result確定後にserverが取得ラウンド数を更新し、2勝未満�
 AHOGE LEGEND BO3 smoke: PASS
 ```
 
-smokeでは最大構成の1-1→2-1まで3ラウンドを実行し、各RoundのHit数 / timer / combat reset、score一致、Round Started、2勝後の停止を確認します。正式なMatch Result通知は後続Issueで接続します。
+smokeでは最大構成の1-1→2-1まで3ラウンドを実行し、各RoundのHit数 / timer / combat reset、score一致、Round Started、2勝後の停止を確認します。
+
+## Authoritative Match Result
+
+2勝が確定した最終Roundで、serverが正式なMatch Resultを両クライアントへ1回だけ通知します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-match-result-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND match result smoke: PASS
+```
+
+Match Resultは `winner_user_id / loser_user_id / round_wins_by_user / final_round_number / server_tick` を含みます。通知順序は最終RoundのRound Result → BO3 score → Match Resultです。Rating / Ranking更新とUI-11表示は後続工程で接続します。
 
 ## 設計・製造計画の正本
 

@@ -27,6 +27,8 @@ var _p1_started: Array[Dictionary] = []
 var _p2_started: Array[Dictionary] = []
 var _p1_match_results: Array[Dictionary] = []
 var _p2_match_results: Array[Dictionary] = []
+var _p1_result_order: Array[int] = []
+var _p2_result_order: Array[int] = []
 
 
 func _init() -> void:
@@ -208,6 +210,31 @@ func _run() -> void:
 	if match_result.is_empty():
 		return
 
+	var final_tick := int(match_result.get("server_tick", -1))
+	if not await _wait_state_at_tick_pair(p1_user_id, "ROUND_LOCKED", final_tick, 5000) \
+			or not await _wait_state_at_tick_pair(p2_user_id, "ROUND_LOCKED", final_tick, 5000):
+		_fail("Match Result時点で両者がROUND_LOCKEDではありません。")
+		return
+
+	if _p1_result_order.size() < 3 or _p2_result_order.size() < 3:
+		_fail("最終Roundの結果通知順序を確認できませんでした。")
+		return
+	var p1_order_size := _p1_result_order.size()
+	var p2_order_size := _p2_result_order.size()
+	if _p1_result_order[p1_order_size - 3] != CombatInputProtocolScript.OPCODE_ROUND_RESULT \
+			or _p1_result_order[p1_order_size - 2] != CombatInputProtocolScript.OPCODE_BO3_SCORE_CHANGED \
+			or _p1_result_order[p1_order_size - 1] != CombatInputProtocolScript.OPCODE_MATCH_RESULT:
+		_fail("P1の最終結果通知順序がRound Result → BO3 score → Match Resultではありません。")
+		return
+	if _p2_result_order[p2_order_size - 3] != CombatInputProtocolScript.OPCODE_ROUND_RESULT \
+			or _p2_result_order[p2_order_size - 2] != CombatInputProtocolScript.OPCODE_BO3_SCORE_CHANGED \
+			or _p2_result_order[p2_order_size - 1] != CombatInputProtocolScript.OPCODE_MATCH_RESULT:
+		_fail("P2の最終結果通知順序がRound Result → BO3 score → Match Resultではありません。")
+		return
+	if _p1_result_order != _p2_result_order:
+		_fail("P1/P2で結果通知順序が一致しません。")
+		return
+
 	if _p1_started.size() != 3 or _p2_started.size() != 3:
 		_fail("BO3終了後にRound 4が開始されたか、Round Started回数が不正です。")
 		return
@@ -266,7 +293,7 @@ func _run() -> void:
 	online_session.disconnect_realtime_socket()
 	_second_socket.close()
 
-	print("AHOGE LEGEND BO3 smoke: PASS match_id=%s" % p1_joined[0])
+	print("AHOGE LEGEND match result smoke: PASS match_id=%s" % p1_joined[0])
 	quit(0)
 
 
@@ -453,7 +480,8 @@ func _on_first_match_state(match_state) -> void:
 		_p1_results,
 		_p1_scores,
 		_p1_started,
-		_p1_match_results
+		_p1_match_results,
+		_p1_result_order
 	)
 
 
@@ -469,7 +497,8 @@ func _on_second_match_state(match_state) -> void:
 		_p2_results,
 		_p2_scores,
 		_p2_started,
-		_p2_match_results
+		_p2_match_results,
+		_p2_result_order
 	)
 
 
@@ -482,7 +511,8 @@ func _collect(
 	results: Array[Dictionary],
 	scores: Array[Dictionary],
 	started: Array[Dictionary],
-	match_results: Array[Dictionary]
+	match_results: Array[Dictionary],
+	result_order: Array[int]
 ) -> void:
 	var op_code := int(match_state.op_code)
 	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
@@ -509,11 +539,13 @@ func _collect(
 		var event := CombatInputProtocolScript.parse_round_result_payload(str(match_state.data))
 		if not event.is_empty():
 			results.append(event)
+			result_order.append(op_code)
 		return
 	if op_code == CombatInputProtocolScript.OPCODE_BO3_SCORE_CHANGED:
 		var event := CombatInputProtocolScript.parse_bo3_score_changed_payload(str(match_state.data))
 		if not event.is_empty():
 			scores.append(event)
+			result_order.append(op_code)
 		return
 	if op_code == CombatInputProtocolScript.OPCODE_ROUND_STARTED:
 		var event := CombatInputProtocolScript.parse_round_started_payload(str(match_state.data))
@@ -524,6 +556,7 @@ func _collect(
 		var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
 		if not event.is_empty():
 			match_results.append(event)
+			result_order.append(op_code)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -857,5 +890,5 @@ func _fail(message: String) -> void:
 	if _second_socket != null:
 		_second_socket.close()
 	push_error(message)
-	print("AHOGE LEGEND BO3 smoke: FAIL")
+	print("AHOGE LEGEND match result smoke: FAIL")
 	quit(1)

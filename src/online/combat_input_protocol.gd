@@ -13,6 +13,7 @@ const OPCODE_ROUND_OVERTIME_STARTED: int = 109
 const OPCODE_ROUND_RESULT: int = 110
 const OPCODE_BO3_SCORE_CHANGED: int = 111
 const OPCODE_ROUND_STARTED: int = 112
+const OPCODE_MATCH_RESULT: int = 113
 
 const ACTION_ATTACK_PRESS: String = "ATTACK_PRESS"
 const ACTION_ATTACK_RELEASE: String = "ATTACK_RELEASE"
@@ -261,6 +262,39 @@ static func parse_round_started_payload(payload: String) -> Dictionary:
 	if int(parsed["round_number"]) < 1 or int(parsed["round_number"]) > 3:
 		return {}
 	if not _valid_round_wins(parsed["round_wins_by_user"]):
+		return {}
+	if int(parsed["server_tick"]) < 0:
+		return {}
+	return parsed
+
+
+static func parse_match_result_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	for key in [
+		"winner_user_id",
+		"loser_user_id",
+		"round_wins_by_user",
+		"final_round_number",
+		"server_tick",
+	]:
+		if not parsed.has(key):
+			return {}
+	var winner_user_id := str(parsed["winner_user_id"])
+	var loser_user_id := str(parsed["loser_user_id"])
+	if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
+		return {}
+	if not _valid_round_wins(parsed["round_wins_by_user"]):
+		return {}
+	var scores: Dictionary = parsed["round_wins_by_user"]
+	if int(scores.get(winner_user_id, -1)) != 2:
+		return {}
+	var loser_rounds := int(scores.get(loser_user_id, -1))
+	if loser_rounds < 0 or loser_rounds > 1:
+		return {}
+	var final_round_number := int(parsed["final_round_number"])
+	if final_round_number < 2 or final_round_number > 3:
 		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
