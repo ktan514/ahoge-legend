@@ -15,6 +15,7 @@ const MATCH_RESULT_OPCODE = 113;
 const ROUND_COUNTDOWN_CHANGED_OPCODE = 114;
 
 const ROUND_COUNTDOWN_SECONDS = 3;
+const ROUND_RESULT_HOLD_TICKS = 2 * AUTHORITATIVE_MATCH_TICK_RATE;
 
 const ROUNDS_TO_WIN_MATCH = 2;
 const MAX_ROUNDS = 3;
@@ -89,6 +90,7 @@ interface AhogeRankedMatchState {
   roundNumber: number;
   roundWinsByUser: {[key: string]: number};
   roundResetPending: boolean;
+  roundResultHoldUntilTick: number;
   roundCountdownActive: boolean;
   roundCountdownStartTick: number;
   roundCountdownValue: number;
@@ -146,6 +148,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundNumber: 1,
       roundWinsByUser: {},
       roundResetPending: false,
+      roundResultHoldUntilTick: -1,
       roundCountdownActive: false,
       roundCountdownStartTick: -1,
       roundCountdownValue: -1,
@@ -593,8 +596,10 @@ function finishRound(
     state.matchFinished = true;
     state.matchWinnerUserId = winnerUserId;
     state.roundResetPending = false;
+    state.roundResultHoldUntilTick = -1;
   } else {
     state.roundResetPending = true;
+    state.roundResultHoldUntilTick = tick + ROUND_RESULT_HOLD_TICKS;
   }
 
   broadcastBo3ScoreChanged(
@@ -704,6 +709,7 @@ function startNextRound(
   }
 
   state.roundResetPending = false;
+  state.roundResultHoldUntilTick = -1;
   state.roundNumber += 1;
   if (state.roundNumber > MAX_ROUNDS) {
     state.matchFinished = true;
@@ -1220,7 +1226,11 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
-  if (state.roundResetPending && !state.matchFinished) {
+  if (
+    state.roundResetPending &&
+    !state.matchFinished &&
+    tick >= state.roundResultHoldUntilTick
+  ) {
     startNextRound(dispatcher, state, tick);
   }
 
