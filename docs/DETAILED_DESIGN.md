@@ -828,13 +828,93 @@ timeout勝利ではtimer 0通知後、`ROUND_LOCKED`、`RoundResultEvent` の順
 
 ```text
 MatchState
-- player1_rounds
-- player2_rounds
+- round_wins_by_user
 - current_round
-- match_winner
+- match_finished
+- match_winner_user_id
+- round_reset_pending
 ```
 
-いずれかの取得ラウンドが2になった時点でマッチ終了。
+オンラインauthoritative matchは2本先取、最大3ラウンドで進行する。
+
+```text
+ROUNDS_TO_WIN_MATCH = 2
+MAX_ROUNDS = 3
+```
+
+Round Result確定後、同じserver tickで次を行う。
+
+1. `round_wins_by_user[round_winner_user_id]` を+1
+2. `BO3ScoreChangedEvent` を両clientへ通知
+3. 2勝へ到達した場合は `match_finished = true`
+4. `match_winner_user_id` に2勝したuser IDを設定
+5. 2勝未満なら `round_reset_pending = true`
+
+server → client:
+
+```text
+BO3ScoreChangedEvent
+- completed_round_number
+- round_winner_user_id
+- round_wins_by_user
+- match_finished
+- server_tick
+```
+
+Round Resultを通知したserver tickでは次ラウンドを開始しない。
+
+`round_reset_pending = true` の場合、次server tick先頭で次ラウンドを開始する。
+
+次ラウンド開始処理:
+
+- `current_round += 1`
+- `round_hit_count_by_user` を両者0へreset
+- Hit count 0 snapshotを両clientへ通知
+- `round_timer_start_tick = server_tick`
+- `round_timer_end_tick = server_tick + 2550`
+- `round_remaining_seconds = 85`
+- timer 85を通知
+- `round_finished = false`
+- `round_winner_user_id = ""`
+- `round_finish_cause = NONE`
+- `round_awaiting_overtime = false`
+- `round_overtime = false`
+- 両者combat stateを新しいIDLEへreset
+- SHORT detach / regrowを持ち越さず `ahoge_available = true`
+- `round_reset_pending = false`
+
+input sequenceはmatch単位の再送・順序検証値なので、Round間でresetしない。
+
+server → client:
+
+```text
+RoundStartedEvent
+- round_number
+- round_wins_by_user
+- server_tick
+```
+
+次Round開始時の通知順序:
+
+1. `RoundStartedEvent`
+2. 両者の `RoundHitCountChangedEvent(hit_count=0, input_sequence=0)`
+3. `RoundTimerChangedEvent(remaining_seconds=85)`
+4. 両者の `COMBAT_STATE_CHANGED(IDLE)`
+
+いずれかが2勝した場合は次Roundを開始せず、両者を `ROUND_LOCKED` のまま維持する。
+正式な `MatchResultEvent` は次工程で通知する。
+
+BO3の最大ケースは次のとおり。
+
+```text
+Round 1: P1 win -> 1-0
+Round 2: P2 win -> 1-1
+Round 3: P1 win -> 2-1
+match_finished = true
+match_winner_user_id = P1
+```
+
+2勝確定後は新規combat / Contact / Hit / Hit count / timer更新を停止する。
 
 ### 11.2 対戦前掛け合い
 
