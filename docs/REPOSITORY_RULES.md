@@ -172,7 +172,7 @@ npm run build
 - `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 - `scripts/client-attack-state-smoke.sh`: 2クライアントで同じauthoritative攻撃状態遷移とContactEventを受信できることを検証する。
 - `scripts/client-defense-state-smoke.sh`: 2クライアントでPARRY / DODGE状態、攻撃キャンセル、Defense終了後復帰、Cooldown一時停止・再開を検証する。
-- `scripts/client-defense-result-smoke.sh`: Contact到達時のNONE / PARRY / JUST_PARRY確定と、両クライアントのDefenseResult一致を検証する。DODGE / JUST_DODGEの実運用接続はSHORT detach / regrow後に行う。
+- `scripts/client-defense-result-smoke.sh`: Contact到達時のNONE / PARRY / JUST_PARRY確定と、両クライアントのDefenseResult一致を検証する。DODGE / JUST_DODGEの実運用経路は `scripts/client-short-state-smoke.sh` で検証する。
 - `scripts/client-contact-outcome-smoke.sh`: 2クライアントでHit、DefenseによるHit抑止、AttackClash確定と両client結果一致を検証する。
 - `scripts/client-stagger-smoke.sh`: Just DefenseとAttackClashからのSTAGGER、14tick継続、入力抑止、IDLE復帰、両client状態一致を検証する。
 - `scripts/client-short-state-smoke.sh`: SHORT_TESTのcharacter_id引き渡し、detach、DODGE、JUST_DODGE、18tick Regrow、PARRY復帰、両client状態一致を検証する。
