@@ -47,6 +47,7 @@ func _init() -> void:
 	_test_authoritative_round_result_protocol()
 	_test_authoritative_bo3_protocol()
 	_test_authoritative_match_result_protocol()
+	_test_authoritative_round_countdown_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -602,6 +603,36 @@ func _test_authoritative_match_result_protocol() -> void:
 		})
 	)
 	_expect_true(invalid.is_empty(), "不正なMatch Resultを拒否する")
+
+
+func _test_authoritative_round_countdown_protocol() -> void:
+	var payload := JSON.stringify({
+		"round_number": 2,
+		"countdown_value": 3,
+		"server_tick": 900,
+	})
+	var event := CombatInputProtocolScript.parse_round_countdown_changed_payload(payload)
+	_expect_equal(int(event["round_number"]), 2, "Round Countdown round番号をdecodeできる")
+	_expect_equal(int(event["countdown_value"]), 3, "Round Countdown値をdecodeできる")
+	_expect_equal(int(event["server_tick"]), 900, "Round Countdown server tickをdecodeできる")
+
+	var go_event := CombatInputProtocolScript.parse_round_countdown_changed_payload(
+		JSON.stringify({
+			"round_number": 3,
+			"countdown_value": 0,
+			"server_tick": 1200,
+		})
+	)
+	_expect_equal(int(go_event["countdown_value"]), 0, "Round Countdown GOをdecodeできる")
+
+	var invalid := CombatInputProtocolScript.parse_round_countdown_changed_payload(
+		JSON.stringify({
+			"round_number": 4,
+			"countdown_value": 4,
+			"server_tick": -1,
+		})
+	)
+	_expect_true(invalid.is_empty(), "不正なRound Countdownを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
