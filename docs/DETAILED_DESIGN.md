@@ -191,7 +191,8 @@ Godotクライアントは公式 `heroiclabs/nakama-godot` v3.4.0 をvendorし�
 raw auth token、refresh token、password等は通常ログへ出力しない。
 Device Authenticationは開発用であり、Steam公開時の正式認証方式は後続Issueで実装する。
 
-WebSocket、Matchmaker、Authoritative Match HandlerはDevice認証基盤の後続Issueで接続する。
+Realtime SocketはDevice認証済みSessionを使用して接続する。
+Matchmaker、Authoritative Match HandlerはRealtime Socket基盤の後続Issueで接続する。
 Nakama側のカスタムサーバーロジックはTypeScriptを使用する。
 
 ### 3.10 RankingService
@@ -752,6 +753,44 @@ Godot
 ```
 
 この段階ではHTTP APIのみを使用し、Realtime Socketは開かない。
+
+### 14.0.2 Godot Realtime Socket
+
+Device認証済みSessionからNakama Realtime Socketを生成する。
+
+初期ローカル接続:
+
+- endpoint: `ws://127.0.0.1:7350/ws`
+- SDK: `Nakama.create_socket_from(client)`
+- session: Device Authenticationで取得した `NakamaSession`
+- `appear_online`: false
+- connect timeout: 3秒
+
+接続フロー:
+
+```text
+AUTHENTICATED
+→ create_socket_from(client)
+→ connect_async(session)
+→ REALTIME_CONNECTED
+```
+
+`OnlineSession` はRealtime Socketのライフサイクルを保持し、少なくとも次を公開する。
+
+- connect
+- disconnect
+- is_connected
+- connected signal
+- disconnected signal
+- connection_failed signal
+
+認証前のSocket接続は受け付けない。
+
+この段階ではMatchmaker、match join、対戦入力送信、再接続制御を実装しない。
+意図しない切断後15秒の復帰仕様は後続Issueで実装する。
+
+Socket接続URLにはSession tokenが含まれるため、Nakama SDKのDEBUGログを通常運用で有効にしない。
+HTTP認証と同様、raw tokenをログへ出力しない。
 
 ### 14.1 サーバー権威で確定する対象
 
