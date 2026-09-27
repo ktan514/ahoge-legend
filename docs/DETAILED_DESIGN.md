@@ -1370,6 +1370,40 @@ AIや実装者が、他作品で使用実績があることだけを理由に `A
 - Windows実機操作感
 - macOS対応時の実機操作感
 
+### 20.3 工程1 2-client戦闘統合検証
+
+工程1の完了判定では、個別smokeの成功だけでなく、同一authoritative match内で複数の戦闘状態を連続させても両クライアントの結果が一致することを確認する。
+
+統合試験は新しい戦闘仕様を追加せず、既存のserver authoritative契約を連続シナリオで検証する。
+
+初期統合シナリオ:
+
+1. LONG_TESTの通常Hit
+2. 攻撃中DEFENDによるAttack cancel
+3. PARRYでHit抑止
+4. JUST_PARRYで攻撃側STAGGER
+5. Stagger終了後IDLE復帰
+6. AttackClashで両者STAGGER
+7. 両者IDLE復帰
+8. SHORT_TESTのStrike開始detach
+9. detach中DODGE
+10. detach中JUST_DODGEで攻撃側STAGGER
+11. SHORT Regrow
+12. Regrow後PARRY復帰
+13. 最後に両者がIDLEから新しい戦闘入力を受理できること
+
+検証条件:
+
+- 1つのmatch IDの中で上記を完走する
+- server確定イベントはP1/P2で同一payloadを受信する
+- 対象となる `COMBAT_STATE_CHANGED` はP1/P2で同一payloadを受信する
+- 各シナリオは開始時点のevent indexまたは `input_sequence` を境界にし、過去eventを成功として再利用しない
+- 次シナリオ開始前に必要なIDLE / Regrow完了を明示的に待つ
+- raw auth tokenをログへ出力しない
+- 既存の個別smokeもすべて回帰成功する
+
+この統合試験で工程1の戦闘コア完了を判定し、Hit数・85秒timer・Round / Overtime / BO3は工程2へ分離する。
+
 ## 21. 実装開始用パラメータ
 
 ### 21.1 初期縦切りキャラクター

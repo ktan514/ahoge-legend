@@ -118,6 +118,12 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-short-state-smoke.sh
 ```
 
+工程1 2-client combat integration smoke test:
+
+```bash
+./scripts/client-combat-integration-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -176,6 +182,7 @@ npm run build
 - `scripts/client-contact-outcome-smoke.sh`: 2クライアントでHit、DefenseによるHit抑止、AttackClash確定と両client結果一致を検証する。
 - `scripts/client-stagger-smoke.sh`: Just DefenseとAttackClashからのSTAGGER、14tick継続、入力抑止、IDLE復帰、両client状態一致を検証する。
 - `scripts/client-short-state-smoke.sh`: SHORT_TESTのcharacter_id引き渡し、detach、DODGE、JUST_DODGE、18tick Regrow、PARRY復帰、両client状態一致を検証する。
+- `scripts/client-combat-integration-smoke.sh`: 工程1の攻撃・Defense cancel・PARRY / DODGE / Just・Hit・Clash・Stagger・SHORT detach / Regrowを同一match内で連続実行し、両clientのイベント列・状態列一致を検証する。
 
 ## アセット管理
 
