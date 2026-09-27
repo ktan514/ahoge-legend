@@ -28,7 +28,7 @@ signal round_overtime_started(server_tick: int)
 signal round_result(round_number: int, winner_user_id: String, loser_user_id: String, finish_cause: String, winner_hits: int, loser_hits: int, server_tick: int)
 signal bo3_score_changed(completed_round_number: int, round_winner_user_id: String, round_wins_by_user: Dictionary, match_finished: bool, server_tick: int)
 signal round_started(round_number: int, round_wins_by_user: Dictionary, server_tick: int)
-signal match_result(winner_user_id: String, loser_user_id: String, round_wins_by_user: Dictionary, final_round_number: int, server_tick: int)
+signal match_result(winner_user_id: String, loser_user_id: String, round_wins_by_user: Dictionary, final_round_number: int, finish_cause: String, server_tick: int)
 signal round_countdown_changed(round_number: int, countdown_value: int, server_tick: int)
 signal match_snapshot_received(snapshot: Dictionary)
 signal player_connection_changed(user_id: String, connected: bool, reconnect_deadline_tick: int, server_tick: int)
@@ -475,6 +475,7 @@ func _on_match_state_received(match_state, candidate) -> void:
 			str(match_event["loser_user_id"]),
 			match_event["round_wins_by_user"],
 			int(match_event["final_round_number"]),
+			str(match_event["finish_cause"]),
 			int(match_event["server_tick"])
 		)
 
