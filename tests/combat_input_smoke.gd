@@ -109,6 +109,14 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	await _send_explicit(p1_joined[0], 1, CombatInputProtocolScript.ACTION_ATTACK_PRESS)
+	await create_timer(0.25).timeout
+	if _count_user_events(p1_accepted, p1_user_id) != 0 or _count_user_events(_p2_accepted, p1_user_id) != 0:
+		_fail("Round Countdown中の入力が受理されました。")
+		return
+
+	await create_timer(3.5).timeout
+
 	var send_result: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_PRESS
 	)

@@ -11,6 +11,8 @@ var _p1_timers: Array[Dictionary] = []
 var _p2_timers: Array[Dictionary] = []
 var _p1_states: Array[Dictionary] = []
 var _p2_states: Array[Dictionary] = []
+var _p1_started: Array[Dictionary] = []
+var _p2_started: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -108,9 +110,13 @@ func _run() -> void:
 		_fail("P1/P2 match IDが一致しません。")
 		return
 
-	var start_event := await _wait_for_timer_pair(85, 5000)
+	var started := await _wait_for_round_started_pair(1, 7000)
+	if started.is_empty():
+		_fail("Countdown後のRound 1開始を受信できませんでした。")
+		return
+	var start_event := await _wait_for_timer_pair_at_tick(85, int(started["server_tick"]), 3000)
 	if start_event.is_empty():
-		_fail("85秒timer開始を両clientで受信できませんでした。")
+		_fail("GOと同tickの85秒timer開始を両clientで受信できませんでした。")
 		return
 
 	var next_event := await _wait_for_timer_pair(84, 3000)
@@ -155,18 +161,23 @@ func _run() -> void:
 		_fail("P1/P2のRound timer event列が一致しません。")
 		return
 
-	if _p1_timers.size() != 86:
-		_fail("Round timer event数が86件ではありません: %d" % _p1_timers.size())
+	var active_timers: Array[Dictionary] = []
+	for timer_event in _p1_timers:
+		if int(timer_event.get("server_tick", -1)) >= int(start_event["server_tick"]):
+			active_timers.append(timer_event)
+
+	if active_timers.size() != 86:
+		_fail("GO後のRound timer event数が86件ではありません: %d" % active_timers.size())
 		return
 
-	for index in range(_p1_timers.size()):
-		var event := _p1_timers[index]
+	for index in range(active_timers.size()):
+		var event := active_timers[index]
 		var expected_seconds := 85 - index
 		if int(event.get("remaining_seconds", -1)) != expected_seconds:
 			_fail("Round timer値が連続していません。index=%d" % index)
 			return
 		if index > 0:
-			var previous := _p1_timers[index - 1]
+			var previous := active_timers[index - 1]
 			if int(event.get("server_tick", -1)) - int(previous.get("server_tick", -1)) != 30:
 				_fail("Round timer更新間隔が30tickではありません。index=%d" % index)
 				return
@@ -187,19 +198,20 @@ func _run() -> void:
 
 
 func _on_first_match_state(match_state) -> void:
-	_collect_match_state(match_state, _p1_timers, _p1_states)
+	_collect_match_state(match_state, _p1_timers, _p1_states, _p1_started)
 
 
 func _on_second_match_state(match_state) -> void:
 	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
 		return
-	_collect_match_state(match_state, _p2_timers, _p2_states)
+	_collect_match_state(match_state, _p2_timers, _p2_states, _p2_started)
 
 
 func _collect_match_state(
 	match_state,
 	timers: Array[Dictionary],
-	states: Array[Dictionary]
+	states: Array[Dictionary],
+	started: Array[Dictionary]
 ) -> void:
 	var op_code := int(match_state.op_code)
 	if op_code == CombatInputProtocolScript.OPCODE_ROUND_TIMER_CHANGED:
@@ -215,6 +227,11 @@ func _collect_match_state(
 		)
 		if not state_event.is_empty():
 			states.append(state_event)
+		return
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_STARTED:
+		var started_event := CombatInputProtocolScript.parse_round_started_payload(str(match_state.data))
+		if not started_event.is_empty():
+			started.append(started_event)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -232,6 +249,38 @@ func _on_second_matchmaker_matched(matched) -> void:
 		_second_failure = "P2 authoritative match joinに失敗しました。"
 		return
 	_second_match_id = str(join_result.match_id)
+
+
+func _wait_for_round_started_pair(round_number: int, timeout_ms: int) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for first in _p1_started:
+			if int(first.get("round_number", -1)) != round_number:
+				continue
+			for second in _p2_started:
+				if int(second.get("round_number", -1)) == round_number and first == second:
+					return first
+		await create_timer(0.02).timeout
+	return {}
+
+
+func _wait_for_timer_pair_at_tick(remaining_seconds: int, server_tick: int, timeout_ms: int) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var first := _find_timer_at_tick(_p1_timers, remaining_seconds, server_tick)
+		var second := _find_timer_at_tick(_p2_timers, remaining_seconds, server_tick)
+		if not first.is_empty() and first == second:
+			return first
+		await create_timer(0.02).timeout
+	return {}
+
+
+func _find_timer_at_tick(events: Array[Dictionary], remaining_seconds: int, server_tick: int) -> Dictionary:
+	for event in events:
+		if int(event.get("remaining_seconds", -1)) == remaining_seconds \
+				and int(event.get("server_tick", -1)) == server_tick:
+			return event
+	return {}
 
 
 func _wait_for_state_pair(
