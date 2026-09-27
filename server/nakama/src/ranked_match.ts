@@ -11,6 +11,7 @@ const ROUND_OVERTIME_STARTED_OPCODE = 109;
 const ROUND_RESULT_OPCODE = 110;
 const BO3_SCORE_CHANGED_OPCODE = 111;
 const ROUND_STARTED_OPCODE = 112;
+const MATCH_RESULT_OPCODE = 113;
 
 const ROUNDS_TO_WIN_MATCH = 2;
 const MAX_ROUNDS = 3;
@@ -398,6 +399,34 @@ function broadcastBo3ScoreChanged(
   );
 }
 
+function broadcastMatchResult(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  if (!state.matchFinished || !state.matchWinnerUserId) {
+    return;
+  }
+  const loserUserId = findOpponentUserId(state, state.matchWinnerUserId);
+  if (!loserUserId) {
+    return;
+  }
+
+  dispatcher.broadcastMessage(
+    MATCH_RESULT_OPCODE,
+    JSON.stringify({
+      winner_user_id: state.matchWinnerUserId,
+      loser_user_id: loserUserId,
+      round_wins_by_user: roundWinsSnapshot(state),
+      final_round_number: state.roundNumber,
+      server_tick: tick
+    }),
+    null,
+    null,
+    true
+  );
+}
+
 function broadcastRoundStarted(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -463,6 +492,9 @@ function finishRound(
     winnerUserId,
     tick
   );
+  if (state.matchFinished) {
+    broadcastMatchResult(dispatcher, state, tick);
+  }
 }
 
 function finishRoundByHitLimit(
