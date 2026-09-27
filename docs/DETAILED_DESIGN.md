@@ -781,6 +781,47 @@ Overtime終了後は通常のラウンド終了と同様に新規combat / Contac
 
 Round Result通知、取得ラウンド数への反映、次ラウンドResetは後続工程で接続する。
 
+### 10.5 Round Result
+
+server内部でラウンド勝者が確定した場合、終了原因に関係なく同一の `RoundResultEvent` を両クライアントへ1回だけ通知する。
+
+対象終了経路:
+
+- 5 Hit到達: `HIT_LIMIT`
+- 85秒timeoutでHit数差あり: `TIMEOUT`
+- Overtime中の次の有効Hit: `OVERTIME_HIT`
+
+server → client通知:
+
+```text
+RoundResultEvent
+- round_number
+- winner_user_id
+- loser_user_id
+- finish_cause
+- winner_hits
+- loser_hits
+- server_tick
+```
+
+初期 `round_number` は1とする。次ラウンド開始時のincrementはBO3実装で接続する。
+
+`winner_hits / loser_hits` はResult確定tick時点のauthoritativeな現在ラウンドHit数を使用する。Overtimeでは勝利HitのHit count加算後にResultを確定する。
+
+通知順序:
+
+1. 最後のHitがある場合は `HitConfirmedEvent`
+2. `RoundHitCountChangedEvent`
+3. server内部でwinner / finish causeを確定
+4. 両者を `ROUND_LOCKED` へ遷移
+5. `RoundResultEvent` を1回だけ通知
+
+timeout勝利ではtimer 0通知後、`ROUND_LOCKED`、`RoundResultEvent` の順とする。
+
+クライアントは `RoundResultEvent` をラウンド結果の正本として扱い、Hit数やtimerから勝者を再計算しない。
+
+この段階ではResult通知後も同じauthoritative matchを保持し、取得ラウンド数更新・次ラウンドReset・Round Intro・2本先取判定は行わない。それらは次工程「2本先取BO3」で接続する。
+
 ## 11. マッチ管理
 
 ### 11.1 MatchState
