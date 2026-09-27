@@ -19,6 +19,7 @@ on:
       - "scripts/client-combat-integration-smoke.sh"
       - "scripts/client-hit-count-smoke.sh"
       - "scripts/client-round-timer-smoke.sh"
+      - "scripts/client-hit-limit-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -37,6 +38,7 @@ on:
       - "tests/combat_integration_smoke.gd"
       - "tests/hit_count_smoke.gd"
       - "tests/round_timer_smoke.gd"
+      - "tests/hit_limit_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -58,6 +60,7 @@ on:
       - "scripts/client-combat-integration-smoke.sh"
       - "scripts/client-hit-count-smoke.sh"
       - "scripts/client-round-timer-smoke.sh"
+      - "scripts/client-hit-limit-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -76,6 +79,7 @@ on:
       - "tests/combat_integration_smoke.gd"
       - "tests/hit_count_smoke.gd"
       - "tests/round_timer_smoke.gd"
+      - "tests/hit_limit_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
 jobs:
@@ -165,6 +169,9 @@ jobs:
 
       - name: Godot authoritative 85 second timer smoke
         run: ./scripts/client-round-timer-smoke.sh
+
+      - name: Godot authoritative 5 Hit round win smoke
+        run: ./scripts/client-hit-limit-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash
