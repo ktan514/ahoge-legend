@@ -1122,7 +1122,7 @@ function advanceCombatStates(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.roundCountdownActive || state.matchFinished) {
     return;
   }
   Object.keys(state.combatStateByUser).forEach(function (userId): void {
@@ -1269,7 +1269,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
 
 
   messages.forEach(function (message): void {
-    if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
+    if (state.roundFinished || state.roundAwaitingOvertime || state.roundCountdownActive || state.matchFinished) {
       return;
     }
     if (message.opCode !== COMBAT_INPUT_OPCODE) {

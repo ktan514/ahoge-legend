@@ -10,6 +10,7 @@ var _status: Label
 var _states: Label
 var _message: Label
 var _connection: Label
+var _countdown: Label
 var _player_one_name: Label
 var _player_two_name: Label
 var _player_one_visual
@@ -94,6 +95,18 @@ func _ready() -> void:
 	)
 	root.add_child(exit)
 
+	var countdown_layer := CenterContainer.new()
+	countdown_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	countdown_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(countdown_layer)
+
+	_countdown = Label.new()
+	_countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_countdown.add_theme_font_size_override("font_size", 72)
+	_countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	countdown_layer.add_child(_countdown)
+
 	# HUDは画面全体を覆うため、そのままだとControl群がマウスイベントを消費して
 	# Battle._input()へ届かない。操作ボタン以外は入力を透過する。
 	_apply_mouse_passthrough(self)
@@ -108,6 +121,17 @@ func set_combatants(player_one_character, player_one_state, player_two_character
 
 func set_connection_status(text: String) -> void:
 	_connection.text = text
+
+
+func show_round_countdown(round_number: int, countdown_value: int) -> void:
+	if countdown_value > 0:
+		_countdown.text = "ROUND %d\n%d" % [round_number, countdown_value]
+	else:
+		_countdown.text = "GO!"
+
+
+func clear_round_countdown() -> void:
+	_countdown.text = ""
 
 
 func render(match_flow, player_one_state, player_two_state) -> void:

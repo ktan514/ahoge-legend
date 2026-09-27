@@ -29,6 +29,8 @@ var _input_ready: bool = false
 var _p1_attack_held: bool = false
 var _p2_attack_held: bool = false
 var _match_finished: bool = false
+var _round_countdown_active: bool = false
+var _go_clear_generation: int = 0
 var _ci_smoke: bool = false
 var _ci_completed: bool = false
 var _has_timer: bool = false
@@ -80,6 +82,7 @@ func _connect_online_signals() -> void:
 	OnlineSession.bo3_score_changed.connect(_on_bo3_score_changed)
 	OnlineSession.round_started.connect(_on_round_started)
 	OnlineSession.match_result.connect(_on_match_result)
+	OnlineSession.round_countdown_changed.connect(_on_round_countdown_changed)
 
 
 func _start_authoritative_match() -> void:
@@ -170,7 +173,7 @@ func _start_authoritative_match() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not _input_ready or _match_finished:
+	if not _input_ready or _match_finished or _round_countdown_active:
 		return
 
 	if event is InputEventMouseButton:
@@ -327,22 +330,60 @@ func _on_round_result(
 
 
 func _on_bo3_score_changed(
-	_completed_round_number: int,
-	_round_winner_user_id: String,
+	completed_round_number: int,
+	round_winner_user_id: String,
 	round_wins_by_user: Dictionary,
 	match_finished: bool,
 	_server_tick: int
 ) -> void:
 	_apply_round_wins(round_wins_by_user)
 	_snapshot["match_finished"] = match_finished
+	if not match_finished:
+		hud.flash_message(
+			"%s TAKES ROUND %d   SCORE %d - %d" % [
+				_player_label(round_winner_user_id),
+				completed_round_number,
+				int(_snapshot["player_one_rounds"]),
+				int(_snapshot["player_two_rounds"]),
+			]
+		)
 	_render()
 
 
 func _on_round_started(round_number: int, round_wins_by_user: Dictionary, _server_tick: int) -> void:
 	_snapshot["round_number"] = round_number
+	_snapshot["remaining_seconds"] = 85
+	_snapshot["player_one_hits"] = 0
+	_snapshot["player_two_hits"] = 0
 	_snapshot["overtime"] = false
+	_round_countdown_active = false
 	_apply_round_wins(round_wins_by_user)
+	hud.flash_message("")
 	_render()
+
+
+func _on_round_countdown_changed(round_number: int, countdown_value: int, _server_tick: int) -> void:
+	_snapshot["round_number"] = round_number
+	_snapshot["remaining_seconds"] = 85
+	_snapshot["player_one_hits"] = 0
+	_snapshot["player_two_hits"] = 0
+	_snapshot["overtime"] = false
+	_round_countdown_active = countdown_value > 0
+	if countdown_value > 0:
+		_p1_state.action_state = CombatantStateScript.ActionState.ROUND_LOCKED
+		_p2_state.action_state = CombatantStateScript.ActionState.ROUND_LOCKED
+	hud.show_round_countdown(round_number, countdown_value)
+	_render()
+	_go_clear_generation += 1
+	var generation := _go_clear_generation
+	if countdown_value == 0:
+		call_deferred("_clear_go_after_delay", generation)
+
+
+func _clear_go_after_delay(generation: int) -> void:
+	await get_tree().create_timer(0.45).timeout
+	if generation == _go_clear_generation:
+		hud.clear_round_countdown()
 
 
 func _on_match_result(
