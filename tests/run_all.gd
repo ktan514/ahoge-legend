@@ -33,6 +33,7 @@ func _init() -> void:
 	_test_device_identity_persists()
 	_test_ranked_matchmaker_query()
 	_test_combat_input_protocol()
+	_test_authoritative_attack_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -272,6 +273,45 @@ func _test_combat_input_protocol() -> void:
 	var parsed = JSON.parse_string(payload)
 	_expect_equal(parsed["input_sequence"], 7.0, "input_sequenceをpayloadへ保持する")
 	_expect_equal(parsed["action"], "DEFEND", "actionをpayloadへ保持する")
+
+
+func _test_authoritative_attack_protocol() -> void:
+	var state_payload := JSON.stringify({
+		"user_id": "player-1",
+		"state": "STRIKE",
+		"server_tick": 42,
+		"charge_ratio": 0.5,
+	})
+	var state_event := CombatInputProtocolScript.parse_combat_state_changed_payload(
+		state_payload
+	)
+	_expect_equal(state_event["state"], "STRIKE", "authoritative攻撃状態をdecodeできる")
+	_expect_equal(int(state_event["server_tick"]), 42, "攻撃状態のserver tickを保持する")
+	_expect_equal(float(state_event["charge_ratio"]), 0.5, "攻撃状態のcharge ratioを保持する")
+
+	var invalid_state := CombatInputProtocolScript.parse_combat_state_changed_payload(
+		JSON.stringify({
+			"user_id": "player-1",
+			"state": "UNKNOWN",
+			"server_tick": 42,
+			"charge_ratio": 0.5,
+		})
+	)
+	_expect_true(invalid_state.is_empty(), "未知のauthoritative攻撃状態を拒否する")
+
+	var contact_payload := JSON.stringify({
+		"attacker_id": "player-1",
+		"defender_id": "player-2",
+		"server_tick": 48,
+		"input_sequence": 2,
+		"charge_ratio": 0.5,
+	})
+	var contact_event := CombatInputProtocolScript.parse_contact_reached_payload(
+		contact_payload
+	)
+	_expect_equal(contact_event["attacker_id"], "player-1", "ContactEvent attackerをdecodeできる")
+	_expect_equal(contact_event["defender_id"], "player-2", "ContactEvent defenderをdecodeできる")
+	_expect_equal(int(contact_event["input_sequence"]), 2, "ContactEvent release sequenceを保持する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
