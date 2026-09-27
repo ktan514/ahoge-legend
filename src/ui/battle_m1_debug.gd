@@ -377,6 +377,8 @@ func _on_round_countdown_changed(round_number: int, countdown_value: int, _serve
 	_round_countdown_active = countdown_value > 0
 	if countdown_value > 0:
 		_has_countdown = true
+		if countdown_value == 3:
+			hud.flash_message("")
 		_p1_attack_held = false
 		_p2_attack_held = false
 		_p1_state.action_state = CombatantStateScript.ActionState.ROUND_LOCKED
