@@ -682,6 +682,17 @@ SCORE 1 - 0
 
 表示はauthoritative `BO3_SCORE_CHANGED` を正本とし、clientで勝数を推測しない。
 
+Round取得表示は次Round Countdownと同時に出さない。M1では暫定2秒、中央フィードバック領域へ単独表示する。
+
+表示例:
+
+```text
+P1 TAKES ROUND 1
+SCORE 1 - 0
+```
+
+この2秒間は次Roundの `3 / 2 / 1 / GO!` を表示しない。表示終了後にCountdownへ遷移する。
+
 Match終了でない場合、その後の次Round準備では中央に次を大きく重ねる。
 
 ```text
