@@ -6,6 +6,7 @@ const DEFENSE_RESOLVED_OPCODE = 104;
 const HIT_CONFIRMED_OPCODE = 105;
 const ATTACK_CLASH_OPCODE = 106;
 const ROUND_HIT_COUNT_CHANGED_OPCODE = 107;
+const ROUND_TIMER_CHANGED_OPCODE = 108;
 
 const DEFENSE_RESULT_NONE = "NONE";
 const DEFENSE_RESULT_PARRY = "PARRY";
@@ -60,6 +61,9 @@ interface AhogeRankedMatchState {
   characterIdByUser: {[key: string]: string};
   roundHitCountByUser: {[key: string]: number};
   roundHitCountSnapshotBroadcast: boolean;
+  roundTimerStartTick: number;
+  roundTimerEndTick: number;
+  roundRemainingSeconds: number;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -100,7 +104,10 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       combatStateByUser: {},
       characterIdByUser: characterIdByUser,
       roundHitCountByUser: {},
-      roundHitCountSnapshotBroadcast: false
+      roundHitCountSnapshotBroadcast: false,
+      roundTimerStartTick: -1,
+      roundTimerEndTick: -1,
+      roundRemainingSeconds: ROUND_DURATION_SECONDS
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -259,6 +266,23 @@ function broadcastRoundHitCount(
       hit_count: state.roundHitCountByUser[userId] || 0,
       server_tick: tick,
       input_sequence: inputSequence
+    }),
+    null,
+    null,
+    true
+  );
+}
+
+function broadcastRoundTimer(
+  dispatcher: nkruntime.MatchDispatcher,
+  remainingSeconds: number,
+  tick: number
+): void {
+  dispatcher.broadcastMessage(
+    ROUND_TIMER_CHANGED_OPCODE,
+    JSON.stringify({
+      remaining_seconds: remainingSeconds,
+      server_tick: tick
     }),
     null,
     null,
@@ -740,6 +764,24 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
+  if (
+    Object.keys(state.presences).length === 2 &&
+    state.roundTimerStartTick < 0
+  ) {
+    state.roundTimerStartTick = tick;
+    state.roundTimerEndTick = tick + roundDurationTicks();
+    state.roundRemainingSeconds = ROUND_DURATION_SECONDS;
+    broadcastRoundTimer(dispatcher, state.roundRemainingSeconds, tick);
+  }
+
+  if (state.roundTimerStartTick >= 0 && state.roundRemainingSeconds > 0) {
+    const remainingSeconds = roundRemainingSeconds(state.roundTimerEndTick, tick);
+    if (remainingSeconds !== state.roundRemainingSeconds) {
+      state.roundRemainingSeconds = remainingSeconds;
+      broadcastRoundTimer(dispatcher, remainingSeconds, tick);
+    }
+  }
+
   if (
     Object.keys(state.presences).length === 2 &&
     !state.roundHitCountSnapshotBroadcast

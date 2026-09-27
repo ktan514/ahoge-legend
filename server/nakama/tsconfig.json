@@ -2,6 +2,7 @@
   "files": [
     "./node_modules/nakama-runtime/index.d.ts",
     "./src/combat_config.ts",
+    "./src/round_config.ts",
     "./src/ranked_match.ts",
     "./src/main.ts"
   ],

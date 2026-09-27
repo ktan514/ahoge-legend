@@ -8,6 +8,7 @@ const OPCODE_DEFENSE_RESOLVED: int = 104
 const OPCODE_HIT_CONFIRMED: int = 105
 const OPCODE_ATTACK_CLASH: int = 106
 const OPCODE_ROUND_HIT_COUNT_CHANGED: int = 107
+const OPCODE_ROUND_TIMER_CHANGED: int = 108
 
 const ACTION_ATTACK_PRESS: String = "ATTACK_PRESS"
 const ACTION_ATTACK_RELEASE: String = "ATTACK_RELEASE"
@@ -149,5 +150,18 @@ static func parse_round_hit_count_changed_payload(payload: String) -> Dictionary
 			or not parsed.has("input_sequence"):
 		return {}
 	if int(parsed["hit_count"]) < 0:
+		return {}
+	return parsed
+
+
+static func parse_round_timer_changed_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	if not parsed.has("remaining_seconds") \
+			or not parsed.has("server_tick"):
+		return {}
+	var remaining_seconds := int(parsed["remaining_seconds"])
+	if remaining_seconds < 0 or remaining_seconds > 85:
 		return {}
 	return parsed

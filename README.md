@@ -325,6 +325,23 @@ AHOGE LEGEND hit count smoke: PASS
 
 PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝利やRound resetは後続Issueで接続します。
 
+## Authoritative 85秒 Round timer
+
+2人がauthoritative matchへ参加した後、Nakama 30Hz tickを正として85秒の整数カウントダウンを開始します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-round-timer-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND round timer smoke: PASS
+```
+
+serverは85から0までの値が変化したときだけ両クライアントへ通知します。0到達時のHit数比較・Overtime・Round終了は後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`
