@@ -238,7 +238,7 @@ ContactEvent到達時のserver tickで相手のDefense stateを参照し、`NONE
 AHOGE LEGEND defense result smoke: PASS
 ```
 
-Defense active / Justの終了tickは排他的境界として扱います。Attack Clash / Hit / Stagger実適用は後続Issueで接続します。
+Defense active / Justの終了tickは排他的境界として扱います。Attack Clash / Hit / Staggerとの接続は後続の各節で説明します。
 
 ## Authoritative Contact outcome
 
