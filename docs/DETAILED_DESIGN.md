@@ -638,8 +638,31 @@ Hit数の更新条件は次で固定する。
 - PARRY / JUST_PARRY / DODGE / JUST_DODGEでは加算しない
 - AttackClashでは加算しない
 - 同じ `input_sequence` のHitを二重加算しない。既存Contactの一度きり確定を前提とする
-- この段階では5 Hit到達をRound終了へ接続しない
+- Hit数更新直後に規定Hit数到達を判定する
+- 初期規定値は5 Hitとする
 - Round resetはRound lifecycle実装時に追加する
+
+5 Hit到達時のserver state:
+
+```text
+round_finished = true
+round_winner_user_id = 5 Hitへ到達した攻撃側user ID
+round_finish_cause = HIT_LIMIT
+```
+
+5 Hit目の `RoundHitCountChangedEvent` を通知した後、同じserver tickで両者の戦闘状態を `ROUND_LOCKED` へ遷移させる。
+
+`ROUND_LOCKED` 中は次を行わない。
+
+- ATTACK_PRESS / ATTACK_RELEASE / DEFENDの適用
+- 新規ContactEventの確定
+- 新規HitConfirmedEvent
+- Hit数加算
+- Round timer更新
+
+5 Hit到達時点のtimer表示値はRound Result lifecycleが接続されるまで最後のauthoritative値を保持し、クライアント側で勝手に0へ変更しない。
+
+Round winnerのclient向け正式なRound Result通知、次ラウンドReset、取得ラウンド数への反映は後続工程で接続する。
 
 server → client通知:
 
@@ -666,6 +689,7 @@ Godotクライアントはこの通知を表示・同期用に受信するが、
 - 表示用 `remaining_seconds` は `ceil(max(0, round_timer_end_tick - server_tick) / 30)` で算出する
 - 初回は85を通知し、その後は表示値が変化したときだけ84、83、…、0を通知する
 - 0へ到達した後は0で停止し、負数へ進めない
+- 5 Hitで `round_finished=true` になった場合もtimer更新を停止する
 - クライアント側で独自カウントダウンを勝敗判定の正本にしない
 - 0到達時のHit数比較・Overtime・Round終了は後続Issueで接続する
 

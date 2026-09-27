@@ -342,6 +342,23 @@ AHOGE LEGEND round timer smoke: PASS
 
 serverは85から0までの値が変化したときだけ両クライアントへ通知します。0到達時のHit数比較・Overtime・Round終了は後続Issueで接続します。
 
+## Authoritative 5 Hit Round win
+
+現在ラウンドのHit数が5へ到達した時点で、server内部で勝者を確定し、両者をROUND_LOCKEDへ遷移させて戦闘とtimerを停止します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-hit-limit-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND hit limit smoke: PASS
+```
+
+Round Result通知・次ラウンドReset・timeout / Overtimeは後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`
