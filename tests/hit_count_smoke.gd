@@ -115,6 +115,9 @@ func _run() -> void:
 		_fail("P1/P2 match IDが一致しません。")
 		return
 
+	# authoritative Round Countdown完了後に戦闘を開始する。
+	await create_timer(3.5).timeout
+
 	if not await _wait_for_count_pair(p1_user_id, 0, 0, 5000):
 		_fail("P1初期Hit数0を両clientで受信できませんでした。")
 		return

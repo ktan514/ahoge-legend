@@ -116,6 +116,9 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	# authoritative Round Countdown完了後に戦闘を開始する。
+	await create_timer(3.5).timeout
+
 	# 1. LONG_TEST通常Hit。
 	var hit_start := _p1_states.size()
 	var hit_sequence := await _start_p1_attack(online_session, p1_user_id, 0.0)

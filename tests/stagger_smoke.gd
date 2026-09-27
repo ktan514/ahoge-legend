@@ -106,6 +106,9 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	# authoritative Round Countdown完了後に戦闘を開始する。
+	await create_timer(3.5).timeout
+
 	# JUST_PARRY → 攻撃側STAGGER。
 	var p1_just_start := _p1_states.size()
 	var p2_just_start := _p2_states.size()
