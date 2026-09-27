@@ -7,6 +7,7 @@ const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
+const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -239,12 +240,7 @@ func _test_device_identity_persists() -> void:
 
 
 func _test_ranked_matchmaker_query() -> void:
-	var online_session = get_root().get_node_or_null("OnlineSession")
-	_expect_true(online_session != null, "OnlineSession Autoloadが存在する")
-	if online_session == null:
-		return
-
-	var query: String = online_session.build_ranked_matchmaker_query(1500)
+	var query: String = RankedMatchmakerQueryScript.build(1500)
 	_expect_equal(
 		query,
 		"+properties.mode:ranked +properties.rating:>=1400 +properties.rating:<=1600",

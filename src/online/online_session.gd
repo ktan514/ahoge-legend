@@ -2,6 +2,7 @@ extends Node
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
+const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 
 signal authentication_succeeded(user_id: String, username: String)
 signal authentication_failed(step: String, message: String)
@@ -135,13 +136,7 @@ func connect_realtime_socket() -> Dictionary:
 
 
 func build_ranked_matchmaker_query(rating: int) -> String:
-	var min_rating := rating - OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
-	var max_rating := rating + OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
-	return "+properties.mode:%s +properties.rating:>=%d +properties.rating:<=%d" % [
-		OnlineConfigScript.RANKED_MATCHMAKER_MODE,
-		min_rating,
-		max_rating,
-	]
+	return RankedMatchmakerQueryScript.build(rating)
 
 
 func start_ranked_matchmaking(rating: int) -> Dictionary:
