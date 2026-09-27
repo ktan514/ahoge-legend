@@ -26,6 +26,7 @@ const _ALLOWED_COMBAT_STATES := {
 	"COOLDOWN": true,
 	"PARRY": true,
 	"DODGE": true,
+	"STAGGER": true,
 }
 
 const _ALLOWED_DEFENSE_RESULTS := {
@@ -71,6 +72,9 @@ static func parse_combat_state_changed_payload(payload: String) -> Dictionary:
 		return {}
 
 	if not bool(_ALLOWED_COMBAT_STATES.get(str(parsed["state"]), false)):
+		return {}
+
+	if str(parsed["state"]) == "STAGGER" and not parsed.has("stagger_until_tick"):
 		return {}
 
 	return parsed

@@ -19,6 +19,7 @@ const COMBAT_STATE_STRIKE = "STRIKE";
 const COMBAT_STATE_COOLDOWN = "COOLDOWN";
 const COMBAT_STATE_PARRY = "PARRY";
 const COMBAT_STATE_DODGE = "DODGE";
+const COMBAT_STATE_STAGGER = "STAGGER";
 
 const ALLOWED_COMBAT_ACTIONS: {[key: string]: boolean} = {
   ATTACK_PRESS: true,
@@ -42,6 +43,7 @@ interface AuthoritativeCombatState {
   defenseJustUntilTick: number;
   resumeState: string;
   resumeRemainingTicks: number;
+  staggerEndTick: number;
 }
 
 interface AhogeRankedMatchState {
@@ -181,7 +183,8 @@ function createIdleCombatState(ahogeAvailable: boolean): AuthoritativeCombatStat
     defenseEndTick: -1,
     defenseJustUntilTick: -1,
     resumeState: COMBAT_STATE_IDLE,
-    resumeRemainingTicks: 0
+    resumeRemainingTicks: 0,
+    staggerEndTick: -1
   };
 }
 
@@ -200,7 +203,8 @@ function broadcastCombatState(
       charge_ratio: combatState.chargeRatio,
       ahoge_available: combatState.ahogeAvailable,
       defense_active_until_tick: combatState.defenseEndTick,
-      defense_just_until_tick: combatState.defenseJustUntilTick
+      defense_just_until_tick: combatState.defenseJustUntilTick,
+      stagger_until_tick: combatState.staggerEndTick
     }),
     null,
     null,
@@ -349,6 +353,24 @@ function broadcastAttackClash(
   );
 }
 
+function applyStagger(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  userId: string,
+  tick: number
+): void {
+  const current = state.combatStateByUser[userId];
+  if (!current) {
+    return;
+  }
+
+  const staggered = createIdleCombatState(current.ahogeAvailable);
+  staggered.state = COMBAT_STATE_STAGGER;
+  staggered.staggerEndTick = tick + combatStaggerTicks();
+  state.combatStateByUser[userId] = staggered;
+  broadcastCombatState(dispatcher, userId, staggered, tick);
+}
+
 function hasPendingContact(combatState: AuthoritativeCombatState | undefined): boolean {
   return !!combatState && combatState.contactTick >= 0 && !combatState.contactEmitted;
 }
@@ -375,6 +397,8 @@ function resolveDueContacts(
       broadcastContactReached(dispatcher, state, firstId, first, first.contactTick);
       broadcastContactReached(dispatcher, state, secondId, second, second.contactTick);
       broadcastAttackClash(dispatcher, firstId, first, secondId, second, tick);
+      applyStagger(dispatcher, state, firstId, tick);
+      applyStagger(dispatcher, state, secondId, tick);
       return;
     }
   }
@@ -388,6 +412,11 @@ function resolveDueContacts(
     const defenseResult = broadcastContactReached(dispatcher, state, attackerId, combatState, combatState.contactTick);
     if (defenseResult === DEFENSE_RESULT_NONE) {
       broadcastHitConfirmed(dispatcher, attackerId, defenderId, combatState, combatState.contactTick);
+    } else if (
+      defenseResult === DEFENSE_RESULT_JUST_PARRY ||
+      defenseResult === DEFENSE_RESULT_JUST_DODGE
+    ) {
+      applyStagger(dispatcher, state, attackerId, tick);
     }
   });
 }
@@ -425,7 +454,8 @@ function applyAttackInput(
       defenseEndTick: -1,
       defenseJustUntilTick: -1,
       resumeState: COMBAT_STATE_IDLE,
-      resumeRemainingTicks: 0
+      resumeRemainingTicks: 0,
+      staggerEndTick: -1
     };
     broadcastCombatState(
       dispatcher,
@@ -460,7 +490,8 @@ function applyAttackInput(
     defenseEndTick: -1,
     defenseJustUntilTick: -1,
     resumeState: COMBAT_STATE_IDLE,
-    resumeRemainingTicks: 0
+    resumeRemainingTicks: 0,
+    staggerEndTick: -1
   };
   broadcastCombatState(
     dispatcher,
@@ -477,7 +508,7 @@ function applyDefenseInput(
   tick: number
 ): void {
   const combatState = state.combatStateByUser[userId];
-  if (!combatState) {
+  if (!combatState || combatState.state === COMBAT_STATE_STAGGER) {
     return;
   }
 
@@ -509,7 +540,8 @@ function applyDefenseInput(
     defenseEndTick: tick + timing.activeTicks,
     defenseJustUntilTick: tick + timing.justTicks,
     resumeState: resumeState,
-    resumeRemainingTicks: resumeRemainingTicks
+    resumeRemainingTicks: resumeRemainingTicks,
+    staggerEndTick: -1
   };
 
   broadcastCombatState(
@@ -527,6 +559,14 @@ function advanceCombatStates(
 ): void {
   Object.keys(state.combatStateByUser).forEach(function (userId): void {
     const combatState = state.combatStateByUser[userId];
+
+    if (combatState.state === COMBAT_STATE_STAGGER) {
+      if (tick >= combatState.staggerEndTick) {
+        state.combatStateByUser[userId] = createIdleCombatState(combatState.ahogeAvailable);
+        broadcastCombatState(dispatcher, userId, state.combatStateByUser[userId], tick);
+      }
+      return;
+    }
 
     if (
       (combatState.state === COMBAT_STATE_PARRY ||
