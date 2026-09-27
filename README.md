@@ -116,7 +116,9 @@ Pull Requestの `Online foundation` は開発反復を優先したfast regressio
 
 `main` pushと手動実行ではfull regressionとして3本も含め、productionの85秒を実時間で確認します。ゲーム本体のRound時間はどちらの区分でも85秒仕様のままです。
 
-CIではGodot importを最初の1回に集約し、同一PRの古いrunは新しいcommitでcancelします。
+CIでは各Runner内のGodot importを最初の1回に集約し、同一PRの古いrunは新しいcommitでcancelします。
+
+PR fastは `foundation / combat / round / match` の4 groupを独立Runnerで並列実行します。各Runnerは独立したNakamaを起動するため、Matchmaker smoke同士は混線しません。
 
 ## Godot → Nakamaローカル認証
 
