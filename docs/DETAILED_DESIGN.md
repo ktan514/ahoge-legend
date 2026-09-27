@@ -623,6 +623,38 @@ RoundState
 - winner
 ```
 
+オンラインauthoritative matchでは工程2を段階実装する。最初の段階ではラウンド終了条件をまだ接続せず、user IDごとの現在ラウンドHit数だけをserver stateで保持する。
+
+```text
+round_hit_count_by_user
+- user_id -> hit_count
+```
+
+初期値は各参加者0とする。2人がauthoritative matchへjoinして対戦可能になった時点で、現在値0を両クライアントへ通知する。
+
+Hit数の更新条件は次で固定する。
+
+- `HitConfirmedEvent` を確定した攻撃側だけを+1する
+- PARRY / JUST_PARRY / DODGE / JUST_DODGEでは加算しない
+- AttackClashでは加算しない
+- 同じ `input_sequence` のHitを二重加算しない。既存Contactの一度きり確定を前提とする
+- この段階では5 Hit到達をRound終了へ接続しない
+- Round resetはRound lifecycle実装時に追加する
+
+server → client通知:
+
+```text
+RoundHitCountChangedEvent
+- user_id
+- hit_count
+- server_tick
+- input_sequence
+```
+
+初期値通知では `input_sequence = 0` とする。Hit加算通知では元の攻撃release sequenceを保持する。
+
+Godotクライアントはこの通知を表示・同期用に受信するが、Hit数をクライアント側で独自加算して正本にしない。
+
 ### 10.2 タイマー
 
 - 開始値: 85
@@ -1488,7 +1520,9 @@ SHORT_TEST
 - SHORT_TESTはStrike開始tickでahogeをdetachし、`ahoge_available=false` とする
 - SHORT Regrow 0.60秒は30Hzで18tickへ量子化し、action stateと独立して進行する
 - detach中DEFENDはDODGE / JUST_DODGE、regrow後DEFENDはPARRY / JUST_PARRYへ分岐する
-- Hit数、勝敗は後続Issueでserver authoritative stateへ接続する
+- 現在ラウンドHit数はuser IDごとにserver stateで保持し、HitConfirmed確定時だけ攻撃側を+1する
+- Hit数更新はRoundHitCountChangedEventとして両clientへ通知する
+- 5 Hit勝利、85秒timer、Round reset、勝敗は後続Issueでserver authoritative stateへ接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
 ### 21.5 切断・再接続

@@ -40,6 +40,7 @@ func _init() -> void:
 	_test_authoritative_defense_result_protocol()
 	_test_authoritative_contact_outcome_protocol()
 	_test_authoritative_stagger_protocol()
+	_test_authoritative_hit_count_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -435,6 +436,29 @@ func _test_authoritative_stagger_protocol() -> void:
 		14,
 		"Stagger 0.45秒を30Hzで14tick保持する"
 	)
+
+
+func _test_authoritative_hit_count_protocol() -> void:
+	var payload := JSON.stringify({
+		"user_id": "player-1",
+		"hit_count": 2,
+		"server_tick": 600,
+		"input_sequence": 14,
+	})
+	var event := CombatInputProtocolScript.parse_round_hit_count_changed_payload(payload)
+	_expect_equal(event["user_id"], "player-1", "Round Hit count userをdecodeできる")
+	_expect_equal(int(event["hit_count"]), 2, "Round Hit countをdecodeできる")
+	_expect_equal(int(event["input_sequence"]), 14, "Round Hit countはHit元sequenceを保持する")
+
+	var invalid := CombatInputProtocolScript.parse_round_hit_count_changed_payload(
+		JSON.stringify({
+			"user_id": "player-1",
+			"hit_count": -1,
+			"server_tick": 600,
+			"input_sequence": 14,
+		})
+	)
+	_expect_true(invalid.is_empty(), "負のRound Hit countを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
