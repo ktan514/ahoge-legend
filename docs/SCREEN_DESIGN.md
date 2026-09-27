@@ -835,7 +835,7 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 ### 18.2 再接続中
 
-対戦中に切断された場合:
+自分の接続が切れた場合:
 
 ```text
 RECONNECTING...
@@ -845,7 +845,16 @@ RECONNECTING...
 ...
 ```
 
-15秒以内に復帰した場合は対戦へ戻る。
+15秒以内に復帰した場合は、server authoritative snapshotを受信して現在の対戦状態へ同期する。
+
+相手だけが切断した場合:
+
+- Round進行中はBattleを継続する。相手側は新規操作を行えない
+- Round開始前またはRound終了後は `WAITING FOR OPPONENT...` を表示し、次Roundへの進行を待つ
+- Countdown中に相手が切断した場合はCountdown表示を停止する
+- 相手が復帰したらserver stateに同期して待機表示を解除する
+
+再接続待機Overlayは最終デザインではなく、工程4の全画面UI見直し対象とする。
 
 ### 18.3 退出確認
 
