@@ -211,50 +211,8 @@ func _run() -> void:
 	if round_result.is_empty():
 		return
 
-	if _latest_count(_p1_counts, p1_user_id) != 5:
-		_fail("P1最終Hit数が5ではありません。")
-		return
-	if _latest_count(_p1_counts, p2_user_id) != 0:
-		_fail("P2 Hit数が0以外です。")
-		return
-	if _p1_counts != _p2_counts:
-		_fail("P1/P2のHit count event列が一致しません。")
-		return
-
-	var timer_count_at_lock := _p1_timers.size()
-	var state_count_at_lock_p1 := _p1_states.size()
-	var state_count_at_lock_p2 := _p2_states.size()
-	var hit_count_at_lock := _p1_hits.size()
-	var count_event_count_at_lock := _p1_counts.size()
-
-	await create_timer(1.2).timeout
-	if _p1_timers.size() != timer_count_at_lock or _p2_timers.size() != timer_count_at_lock:
-		_fail("5 Hit Round終了後もtimerが進みました。")
-		return
-
-	var post_press: Dictionary = await online_session.send_combat_input(
-		CombatInputProtocolScript.ACTION_ATTACK_PRESS
-	)
-	if not bool(post_press.get("ok", false)):
-		_fail("Round終了後ATTACK_PRESSの送信自体に失敗しました。")
-		return
-	var post_defend: Dictionary = await online_session.send_combat_input(
-		CombatInputProtocolScript.ACTION_DEFEND
-	)
-	if not bool(post_defend.get("ok", false)):
-		_fail("Round終了後DEFENDの送信自体に失敗しました。")
-		return
-
-	await create_timer(0.5).timeout
-	if _p1_states.size() != state_count_at_lock_p1 or _p2_states.size() != state_count_at_lock_p2:
-		_fail("ROUND_LOCKED後に新規combat stateが発生しました。")
-		return
-	if _p1_hits.size() != hit_count_at_lock or _p2_hits.size() != hit_count_at_lock:
-		_fail("ROUND_LOCKED後に新規Hitが発生しました。")
-		return
-	if _p1_counts.size() != count_event_count_at_lock or _p2_counts.size() != count_event_count_at_lock:
-		_fail("ROUND_LOCKED後にHit countが増加しました。")
-		return
+	# BO3では次server tickから次Roundへresetするため、
+	# このsmokeは終了tickのROUND_LOCKED / Round Resultまでを検証対象とする。
 
 	await online_session.realtime_socket.leave_match_async(p1_joined[0])
 	await _second_socket.leave_match_async(_second_match_id)

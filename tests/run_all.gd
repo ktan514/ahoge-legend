@@ -45,6 +45,7 @@ func _init() -> void:
 	_test_authoritative_round_locked_protocol()
 	_test_authoritative_overtime_protocol()
 	_test_authoritative_round_result_protocol()
+	_test_authoritative_bo3_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -543,6 +544,38 @@ func _test_authoritative_round_result_protocol() -> void:
 		})
 	)
 	_expect_true(invalid.is_empty(), "不正なRound Resultを拒否する")
+
+
+func _test_authoritative_bo3_protocol() -> void:
+	var score_payload := JSON.stringify({
+		"completed_round_number": 2,
+		"round_winner_user_id": "player-2",
+		"round_wins_by_user": {"player-1": 1, "player-2": 1},
+		"match_finished": false,
+		"server_tick": 1200,
+	})
+	var score_event := CombatInputProtocolScript.parse_bo3_score_changed_payload(score_payload)
+	_expect_equal(int(score_event["completed_round_number"]), 2, "BO3 completed roundをdecodeできる")
+	_expect_equal(int(score_event["round_wins_by_user"]["player-1"]), 1, "BO3 P1 scoreをdecodeできる")
+	_expect_equal(bool(score_event["match_finished"]), false, "BO3継続状態をdecodeできる")
+
+	var started_payload := JSON.stringify({
+		"round_number": 3,
+		"round_wins_by_user": {"player-1": 1, "player-2": 1},
+		"server_tick": 1201,
+	})
+	var started_event := CombatInputProtocolScript.parse_round_started_payload(started_payload)
+	_expect_equal(int(started_event["round_number"]), 3, "Round Started round番号をdecodeできる")
+	_expect_equal(int(started_event["round_wins_by_user"]["player-2"]), 1, "Round Started scoreをdecodeできる")
+
+	var invalid := CombatInputProtocolScript.parse_round_started_payload(
+		JSON.stringify({
+			"round_number": 4,
+			"round_wins_by_user": {"player-1": 3},
+			"server_tick": -1,
+		})
+	)
+	_expect_true(invalid.is_empty(), "不正なBO3 Round Startedを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:

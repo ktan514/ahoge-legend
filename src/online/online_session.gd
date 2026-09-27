@@ -26,6 +26,8 @@ signal round_hit_count_changed(user_id: String, hit_count: int, server_tick: int
 signal round_timer_changed(remaining_seconds: int, server_tick: int)
 signal round_overtime_started(server_tick: int)
 signal round_result(round_number: int, winner_user_id: String, loser_user_id: String, finish_cause: String, winner_hits: int, loser_hits: int, server_tick: int)
+signal bo3_score_changed(completed_round_number: int, round_winner_user_id: String, round_wins_by_user: Dictionary, match_finished: bool, server_tick: int)
+signal round_started(round_number: int, round_wins_by_user: Dictionary, server_tick: int)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -425,6 +427,30 @@ func _on_match_state_received(match_state, candidate) -> void:
 			int(result_event["winner_hits"]),
 			int(result_event["loser_hits"]),
 			int(result_event["server_tick"])
+		)
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_BO3_SCORE_CHANGED:
+		var score_event := CombatInputProtocolScript.parse_bo3_score_changed_payload(str(match_state.data))
+		if score_event.is_empty():
+			return
+		bo3_score_changed.emit(
+			int(score_event["completed_round_number"]),
+			str(score_event["round_winner_user_id"]),
+			score_event["round_wins_by_user"],
+			bool(score_event["match_finished"]),
+			int(score_event["server_tick"])
+		)
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_STARTED:
+		var started_event := CombatInputProtocolScript.parse_round_started_payload(str(match_state.data))
+		if started_event.is_empty():
+			return
+		round_started.emit(
+			int(started_event["round_number"]),
+			started_event["round_wins_by_user"],
+			int(started_event["server_tick"])
 		)
 
 

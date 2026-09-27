@@ -9,6 +9,11 @@ const ROUND_HIT_COUNT_CHANGED_OPCODE = 107;
 const ROUND_TIMER_CHANGED_OPCODE = 108;
 const ROUND_OVERTIME_STARTED_OPCODE = 109;
 const ROUND_RESULT_OPCODE = 110;
+const BO3_SCORE_CHANGED_OPCODE = 111;
+const ROUND_STARTED_OPCODE = 112;
+
+const ROUNDS_TO_WIN_MATCH = 2;
+const MAX_ROUNDS = 3;
 
 const DEFENSE_RESULT_NONE = "NONE";
 const DEFENSE_RESULT_PARRY = "PARRY";
@@ -78,6 +83,10 @@ interface AhogeRankedMatchState {
   roundAwaitingOvertime: boolean;
   roundOvertime: boolean;
   roundNumber: number;
+  roundWinsByUser: {[key: string]: number};
+  roundResetPending: boolean;
+  matchFinished: boolean;
+  matchWinnerUserId: string;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -127,7 +136,11 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundFinishCause: ROUND_FINISH_CAUSE_NONE,
       roundAwaitingOvertime: false,
       roundOvertime: false,
-      roundNumber: 1
+      roundNumber: 1,
+      roundWinsByUser: {},
+      roundResetPending: false,
+      matchFinished: false,
+      matchWinnerUserId: ""
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -196,6 +209,9 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     }
     if (state.roundHitCountByUser[presence.userId] === undefined) {
       state.roundHitCountByUser[presence.userId] = 0;
+    }
+    if (state.roundWinsByUser[presence.userId] === undefined) {
+      state.roundWinsByUser[presence.userId] = 0;
     }
   });
 
@@ -352,6 +368,54 @@ function broadcastRoundResult(
   );
 }
 
+function roundWinsSnapshot(state: AhogeRankedMatchState): {[key: string]: number} {
+  const snapshot: {[key: string]: number} = {};
+  Object.keys(state.roundWinsByUser).forEach(function (userId): void {
+    snapshot[userId] = state.roundWinsByUser[userId] || 0;
+  });
+  return snapshot;
+}
+
+function broadcastBo3ScoreChanged(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  completedRoundNumber: number,
+  roundWinnerUserId: string,
+  tick: number
+): void {
+  dispatcher.broadcastMessage(
+    BO3_SCORE_CHANGED_OPCODE,
+    JSON.stringify({
+      completed_round_number: completedRoundNumber,
+      round_winner_user_id: roundWinnerUserId,
+      round_wins_by_user: roundWinsSnapshot(state),
+      match_finished: state.matchFinished,
+      server_tick: tick
+    }),
+    null,
+    null,
+    true
+  );
+}
+
+function broadcastRoundStarted(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  dispatcher.broadcastMessage(
+    ROUND_STARTED_OPCODE,
+    JSON.stringify({
+      round_number: state.roundNumber,
+      round_wins_by_user: roundWinsSnapshot(state),
+      server_tick: tick
+    }),
+    null,
+    null,
+    true
+  );
+}
+
 function lockRoundCombat(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -373,7 +437,7 @@ function finishRound(
   finishCause: string,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
   state.roundFinished = true;
@@ -382,6 +446,23 @@ function finishRound(
   state.roundOvertime = false;
   lockRoundCombat(dispatcher, state, tick);
   broadcastRoundResult(dispatcher, state, winnerUserId, finishCause, tick);
+
+  state.roundWinsByUser[winnerUserId] = (state.roundWinsByUser[winnerUserId] || 0) + 1;
+  if (state.roundWinsByUser[winnerUserId] >= ROUNDS_TO_WIN_MATCH) {
+    state.matchFinished = true;
+    state.matchWinnerUserId = winnerUserId;
+    state.roundResetPending = false;
+  } else {
+    state.roundResetPending = true;
+  }
+
+  broadcastBo3ScoreChanged(
+    dispatcher,
+    state,
+    state.roundNumber,
+    winnerUserId,
+    tick
+  );
 }
 
 function finishRoundByHitLimit(
@@ -404,7 +485,7 @@ function resolveRoundTimeout(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
 
@@ -469,6 +550,47 @@ function startRoundOvertime(
   });
 }
 
+function startNextRound(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  if (!state.roundResetPending || state.matchFinished) {
+    return;
+  }
+
+  state.roundResetPending = false;
+  state.roundNumber += 1;
+  if (state.roundNumber > MAX_ROUNDS) {
+    state.matchFinished = true;
+    return;
+  }
+
+  state.roundFinished = false;
+  state.roundWinnerUserId = "";
+  state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
+  state.roundAwaitingOvertime = false;
+  state.roundOvertime = false;
+  state.roundTimerStartTick = tick;
+  state.roundTimerEndTick = tick + roundDurationTicks();
+  state.roundRemainingSeconds = ROUND_DURATION_SECONDS;
+  state.roundHitCountSnapshotBroadcast = true;
+
+  Object.keys(state.presences).forEach(function (userId): void {
+    state.roundHitCountByUser[userId] = 0;
+    state.combatStateByUser[userId] = createIdleCombatState(true);
+  });
+
+  broadcastRoundStarted(dispatcher, state, tick);
+  Object.keys(state.presences).forEach(function (userId): void {
+    broadcastRoundHitCount(dispatcher, state, userId, tick, 0);
+  });
+  broadcastRoundTimer(dispatcher, ROUND_DURATION_SECONDS, tick);
+  Object.keys(state.presences).forEach(function (userId): void {
+    broadcastCombatState(dispatcher, userId, state.combatStateByUser[userId], tick);
+  });
+}
+
 function incrementRoundHitCount(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -476,7 +598,7 @@ function incrementRoundHitCount(
   tick: number,
   inputSequence: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
   state.roundHitCountByUser[userId] = (state.roundHitCountByUser[userId] || 0) + 1;
@@ -679,7 +801,7 @@ function resolveDueContacts(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
   const userIds = Object.keys(state.presences);
@@ -706,7 +828,7 @@ function resolveDueContacts(
   }
 
   userIds.forEach(function (attackerId): void {
-    if (state.roundFinished || state.roundAwaitingOvertime) {
+    if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
       return;
     }
     const combatState = state.combatStateByUser[attackerId];
@@ -741,7 +863,7 @@ function applyAttackInput(
   sequence: number,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
   const combatState = state.combatStateByUser[userId];
@@ -824,7 +946,7 @@ function applyDefenseInput(
   userId: string,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
   const combatState = state.combatStateByUser[userId];
@@ -878,7 +1000,7 @@ function advanceCombatStates(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime) {
+  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
     return;
   }
   Object.keys(state.combatStateByUser).forEach(function (userId): void {
@@ -976,6 +1098,10 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
+  if (state.roundResetPending && !state.matchFinished) {
+    startNextRound(dispatcher, state, tick);
+  }
+
   if (state.roundAwaitingOvertime) {
     startRoundOvertime(dispatcher, state, tick);
   }
@@ -987,6 +1113,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
     state.roundTimerStartTick = tick;
     state.roundTimerEndTick = tick + roundDurationTicks();
     state.roundRemainingSeconds = ROUND_DURATION_SECONDS;
+    broadcastRoundStarted(dispatcher, state, tick);
     broadcastRoundTimer(dispatcher, state.roundRemainingSeconds, tick);
   }
 
@@ -1018,7 +1145,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
 
 
   messages.forEach(function (message): void {
-    if (state.roundFinished || state.roundAwaitingOvertime) {
+    if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
       return;
     }
     if (message.opCode !== COMBAT_INPUT_OPCODE) {
