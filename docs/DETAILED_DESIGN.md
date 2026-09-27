@@ -515,7 +515,7 @@ DefenseResultEvent
 
 `input_sequence` は元の攻撃release sequenceと一致させ、ContactEventとDefenseResultEventを対応付ける。
 
-DODGE / JUST_DODGEは `ahoge_available = false` のDefenseContextに対して同じtick規則を適用する。SHORT detach / regrowによる実際の `ahoge_available=false` 接続は後続工程で行う。
+DODGE / JUST_DODGEは `ahoge_available = false` のDefenseContextに対して同じtick規則を適用する。SHORT detach / regrowで `ahoge_available=false` を発生させ、DODGE / JUST_DODGEを実運用経路へ接続する。
 
 ### 8.4 ジャスト成功時
 
@@ -1085,7 +1085,7 @@ Contact到達時点ではまだPARRY / DODGE成功結果やHitを確定しない
 
 - キャラクター選択後にマッチングへ入る
 - 2人固定で検索する
-- Matchmaker propertyに `mode=ranked` と数値 `rating` を付与する
+- Matchmaker propertyに `mode=ranked`、選択済み `character_id`、数値 `rating` を付与する
 - 初期queryは `+properties.mode:ranked +properties.rating:>=MIN +properties.rating:<=MAX`
 - 初期検索幅は自分のRating ±100
 - Matchmaker Matched hookが authoritative match `ahoge_ranked` を生成する
