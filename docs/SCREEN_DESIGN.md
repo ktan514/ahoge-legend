@@ -642,6 +642,82 @@ BO3のため、各プレイヤーについて最大2つの取得マーカーを�
 
 必要な離脱操作はPauseではなく、対戦を継続したまま表示する確認Overlayとして別途設計する。
 
+
+### 15.9 M1 Battle Coreデバッグ表示
+
+M1 #53ではUI-10の本番導線完成を待たず、起動引数 `--m1-battle` でBattleへ直接入れる。
+
+M1では同一Godot実ウィンドウ内で2つのauthoritative clientを成立させ、P1をマウス、P2をQ/Eで操作する。画面は通常の `BattleHUD` と `FighterVisual` を再利用し、ローカル戦闘ロジックではなくNakamaから受信したauthoritative eventで更新する。
+
+初期M1レイアウトでは1280×720内の中央に約5:4の戦闘領域候補を置き、左右余白を残す。5:4はM1でHuman Verificationする候補値であり、M1 PASSだけで最終採用とはしない。
+
+M1で最低限表示するもの:
+
+- P1 / P2キャラクター名
+- Round取得数
+- Hit数
+- 85秒timer
+- Round番号
+- OVERTIME
+- PARRY / DODGE / JUST PARRY / JUST DODGE
+- CLASH
+- STAGGER
+- SHORT detach / regrow
+- Round winner
+- Match winner / final score
+- 接続中・接続失敗・操作可能状態
+
+M1専用表示やデバッグ操作は、工程4の正式UI導線・最終キー設定・最終レイアウトを確定するものではない。
+
+### 15.10 Round取得・次Round開始表示
+
+M1でRoundを1本取得した場合、次Roundへ無表示で切り替えない。
+
+Round終了時は中央フィードバック領域に少なくとも次を表示する。
+
+```text
+P1 TAKES ROUND 1
+SCORE 1 - 0
+```
+
+表示はauthoritative `BO3_SCORE_CHANGED` を正本とし、clientで勝数を推測しない。
+
+Round取得表示は次Round Countdownと同時に出さない。M1では暫定2秒、中央フィードバック領域へ単独表示する。
+
+表示例:
+
+```text
+P1 TAKES ROUND 1
+SCORE 1 - 0
+```
+
+この2秒間は次Roundの `3 / 2 / 1 / GO!` を表示しない。表示終了後にCountdownへ遷移する。
+
+Match終了でない場合、その後の次Round準備では中央に次を大きく重ねる。
+
+```text
+ROUND 2
+3
+↓
+2
+↓
+1
+↓
+GO!
+```
+
+要件:
+
+- Countdown中も上部timer表示は次Round初期値 `85` を表示する
+- Countdown中はHit数を `0 / 5` へresetした状態で表示する
+- Countdown中はP1/P2 stateを `ROUND_LOCKED` として表示する
+- `GO!` で戦闘開始が視覚的に明確であること
+- `GO!` 後は前Roundのwinner messageを残し続けない
+- Round取得数は次Round中もHUD上部へ継続表示する
+- 5:4 Battle領域とアホ毛をCountdown文字が恒常的に隠さないこと
+
+Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade/scale等はclient側で追加できるが、開始時刻をclient単独で決めない。
+
 ## 16. UI-11 対戦結果
 
 ### 16.1 共通表示

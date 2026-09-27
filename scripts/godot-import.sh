@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+if [ "${AHOGE_GODOT_IMPORTED:-0}" = "1" ]; then
+  exit 0
+fi
+
 LOG_FILE="$(mktemp)"
 trap 'rm -f "$LOG_FILE"' EXIT
 

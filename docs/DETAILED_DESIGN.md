@@ -1373,6 +1373,123 @@ Contact到達時点ではまだPARRY / DODGE成功結果やHitを確定しない
 
 通信遅延を考慮したContactEventの時刻補正と100ms上限の具体的な補正方式は後続Issueで実装する。
 
+
+### 14.4 M1 Battle Core用authoritative実画面接続
+
+工程2完了直後のM1 #53では、工程4のGameFlow完成を待たず、UI-10 Battleへ直接入るデバッグ導線を用意する。
+
+M1用のデバッグ構成は次とする。
+
+```text
+Godot実ウィンドウ
+├─ P1: OnlineSession
+│   ├─ Device Authentication
+│   ├─ Realtime Socket
+│   └─ LONG_TEST / マウス操作
+└─ P2: M1デバッグ用Nakama client/socket
+    ├─ 実行ごとに別Device ID
+    ├─ Realtime Socket
+    └─ SHORT_TEST / Q・E操作
+
+P1 + P2
+→ 同一Ranked Matchmaker
+→ 同一authoritative match
+→ server確定event
+→ UI-10 HUD / FighterVisual
+```
+
+M1では1つのGodot process内に2つのNakama clientを保持してよい。これは操作・描画を1画面で早期確認するためのデバッグ構成であり、本番Ranked GameFlowで1processに2playerを保持する仕様ではない。
+
+操作:
+
+- P1 左クリック押下: `ATTACK_PRESS`
+- P1 左クリック解放: `ATTACK_RELEASE`
+- P1 右クリック: `DEFEND`
+- P2 Q押下: `ATTACK_PRESS`
+- P2 Q解放: `ATTACK_RELEASE`
+- P2 E: `DEFEND`
+
+M1のBattle表示はローカル `MatchCoordinator / CombatResolver` から勝敗を再計算しない。次のauthoritative eventを表示の正本として使用する。
+
+- `COMBAT_STATE_CHANGED`: Attack / Charge / Parry / Dodge / Stagger / ROUND_LOCKED
+- `DEFENSE_RESOLVED`: PARRY / DODGE / JUST_PARRY / JUST_DODGE
+- `ATTACK_CLASH`: CLASH
+- `HIT_CONFIRMED`: Hit演出
+- `ROUND_HIT_COUNT_CHANGED`: Hit数
+- `ROUND_TIMER_CHANGED`: 85秒timer
+- `ROUND_OVERTIME_STARTED`: OVERTIME
+- `ROUND_STARTED`: Round番号
+- `BO3_SCORE_CHANGED`: 取得Round数
+- `MATCH_RESULT`: Match終了・最終score
+- `ahoge_available`: SHORT detach / regrow表示
+
+見た目の頭部・アホ毛二次動作は引き続きGodot client側で行い、serverの戦闘判定へ逆流させない。
+
+M1デバッグ起動は通常GameFlowと分離し、起動引数 `--m1-battle` からUI-10へ直接入れる。M1用の内部2client構成、固定テストキャラクター、操作キーは検証専用であり、本番仕様へ昇格させない。
+
+#### 14.4.1 authoritative Round開始Countdown
+
+M1 Human Verificationで、Round終了後の85秒reset・1本取得・次Round開始が視覚的に分かりにくいことをblocking findingとして確認したため、Round開始をserver authoritativeなCountdown stateへ分離する。
+
+対象はRound 1を含む全Roundとする。
+
+server stateへ次を追加する。
+
+```text
+round_countdown_active
+round_countdown_start_tick
+round_countdown_value
+```
+
+Countdownは30Hz server tickを基準に3秒間とし、表示値を `3 → 2 → 1 → GO` とする。
+
+新規server event:
+
+```text
+opcode 114: ROUND_COUNTDOWN_CHANGED
+- round_number
+- countdown_value
+- server_tick
+```
+
+`countdown_value` は `3 / 2 / 1 / 0` の整数とし、`0` を `GO!` と解釈する。
+
+Round準備時の順序:
+
+1. 次Round番号を確定する
+2. Hit数を両者0へresetする
+3. timer表示値を85へresetする
+4. 両者を `ROUND_LOCKED` にする
+5. `ROUND_COUNTDOWN_CHANGED(3)` を通知する
+6. 1秒ごとに `2`、`1` を通知する
+7. Countdown中はcombat inputを受理せず、85秒timerも進めない
+8. Countdown終了tickで `ROUND_COUNTDOWN_CHANGED(0 = GO!)` を通知する
+9. 同tickで `ROUND_STARTED`、Hit 0、timer 85、両者 `IDLE` を通知する
+10. そのtickから85秒timerと戦闘入力を有効にする
+
+Round終了から次Round Countdownへ移る際、前Roundの `BO3_SCORE_CHANGED` で取得Round数を先に確定する。clientはこのscoreを「1本取得」の表示正本とし、Countdownとは別表示する。
+
+Round終了後は `Round Result表示フェーズ` を挟み、次Round Countdownへ即時遷移しない。
+
+M1の暫定値として、Round Result表示フェーズは2秒（30Hzで60tick）とする。これはM1 Human Verification用の暫定演出時間であり、正式UIの最終演出時間を確定するものではない。
+
+非最終Roundの順序:
+
+1. 5 Hit / TIMEOUT / OVERTIME_HITでRound勝者を確定
+2. 両者を `ROUND_LOCKED` にする
+3. `ROUND_RESULT` を通知する
+4. `BO3_SCORE_CHANGED` を通知し、取得Round数を更新する
+5. 2秒間は戦闘入力・timer進行・次Round Countdownを開始しない
+6. 2秒経過後に次Round番号へ進める
+7. 次Roundの `3 → 2 → 1 → GO!` Countdownを開始する
+8. `GO!` と同tickで戦闘と85秒timerを開始する
+
+Match終了Roundでは次Round Countdownへ進まず、`MATCH_RESULT` へ接続する。
+
+Countdown中に届いたclient戦闘入力は `INPUT_ACCEPTED` を返さず破棄し、input sequenceも消費しない。
+
+`GO!` はserver上の入力解禁と同じtickを表す。clientは視認性のため `GO!` 表示を短時間残してよいが、その間もserver timerは開始済みとする。
+
 ## 15. マッチメイキング
 
 ### 15.1 ランクマッチ

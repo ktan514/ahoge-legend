@@ -172,6 +172,18 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-match-result-smoke.sh
 ```
 
+M1 authoritative Battle UI integration smoke test:
+
+```bash
+./scripts/client-m1-battle-smoke.sh
+```
+
+M1 Godot実ウィンドウ起動:
+
+```bash
+./scripts/client-m1-battle.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -201,6 +213,39 @@ npm run build
 
 コマンドを実行していない場合はPASS扱いしない。
 
+## CI実行区分
+
+`Online foundation` は、開発中のPR反復速度と本番相当の回帰保証を分離する。
+
+### PR fast regression
+
+Pull Request更新時は、通常の認証・Realtime・Matchmaker・combat・Round / BO3 / Match Result・M1 headless smokeを実行する。ただし、85秒を実時間で待つ次の3本はPR fastから除外する。
+
+- `client-round-timer-smoke.sh`
+- `client-timeout-winner-smoke.sh`
+- `client-overtime-smoke.sh`
+
+85秒というproduction定数、2550tick換算、timeout / Overtimeのルール自体はheadless unit / protocol testで回帰する。
+
+PR fastではGodot importをjob冒頭で1回だけ実行し、各client smokeからの重複importを省略する。
+
+同一PRへ新しいcommitがpushされた場合、旧HEAD向けの実行はcancelし、最新HEADを優先する。
+
+PR fastのonline smokeは独立Runnerで並列実行する。各Runnerは独立したDocker Compose/Nakamaを持ち、異なるsmoke groupのMatchmaker clientを同一Nakamaへ混在させない。
+
+初期group:
+
+- `foundation`: auth / realtime / matchmaker / combat input / attack / Defense state / Defense result
+- `combat`: Contact outcome / Stagger / SHORT / combat integration / Hit count
+- `round`: 5 Hit / Round Result / M1 Battle UI
+- `match`: BO3 / Match Result
+
+### full regression
+
+`main` pushおよび手動 `workflow_dispatch` では、PR fast項目に加えて上記3本も実行し、productionの85秒を実時間で通す。
+
+full regressionを実行していない状態で「85秒authoritative E2E PASS」と記録しない。
+
 ## 保護対象branch
 
 - `main`
@@ -222,7 +267,7 @@ npm run build
 - `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 - `scripts/client-matchmaker-smoke.sh`: 2クライアントをDevice認証・Realtime接続し、Matchmaker成立から同一authoritative matchへのjoinまで検証する。
 - `server/nakama/src/combat_config.ts`: server authoritative戦闘の暫定時間値と30Hz tick換算・補間を一元管理する。
-- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数、85秒timer、5 Hitラウンド終了、timeout Hit数比較、Overtime次Hit終了、Round Result、2本先取BO3、Round reset、Match Result通知を定義する。
+- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数、85秒timer、5 Hitラウンド終了、timeout Hit数比較、Overtime次Hit終了、Round Result、2本先取BO3、3/2/1/GO Round Countdown、Round reset、Match Result通知を定義する。
 - `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 - `scripts/client-attack-state-smoke.sh`: 2クライアントで同じauthoritative攻撃状態遷移とContactEventを受信できることを検証する。
 - `scripts/client-defense-state-smoke.sh`: 2クライアントでPARRY / DODGE状態、攻撃キャンセル、Defense終了後復帰、Cooldown一時停止・再開を検証する。
@@ -237,8 +282,11 @@ npm run build
 - `scripts/client-timeout-winner-smoke.sh`: 1-0のHit数で85秒を完走し、timer 0、終了tickの両者ROUND_LOCKED、TIMEOUT Round Result、両client event一致を検証する。次Round lifecycleはBO3 smokeで検証する。
 - `scripts/client-overtime-smoke.sh`: 0-0 timeout、次tick Overtime開始、timer 0維持、PARRY / Clash継続、次の有効Hitでcount更新後ROUND_LOCKED、両client一致を検証する。
 - `scripts/client-round-result-smoke.sh`: HIT_LIMIT Round Resultのround番号、winner / loser、Hit数、finish cause、server tick、1回限り通知、両client一致を検証する。TIMEOUT / OVERTIME_HITは既存各smokeで同契約を回帰する。
-- `scripts/client-bo3-smoke.sh`: 1-0→1-1→2-1の最大3Roundを通し、Round Started、score、Hit数0 / timer85 / IDLE reset、input sequence継続、2勝後のmatch停止、Match Result、両client一致を検証する。
+- `scripts/client-bo3-smoke.sh`: 1-0→1-1→2-1の最大3Roundを通し、各Roundの3/2/1/GO Countdown、Countdown開始時のHit数0 / timer85 / ROUND_LOCKED、GOと同tickのRound Started / IDLE、score、input sequence継続、2勝後のmatch停止、Match Result、両client一致を検証する。
 - `scripts/client-match-result-smoke.sh`: 1勝・1-1ではMatch Result非通知、2勝確定時のwinner / loser / final score / final round / server tick、1回限り通知、終了後停止を検証する。
+- `src/ui/battle_m1_debug.gd`: M1専用にP1/P2の2つのNakama clientを同一Godot processで成立させ、authoritative eventをUI-10へ反映する。勝敗ルールは持たない。
+- `scripts/client-m1-battle-smoke.sh`: M1 Battle Sceneから2-client authoritative matchへjoinし、初期timer / Hit snapshotをHUD用stateへ受信できることをheadlessで検証する。
+- `scripts/client-m1-battle.sh`: M1 Human Verification用に `--m1-battle` でGodot実ウィンドウを起動する。
 
 ## アセット管理
 

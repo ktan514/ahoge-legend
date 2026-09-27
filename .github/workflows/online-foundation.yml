@@ -1,6 +1,7 @@
 name: Online foundation
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "docker-compose.yml"
@@ -25,6 +26,12 @@ on:
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
+      - "scripts/client-m1-battle.sh"
+      - "scripts/client-m1-battle-smoke.sh"
+      - "src/ui/app_root.gd"
+      - "src/ui/battle_hud.gd"
+      - "src/ui/battle_m1_debug.gd"
+      - "scenes/screens/battle/BattleM1Debug.tscn"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -76,6 +83,12 @@ on:
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
+      - "scripts/client-m1-battle.sh"
+      - "scripts/client-m1-battle-smoke.sh"
+      - "src/ui/app_root.gd"
+      - "src/ui/battle_hud.gd"
+      - "src/ui/battle_m1_debug.gd"
+      - "scenes/screens/battle/BattleM1Debug.tscn"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -102,26 +115,23 @@ on:
       - "tests/match_result_smoke.gd"
       - ".github/workflows/online-foundation.yml"
 
+concurrency:
+  group: online-foundation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
+    name: test (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(github.event_name == 'pull_request' && '["foundation","combat","round","match"]' || '["foundation","combat","round","match","long"]') }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: TypeScript type-check and build
-        working-directory: server/nakama
-        run: |
-          npm install
-          npm run type-check
-          npm run build
 
       - name: Validate Docker Compose
         run: docker compose config
@@ -146,69 +156,49 @@ jobs:
       - name: Install Godot 4.7.2
         shell: bash
         run: |
-          curl -L --fail --retry 3             -o godot.zip             https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          curl -L --fail --retry 3 \
+            -o godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
           unzip -q godot.zip
           sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           godot --version
 
+      - name: Import Godot project once
+        shell: bash
+        run: |
+          ./scripts/godot-import.sh
+          echo "AHOGE_GODOT_IMPORTED=1" >> "$GITHUB_ENV"
+
       - name: Godot client authentication smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-online-smoke.sh
 
       - name: Godot realtime socket smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-realtime-smoke.sh
 
       - name: Godot ranked matchmaker smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-matchmaker-smoke.sh
 
       - name: Godot authoritative combat input smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-combat-input-smoke.sh
 
       - name: Godot authoritative attack state smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-attack-state-smoke.sh
 
       - name: Godot authoritative Defense state smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-defense-state-smoke.sh
 
       - name: Godot authoritative Defense result smoke
+        if: matrix.group == 'foundation'
         run: ./scripts/client-defense-result-smoke.sh
 
-      - name: Godot authoritative Contact outcome smoke
-        run: ./scripts/client-contact-outcome-smoke.sh
-
-      - name: Godot authoritative Stagger smoke
-        run: ./scripts/client-stagger-smoke.sh
-
-      - name: Godot authoritative SHORT state smoke
-        run: ./scripts/client-short-state-smoke.sh
-
-      - name: Godot 2-client combat integration smoke
-        run: ./scripts/client-combat-integration-smoke.sh
-
-      - name: Godot authoritative Hit count smoke
-        run: ./scripts/client-hit-count-smoke.sh
-
-      - name: Godot authoritative 85 second timer smoke
-        run: ./scripts/client-round-timer-smoke.sh
-
-      - name: Godot authoritative 5 Hit round win smoke
-        run: ./scripts/client-hit-limit-smoke.sh
-
-      - name: Godot authoritative timeout winner smoke
-        run: ./scripts/client-timeout-winner-smoke.sh
-
-      - name: Godot authoritative Overtime smoke
-        run: ./scripts/client-overtime-smoke.sh
-
-      - name: Godot authoritative Round Result smoke
-        run: ./scripts/client-round-result-smoke.sh
-
-      - name: Godot authoritative BO3 full match smoke
-        run: ./scripts/client-bo3-smoke.sh
-
-      - name: Godot authoritative Match Result smoke
-        run: ./scripts/client-match-result-smoke.sh
-
       - name: Verify restart with persistent volume
+        if: matrix.group == 'foundation'
         shell: bash
         run: |
           docker compose restart postgres nakama
@@ -223,6 +213,58 @@ jobs:
           docker compose ps
           docker compose logs
           exit 1
+
+      - name: Godot authoritative Contact outcome smoke
+        if: matrix.group == 'combat'
+        run: ./scripts/client-contact-outcome-smoke.sh
+
+      - name: Godot authoritative Stagger smoke
+        if: matrix.group == 'combat'
+        run: ./scripts/client-stagger-smoke.sh
+
+      - name: Godot authoritative SHORT state smoke
+        if: matrix.group == 'combat'
+        run: ./scripts/client-short-state-smoke.sh
+
+      - name: Godot 2-client combat integration smoke
+        if: matrix.group == 'combat'
+        run: ./scripts/client-combat-integration-smoke.sh
+
+      - name: Godot authoritative Hit count smoke
+        if: matrix.group == 'combat'
+        run: ./scripts/client-hit-count-smoke.sh
+
+      - name: Godot authoritative 5 Hit round win smoke
+        if: matrix.group == 'round'
+        run: ./scripts/client-hit-limit-smoke.sh
+
+      - name: Godot authoritative Round Result smoke
+        if: matrix.group == 'round'
+        run: ./scripts/client-round-result-smoke.sh
+
+      - name: Godot M1 authoritative Battle UI smoke
+        if: matrix.group == 'round'
+        run: ./scripts/client-m1-battle-smoke.sh
+
+      - name: Godot authoritative BO3 full match smoke
+        if: matrix.group == 'match'
+        run: ./scripts/client-bo3-smoke.sh
+
+      - name: Godot authoritative Match Result smoke
+        if: matrix.group == 'match'
+        run: ./scripts/client-match-result-smoke.sh
+
+      - name: Godot authoritative 85 second timer smoke
+        if: matrix.group == 'long'
+        run: ./scripts/client-round-timer-smoke.sh
+
+      - name: Godot authoritative timeout winner smoke
+        if: matrix.group == 'long'
+        run: ./scripts/client-timeout-winner-smoke.sh
+
+      - name: Godot authoritative Overtime smoke
+        if: matrix.group == 'long'
+        run: ./scripts/client-overtime-smoke.sh
 
       - name: Shutdown
         if: always()

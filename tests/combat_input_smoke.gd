@@ -63,6 +63,13 @@ func _run() -> void:
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
+	var round_one_started := [false]
+	online_session.round_started.connect(
+		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
+			if round_number == 1:
+				round_one_started[0] = true
+	)
+
 
 	var p1_accepted: Array[Dictionary] = []
 	online_session.combat_input_accepted.connect(
@@ -107,6 +114,19 @@ func _run() -> void:
 		return
 	if p1_joined[0] != _second_match_id:
 		_fail("P1とP2のmatch IDが一致しません。")
+		return
+
+	await _send_explicit(p1_joined[0], 1, CombatInputProtocolScript.ACTION_ATTACK_PRESS)
+	await create_timer(0.25).timeout
+	if _count_user_events(p1_accepted, p1_user_id) != 0 or _count_user_events(_p2_accepted, p1_user_id) != 0:
+		_fail("Round Countdown中の入力が受理されました。")
+		return
+
+	var round_start_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < round_start_deadline and not round_one_started[0]:
+		await create_timer(0.02).timeout
+	if not round_one_started[0]:
+		_fail("Round 1のauthoritative開始を受信できませんでした。")
 		return
 
 	var send_result: Dictionary = await online_session.send_combat_input(

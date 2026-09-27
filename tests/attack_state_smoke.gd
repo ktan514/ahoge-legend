@@ -64,6 +64,13 @@ func _run() -> void:
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
+	var round_one_started := [false]
+	online_session.round_started.connect(
+		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
+			if round_number == 1:
+				round_one_started[0] = true
+	)
+
 
 	var p1_states: Array[Dictionary] = []
 	var p1_contacts: Array[Dictionary] = []
@@ -121,6 +128,16 @@ func _run() -> void:
 		_fail("P1とP2のmatch IDが一致しません。")
 		return
 
+	# 固定時間ではなくauthoritative ROUND_STARTEDを待ってから戦闘を開始する。
+	var round_start_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < round_start_deadline and not round_one_started[0]:
+		await create_timer(0.02).timeout
+	if not round_one_started[0]:
+		_fail("Round 1のauthoritative開始を受信できませんでした。")
+		return
+	var p1_state_start := p1_states.size()
+	var p2_state_start := _p2_states.size()
+
 	var press_result: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_PRESS
 	)
@@ -146,10 +163,10 @@ func _run() -> void:
 	var release_sequence := int(release_result.get("input_sequence", 0))
 
 	for expected_state in ["WINDUP", "STRIKE", "COOLDOWN", "IDLE"]:
-		if not await _wait_for_state(p1_states, p1_user_id, expected_state, 5000):
+		if not await _wait_for_state_from(p1_states, p1_user_id, expected_state, p1_state_start, 5000):
 			_fail("P1が%sを受信できませんでした。" % expected_state)
 			return
-		if not await _wait_for_state(_p2_states, p1_user_id, expected_state, 5000):
+		if not await _wait_for_state_from(_p2_states, p1_user_id, expected_state, p2_state_start, 5000):
 			_fail("P2がP1の%sを受信できませんでした。" % expected_state)
 			return
 
@@ -160,8 +177,8 @@ func _run() -> void:
 		_fail("P2がP1のContactEventを受信できませんでした。")
 		return
 
-	var p1_attack_states := _states_for_user(p1_states, p1_user_id)
-	var p2_attack_states := _states_for_user(_p2_states, p1_user_id)
+	var p1_attack_states := _states_for_user_from(p1_states, p1_user_id, p1_state_start)
+	var p2_attack_states := _states_for_user_from(_p2_states, p1_user_id, p2_state_start)
 	var expected_states := ["CHARGING", "WINDUP", "STRIKE", "COOLDOWN", "IDLE"]
 	if p1_attack_states != expected_states:
 		_fail("P1の攻撃状態順序が不正です: %s" % str(p1_attack_states))
@@ -192,7 +209,7 @@ func _run() -> void:
 		_fail("IDLE中のATTACK_RELEASE自体がtransport拒否されました。")
 		return
 	await create_timer(0.3).timeout
-	if _states_for_user(p1_states, p1_user_id).size() != states_before_invalid:
+	if _states_for_user_from(p1_states, p1_user_id, p1_state_start).size() != states_before_invalid:
 		_fail("IDLE中ATTACK_RELEASEが攻撃状態へ適用されました。")
 		return
 
@@ -223,6 +240,23 @@ func _wait_for_state(
 	return false
 
 
+func _wait_for_state_from(
+	events: Array[Dictionary],
+	user_id: String,
+	state: String,
+	start_index: int,
+	timeout_ms: int
+) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for index in range(maxi(start_index, 0), events.size()):
+			var event := events[index]
+			if str(event["user_id"]) == user_id and str(event["state"]) == state:
+				return true
+		await create_timer(0.05).timeout
+	return false
+
+
 func _wait_for_contact(
 	events: Array[Dictionary],
 	attacker_id: String,
@@ -240,6 +274,15 @@ func _wait_for_contact(
 func _states_for_user(events: Array[Dictionary], user_id: String) -> Array:
 	var states: Array = []
 	for event in events:
+		if str(event["user_id"]) == user_id:
+			states.append(str(event["state"]))
+	return states
+
+
+func _states_for_user_from(events: Array[Dictionary], user_id: String, start_index: int) -> Array:
+	var states: Array = []
+	for index in range(maxi(start_index, 0), events.size()):
+		var event := events[index]
 		if str(event["user_id"]) == user_id:
 			states.append(str(event["state"]))
 	return states

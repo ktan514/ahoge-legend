@@ -75,6 +75,13 @@ func _run() -> void:
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
+	var round_one_start_tick := [-1]
+	online_session.round_started.connect(
+		func(round_number: int, _round_wins: Dictionary, server_tick: int) -> void:
+			if round_number == 1:
+				round_one_start_tick[0] = server_tick
+	)
+
 
 	var p1_start: Dictionary = await online_session.start_ranked_matchmaking(
 		1500,
@@ -116,9 +123,17 @@ func _run() -> void:
 		_fail("P1/P2 match IDが一致しません。")
 		return
 
-	var start_timer := await _wait_timer_pair(85, 5000)
+	# authoritative GO / ROUND_STARTEDを基準に85秒計測を開始する。
+	var round_start_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < round_start_deadline and round_one_start_tick[0] < 0:
+		await create_timer(0.02).timeout
+	if round_one_start_tick[0] < 0:
+		_fail("Round 1のauthoritative開始を受信できませんでした。")
+		return
+
+	var start_timer := await _wait_timer_pair_at_tick(85, round_one_start_tick[0], 5000)
 	if start_timer.is_empty():
-		_fail("Round timer 85を受信できませんでした。")
+		_fail("GOと同tickのRound timer 85を受信できませんでした。")
 		return
 
 	# timeout前にP1だけ1 Hitを確定し、1-0を作る。
@@ -397,6 +412,36 @@ func _find_count(
 		if str(event.get("user_id", "")) == user_id \
 				and int(event.get("hit_count", -1)) == hit_count \
 				and int(event.get("input_sequence", -1)) == input_sequence:
+			return event
+	return {}
+
+
+func _wait_timer_pair_at_tick(
+	remaining_seconds: int,
+	server_tick: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var first := _find_timer_at_tick(_p1_timers, remaining_seconds, server_tick)
+		var second := _find_timer_at_tick(_p2_timers, remaining_seconds, server_tick)
+		if not first.is_empty() and not second.is_empty():
+			if first != second:
+				_fail("P1/P2でRound timer payloadが一致しません。")
+				return {}
+			return first
+		await create_timer(0.02).timeout
+	return {}
+
+
+func _find_timer_at_tick(
+	events: Array[Dictionary],
+	remaining_seconds: int,
+	server_tick: int
+) -> Dictionary:
+	for event in events:
+		if int(event.get("remaining_seconds", -1)) == remaining_seconds \
+				and int(event.get("server_tick", -1)) == server_tick:
 			return event
 	return {}
 

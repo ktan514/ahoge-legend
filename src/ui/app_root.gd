@@ -3,18 +3,24 @@ extends Control
 const TOP_MENU_SCENE := preload("res://scenes/screens/top_menu/TopMenu.tscn")
 const CHARACTER_SELECT_SCENE := preload("res://scenes/screens/character_select/CharacterSelect.tscn")
 const BATTLE_SCENE := preload("res://scenes/screens/battle/Battle.tscn")
+const M1_BATTLE_SCENE := preload("res://scenes/screens/battle/BattleM1Debug.tscn")
 const MATCH_RESULT_SCENE := preload("res://scenes/screens/result/MatchResult.tscn")
 
 var _current_screen: Control
 var _last_player_one_id: String = "LONG_TEST"
 var _last_player_two_id: String = "SHORT_TEST"
+var _m1_direct_mode: bool = false
 
 
 func _ready() -> void:
 	# AppRoot自身は画面全体を覆うが、マウスイベントを消費しない。
 	# 各画面内のButton等は子Controlとして通常どおり入力を受ける。
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_show_top_menu()
+	_m1_direct_mode = OS.get_cmdline_user_args().has("--m1-battle")
+	if _m1_direct_mode:
+		_show_m1_authoritative_battle()
+	else:
+		_show_top_menu()
 
 
 func _show_top_menu() -> void:
@@ -39,6 +45,11 @@ func _show_battle(player_one_id: String, player_two_id: String) -> void:
 	_replace_screen_instance(screen)
 	screen.connect("match_completed", Callable(self, "_show_match_result"))
 	screen.connect("exit_requested", Callable(self, "_show_top_menu"))
+
+
+func _show_m1_authoritative_battle() -> void:
+	var screen = _replace_screen(M1_BATTLE_SCENE)
+	screen.connect("exit_requested", Callable(self, "_on_m1_exit_requested"))
 
 
 func _show_match_result(summary: Dictionary) -> void:
@@ -66,6 +77,13 @@ func _replace_screen_instance(instance: Control) -> void:
 		_current_screen.queue_free()
 	_current_screen = instance
 	add_child(_current_screen)
+
+
+func _on_m1_exit_requested() -> void:
+	if _m1_direct_mode:
+		get_tree().quit()
+	else:
+		_show_top_menu()
 
 
 func _on_exit_requested() -> void:

@@ -27,6 +27,8 @@ var _p1_started: Array[Dictionary] = []
 var _p2_started: Array[Dictionary] = []
 var _p1_match_results: Array[Dictionary] = []
 var _p2_match_results: Array[Dictionary] = []
+var _p1_countdowns: Array[Dictionary] = []
+var _p2_countdowns: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -124,6 +126,12 @@ func _run() -> void:
 		_fail("P1/P2 match IDが一致しません。")
 		return
 
+	var countdown_one := await _wait_round_countdown_pair(1, 7000)
+	if countdown_one.is_empty():
+		return
+	if not await _assert_countdown_reset(countdown_one, p1_user_id, p2_user_id, 5000):
+		return
+
 	var round_one := await _wait_round_started_pair(1, p1_user_id, 0, p2_user_id, 0, 5000)
 	if round_one.is_empty():
 		_fail("Round 1開始通知を受信できませんでした。")
@@ -152,7 +160,20 @@ func _run() -> void:
 		_fail("1勝時にMatch Resultが通知されました。")
 		return
 
+	var round_one_score := _find_score(_p1_scores, 1)
+	var countdown_two := await _wait_round_countdown_pair(2, 7000)
+	if countdown_two.is_empty():
+		return
+	if int(countdown_two.get("start_tick", -1)) - int(round_one_score.get("server_tick", -1)) != 60:
+		_fail("Round 1取得表示からRound 2 Countdown開始まで60tickではありません。")
+		return
+	if not await _assert_countdown_reset(countdown_two, p1_user_id, p2_user_id, 5000):
+		return
+
 	var round_two := await _wait_round_started_pair(2, p1_user_id, 1, p2_user_id, 0, 5000)
+	if int(round_two.get("server_tick", -1)) != int(countdown_two.get("go_tick", -2)):
+		_fail("Round 2 GOとRound Startedが同じserver tickではありません。")
+		return
 	if round_two.is_empty():
 		_fail("Round 2開始通知を受信できませんでした。")
 		return
@@ -176,7 +197,20 @@ func _run() -> void:
 		_fail("1-1時にMatch Resultが通知されました。")
 		return
 
+	var round_two_score := _find_score(_p1_scores, 2)
+	var countdown_three := await _wait_round_countdown_pair(3, 7000)
+	if countdown_three.is_empty():
+		return
+	if int(countdown_three.get("start_tick", -1)) - int(round_two_score.get("server_tick", -1)) != 60:
+		_fail("Round 2取得表示からRound 3 Countdown開始まで60tickではありません。")
+		return
+	if not await _assert_countdown_reset(countdown_three, p1_user_id, p2_user_id, 5000):
+		return
+
 	var round_three := await _wait_round_started_pair(3, p1_user_id, 1, p2_user_id, 1, 5000)
+	if int(round_three.get("server_tick", -1)) != int(countdown_three.get("go_tick", -2)):
+		_fail("Round 3 GOとRound Startedが同じserver tickではありません。")
+		return
 	if round_three.is_empty():
 		_fail("Round 3開始通知を受信できませんでした。")
 		return
@@ -453,7 +487,8 @@ func _on_first_match_state(match_state) -> void:
 		_p1_results,
 		_p1_scores,
 		_p1_started,
-		_p1_match_results
+		_p1_match_results,
+		_p1_countdowns
 	)
 
 
@@ -469,7 +504,8 @@ func _on_second_match_state(match_state) -> void:
 		_p2_results,
 		_p2_scores,
 		_p2_started,
-		_p2_match_results
+		_p2_match_results,
+		_p2_countdowns
 	)
 
 
@@ -482,7 +518,8 @@ func _collect(
 	results: Array[Dictionary],
 	scores: Array[Dictionary],
 	started: Array[Dictionary],
-	match_results: Array[Dictionary]
+	match_results: Array[Dictionary],
+	countdowns: Array[Dictionary]
 ) -> void:
 	var op_code := int(match_state.op_code)
 	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
@@ -524,6 +561,13 @@ func _collect(
 		var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
 		if not event.is_empty():
 			match_results.append(event)
+		return
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_COUNTDOWN_CHANGED:
+		var event := CombatInputProtocolScript.parse_round_countdown_changed_payload(
+			str(match_state.data)
+		)
+		if not event.is_empty():
+			countdowns.append(event)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -787,6 +831,82 @@ func _find_score(events: Array[Dictionary], completed_round_number: int) -> Dict
 		if int(event.get("completed_round_number", -1)) == completed_round_number:
 			return event
 	return {}
+
+
+func _wait_round_countdown_pair(round_number: int, timeout_ms: int) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var first := _countdown_events_for_round(_p1_countdowns, round_number)
+		var second := _countdown_events_for_round(_p2_countdowns, round_number)
+		if first.size() >= 4 and second.size() >= 4:
+			if first != second:
+				_fail("P1/P2でRound %d Countdown列が一致しません。" % round_number)
+				return {}
+			var expected := [3, 2, 1, 0]
+			for index in range(4):
+				if int(first[index].get("countdown_value", -1)) != expected[index]:
+					_fail("Round %d Countdownが3/2/1/GOの順ではありません。" % round_number)
+					return {}
+				if index > 0:
+					var tick_gap := int(first[index].get("server_tick", -1)) - int(first[index - 1].get("server_tick", -1))
+					if tick_gap != 30:
+						_fail("Round %d Countdown間隔が30tickではありません。" % round_number)
+						return {}
+			return {
+				"start_tick": int(first[0].get("server_tick", -1)),
+				"go_tick": int(first[3].get("server_tick", -1)),
+			}
+		await create_timer(0.02).timeout
+	_fail("Round %d Countdownを両clientで受信できませんでした。" % round_number)
+	return {}
+
+
+func _countdown_events_for_round(events: Array[Dictionary], round_number: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for event in events:
+		if int(event.get("round_number", -1)) == round_number:
+			result.append(event)
+	return result
+
+
+func _assert_countdown_reset(
+	countdown: Dictionary,
+	p1_user_id: String,
+	p2_user_id: String,
+	timeout_ms: int
+) -> bool:
+	var start_tick := int(countdown.get("start_tick", -1))
+	if (await _wait_timer_pair_at_tick(85, start_tick, timeout_ms)).is_empty():
+		_fail("Countdown開始tickでtimer 85へresetされていません。")
+		return false
+	if not await _wait_zero_count_pair(p1_user_id, p2_user_id, start_tick, timeout_ms):
+		_fail("Countdown開始tickでHit数0へresetされていません。")
+		return false
+	if not await _wait_state_at_tick_pair(p1_user_id, "ROUND_LOCKED", start_tick, timeout_ms):
+		_fail("Countdown中にP1がROUND_LOCKEDではありません。")
+		return false
+	if not await _wait_state_at_tick_pair(p2_user_id, "ROUND_LOCKED", start_tick, timeout_ms):
+		_fail("Countdown中にP2がROUND_LOCKEDではありません。")
+		return false
+	var go_tick := int(countdown.get("go_tick", -1))
+	if _timer_changed_during_countdown(_p1_timers, start_tick, go_tick) 			or _timer_changed_during_countdown(_p2_timers, start_tick, go_tick):
+		_fail("Countdown中にRound timerが85から進みました。")
+		return false
+	return true
+
+
+func _timer_changed_during_countdown(
+	events: Array[Dictionary],
+	start_tick: int,
+	go_tick: int
+) -> bool:
+	for event in events:
+		var server_tick := int(event.get("server_tick", -1))
+		if server_tick < start_tick or server_tick >= go_tick:
+			continue
+		if int(event.get("remaining_seconds", -1)) != 85:
+			return true
+	return false
 
 
 func _wait_round_started_pair(

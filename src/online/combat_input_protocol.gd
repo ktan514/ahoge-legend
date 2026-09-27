@@ -14,6 +14,7 @@ const OPCODE_ROUND_RESULT: int = 110
 const OPCODE_BO3_SCORE_CHANGED: int = 111
 const OPCODE_ROUND_STARTED: int = 112
 const OPCODE_MATCH_RESULT: int = 113
+const OPCODE_ROUND_COUNTDOWN_CHANGED: int = 114
 
 const ACTION_ATTACK_PRESS: String = "ATTACK_PRESS"
 const ACTION_ATTACK_RELEASE: String = "ATTACK_RELEASE"
@@ -295,6 +296,24 @@ static func parse_match_result_payload(payload: String) -> Dictionary:
 		return {}
 	var final_round_number := int(parsed["final_round_number"])
 	if final_round_number < 2 or final_round_number > 3:
+		return {}
+	if int(parsed["server_tick"]) < 0:
+		return {}
+	return parsed
+
+
+static func parse_round_countdown_changed_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	for key in ["round_number", "countdown_value", "server_tick"]:
+		if not parsed.has(key):
+			return {}
+	var round_number := int(parsed["round_number"])
+	var countdown_value := int(parsed["countdown_value"])
+	if round_number < 1 or round_number > 3:
+		return {}
+	if countdown_value < 0 or countdown_value > 3:
 		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
