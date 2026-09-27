@@ -119,6 +119,7 @@ func _run() -> void:
 		return
 
 	# DefenseなしContactはNONE。
+	var none_state_index := _p1_states.size()
 	var none_sequence := await _start_p1_attack(online_session, p1_user_id, 0.0)
 	if none_sequence <= 0:
 		return
@@ -126,18 +127,19 @@ func _run() -> void:
 	var none_p2 := await _wait_for_result(_p2_results, p1_user_id, none_sequence, 5000)
 	if not _assert_result_pair(none_p1, none_p2, "NONE"):
 		return
-	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", 0, 5000):
+	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", none_state_index, 5000):
 		_fail("NONE検証後にP1がIDLEへ復帰しませんでした。")
 		return
 
 	# 通常攻撃のSTRIKE開始直後にDefenseし、通常PARRYを成立させる。
 	var parry_state_index := _p1_states.size()
+	var parry_p2_state_index := _p2_states.size()
 	var parry_sequence := await _start_p1_attack(online_session, p1_user_id, 0.0)
 	if parry_sequence <= 0:
 		return
 	if not await _send_second_defend():
 		return
-	if not await _wait_for_state(_p2_states, p2_user_id, "PARRY", 0, 5000):
+	if not await _wait_for_state(_p2_states, p2_user_id, "PARRY", parry_p2_state_index, 5000):
 		_fail("P2がPARRYへ遷移しませんでした。")
 		return
 	var parry_p1 := await _wait_for_result(_p1_results, p1_user_id, parry_sequence, 5000)
@@ -147,7 +149,7 @@ func _run() -> void:
 	if not await _wait_for_state(_p1_states, p1_user_id, "IDLE", parry_state_index, 5000):
 		_fail("PARRY検証後にP1がIDLEへ復帰しませんでした。")
 		return
-	if not await _wait_for_state(_p2_states, p2_user_id, "IDLE", 0, 5000):
+	if not await _wait_for_state(_p2_states, p2_user_id, "IDLE", parry_p2_state_index, 5000):
 		_fail("PARRY検証後にP2がIDLEへ復帰しませんでした。")
 		return
 
