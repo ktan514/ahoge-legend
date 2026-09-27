@@ -244,11 +244,11 @@ jobs:
 
       - name: Godot reconnect continuity smoke
         if: matrix.group == 'round'
-        run: ./scripts/client-reconnect-smoke.sh
+        run: bash ./scripts/client-reconnect-smoke.sh
 
       - name: Godot reconnect timeout smoke
         if: matrix.group == 'round'
-        run: ./scripts/client-reconnect-timeout-smoke.sh
+        run: bash ./scripts/client-reconnect-timeout-smoke.sh
 
       - name: Godot authoritative 5 Hit round win smoke
         if: matrix.group == 'round'
