@@ -35,6 +35,7 @@ func _init() -> void:
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
+	_test_authoritative_defense_result_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -354,6 +355,31 @@ func _test_authoritative_defense_protocol() -> void:
 	)
 	_expect_equal(dodge_event["state"], "DODGE", "authoritative DODGE状態をdecodeできる")
 	_expect_false(bool(dodge_event["ahoge_available"]), "DODGEはahoge unavailable状態を保持できる")
+
+
+func _test_authoritative_defense_result_protocol() -> void:
+	for result in ["NONE", "PARRY", "JUST_PARRY", "DODGE", "JUST_DODGE"]:
+		var payload := JSON.stringify({
+			"attacker_id": "player-1",
+			"defender_id": "player-2",
+			"server_tick": 321,
+			"input_sequence": 9,
+			"result": result,
+		})
+		var event := CombatInputProtocolScript.parse_defense_resolved_payload(payload)
+		_expect_equal(event["result"], result, "DefenseResult %sをdecodeできる" % result)
+		_expect_equal(int(event["input_sequence"]), 9, "DefenseResultは攻撃release sequenceを保持する")
+
+	var invalid := CombatInputProtocolScript.parse_defense_resolved_payload(
+		JSON.stringify({
+			"attacker_id": "player-1",
+			"defender_id": "player-2",
+			"server_tick": 321,
+			"input_sequence": 9,
+			"result": "UNKNOWN",
+		})
+	)
+	_expect_true(invalid.is_empty(), "未知のDefenseResultを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:

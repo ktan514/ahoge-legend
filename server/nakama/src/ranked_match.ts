@@ -2,6 +2,13 @@ const COMBAT_INPUT_OPCODE = 1;
 const INPUT_ACCEPTED_OPCODE = 101;
 const COMBAT_STATE_CHANGED_OPCODE = 102;
 const CONTACT_REACHED_OPCODE = 103;
+const DEFENSE_RESOLVED_OPCODE = 104;
+
+const DEFENSE_RESULT_NONE = "NONE";
+const DEFENSE_RESULT_PARRY = "PARRY";
+const DEFENSE_RESULT_JUST_PARRY = "JUST_PARRY";
+const DEFENSE_RESULT_DODGE = "DODGE";
+const DEFENSE_RESULT_JUST_DODGE = "JUST_DODGE";
 
 const COMBAT_STATE_IDLE = "IDLE";
 const COMBAT_STATE_CHARGING = "CHARGING";
@@ -210,6 +217,58 @@ function findOpponentUserId(
   return "";
 }
 
+function resolveDefenseResult(
+  state: AhogeRankedMatchState,
+  defenderId: string,
+  tick: number
+): string {
+  const defenderState = state.combatStateByUser[defenderId];
+  if (!defenderState) {
+    return DEFENSE_RESULT_NONE;
+  }
+
+  if (
+    defenderState.state !== COMBAT_STATE_PARRY &&
+    defenderState.state !== COMBAT_STATE_DODGE
+  ) {
+    return DEFENSE_RESULT_NONE;
+  }
+
+  if (tick >= defenderState.defenseEndTick) {
+    return DEFENSE_RESULT_NONE;
+  }
+
+  const isJust = tick < defenderState.defenseJustUntilTick;
+  if (defenderState.state === COMBAT_STATE_PARRY) {
+    return isJust ? DEFENSE_RESULT_JUST_PARRY : DEFENSE_RESULT_PARRY;
+  }
+
+  return isJust ? DEFENSE_RESULT_JUST_DODGE : DEFENSE_RESULT_DODGE;
+}
+
+function broadcastDefenseResolved(
+  dispatcher: nkruntime.MatchDispatcher,
+  attackerId: string,
+  defenderId: string,
+  combatState: AuthoritativeCombatState,
+  tick: number,
+  result: string
+): void {
+  dispatcher.broadcastMessage(
+    DEFENSE_RESOLVED_OPCODE,
+    JSON.stringify({
+      attacker_id: attackerId,
+      defender_id: defenderId,
+      server_tick: tick,
+      input_sequence: combatState.releaseSequence,
+      result: result
+    }),
+    null,
+    null,
+    true
+  );
+}
+
 function broadcastContactReached(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -221,6 +280,8 @@ function broadcastContactReached(
   if (!defenderId) {
     return;
   }
+
+  const defenseResult = resolveDefenseResult(state, defenderId, tick);
 
   dispatcher.broadcastMessage(
     CONTACT_REACHED_OPCODE,
@@ -234,6 +295,15 @@ function broadcastContactReached(
     null,
     null,
     true
+  );
+
+  broadcastDefenseResolved(
+    dispatcher,
+    attackerId,
+    defenderId,
+    combatState,
+    tick,
+    defenseResult
   );
 }
 
@@ -446,8 +516,6 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
-  advanceCombatStates(dispatcher, state, tick);
-
   messages.forEach(function (message): void {
     if (message.opCode !== COMBAT_INPUT_OPCODE) {
       return;
@@ -512,6 +580,10 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
       applyAttackInput(dispatcher, state, userId, action, sequence, tick);
     }
   });
+
+  // 同一tickで受理した入力を、そのtickのContact/Defense判定へ先に反映する。
+  // Defense開始tickをactiveに含む設計のため、state advanceは入力処理後に行う。
+  advanceCombatStates(dispatcher, state, tick);
 
   return {state: state};
 };

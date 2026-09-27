@@ -461,9 +461,40 @@ DefenseResult
 
 攻撃が有効ヒット位置へ到達した時点で、相手のDefenseContextを参照する。
 
-攻撃到達が `just_until` 以内であればジャスト成功とする。
+オンラインauthoritative matchではクライアント時刻・描画フレーム・見た目のアホ毛位置を判定へ使用せず、ContactEventが到達したserver tickだけを基準にする。
 
-実際の受付時間は未決。
+Defenseのtick境界は次で固定する。
+
+- Defense開始tickはactiveに含む
+- `defense_active_until_tick` は終了境界とし、そのtick自体はactiveに含めない
+- `defense_just_until_tick` は終了境界とし、そのtick自体はJustに含めない
+- したがって `contact_tick < defense_just_until_tick` ならJust、Just終了後かつ `contact_tick < defense_active_until_tick` なら通常Defense、それ以外はNONE
+
+Contact到達時に確定する結果は次とする。
+
+```text
+DefenseResult
+- NONE
+- PARRY
+- JUST_PARRY
+- DODGE
+- JUST_DODGE
+```
+
+serverはContactEventを維持したまま、同じContactに対応するDefense結果を両クライアントへ通知する。
+
+```text
+DefenseResultEvent
+- attacker_id
+- defender_id
+- input_sequence
+- server_tick
+- result
+```
+
+`input_sequence` は元の攻撃release sequenceと一致させ、ContactEventとDefenseResultEventを対応付ける。
+
+DODGE / JUST_DODGEは `ahoge_available = false` のDefenseContextに対して同じtick規則を適用する。SHORT detach / regrowによる実際の `ahoge_available=false` 接続は後続工程で行う。
 
 ### 8.4 ジャスト成功時
 
@@ -471,6 +502,8 @@ DefenseResult
 - 防御側ノーダメージ
 - 攻撃側をStaggerへ遷移
 - 視覚・UI上で通常防御と区別する
+
+authoritative化は段階的に行う。DefenseResultの確定時点ではJust成功を結果として通知するところまでとし、攻撃側をStaggerへ実遷移させる処理は後続Issueで接続する。
 
 ## 9. 攻撃相殺
 

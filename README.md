@@ -223,6 +223,23 @@ AHOGE LEGEND defense state smoke: PASS
 PARRYは0.18秒、DODGEは0.22秒、Just受付は0.07秒の暫定値を30Hz tickへ量子化して保持します。
 この段階ではDefense stateまでをserver authoritativeとし、Contact到達時のParry / Dodge / Just結果、Clash、Hitは後続Issueで確定します。
 
+## Authoritative Defense result
+
+ContactEvent到達時のserver tickで相手のDefense stateを参照し、`NONE / PARRY / JUST_PARRY / DODGE / JUST_DODGE` を確定して両クライアントへ通知します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-defense-result-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND defense result smoke: PASS
+```
+
+Defense active / Justの終了tickは排他的境界として扱います。Attack Clash / Hit / Stagger実適用は後続Issueで接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`

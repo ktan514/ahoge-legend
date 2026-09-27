@@ -18,6 +18,7 @@ signal ranked_matchmaking_failed(step: String, message: String)
 signal combat_input_accepted(user_id: String, input_sequence: int, action: String, server_tick: int)
 signal combat_state_changed(user_id: String, state: String, server_tick: int, charge_ratio: float)
 signal contact_reached(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, charge_ratio: float)
+signal defense_resolved(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, result: String)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -330,6 +331,22 @@ func _on_match_state_received(match_state, candidate) -> void:
 			int(contact_event["server_tick"]),
 			int(contact_event["input_sequence"]),
 			float(contact_event["charge_ratio"])
+		)
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_DEFENSE_RESOLVED:
+		var defense_event := CombatInputProtocolScript.parse_defense_resolved_payload(
+			str(match_state.data)
+		)
+		if defense_event.is_empty():
+			return
+
+		defense_resolved.emit(
+			str(defense_event["attacker_id"]),
+			str(defense_event["defender_id"]),
+			int(defense_event["server_tick"]),
+			int(defense_event["input_sequence"]),
+			str(defense_event["result"])
 		)
 
 
