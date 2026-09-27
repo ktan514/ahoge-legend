@@ -46,6 +46,7 @@ func _init() -> void:
 	_test_authoritative_overtime_protocol()
 	_test_authoritative_round_result_protocol()
 	_test_authoritative_bo3_protocol()
+	_test_authoritative_match_result_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -576,6 +577,31 @@ func _test_authoritative_bo3_protocol() -> void:
 		})
 	)
 	_expect_true(invalid.is_empty(), "不正なBO3 Round Startedを拒否する")
+
+
+func _test_authoritative_match_result_protocol() -> void:
+	var payload := JSON.stringify({
+		"winner_user_id": "player-1",
+		"loser_user_id": "player-2",
+		"round_wins_by_user": {"player-1": 2, "player-2": 1},
+		"final_round_number": 3,
+		"server_tick": 1300,
+	})
+	var event := CombatInputProtocolScript.parse_match_result_payload(payload)
+	_expect_equal(event["winner_user_id"], "player-1", "Match Result winnerをdecodeできる")
+	_expect_equal(int(event["round_wins_by_user"]["player-1"]), 2, "Match Result winner scoreをdecodeできる")
+	_expect_equal(int(event["final_round_number"]), 3, "Match Result final roundをdecodeできる")
+
+	var invalid := CombatInputProtocolScript.parse_match_result_payload(
+		JSON.stringify({
+			"winner_user_id": "player-1",
+			"loser_user_id": "player-2",
+			"round_wins_by_user": {"player-1": 1, "player-2": 1},
+			"final_round_number": 1,
+			"server_tick": -1,
+		})
+	)
+	_expect_true(invalid.is_empty(), "不正なMatch Resultを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
