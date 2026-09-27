@@ -274,6 +274,23 @@ AHOGE LEGEND stagger smoke: PASS
 
 Stagger中はAttack / Defenseによる状態遷移を行いません。見た目のStaggerモーション仕上げは後続の画面・演出工程で行います。
 
+## Authoritative SHORT detach / regrow
+
+Ranked Matchmakerへ選択済み `character_id` を渡し、SHORT_TESTのTHROW攻撃はSTRIKE開始tickで `ahoge_available=false` へdetachします。0.60秒は30Hzで18tickへ量子化し、action stateと独立してregrowします。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-short-state-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND short state smoke: PASS
+```
+
+Detach中のDEFENDはDODGEへ切り替わり、regrow後はPARRYへ戻ります。Projectileの見た目はGodot側で後続接続します。
+
 ## 設計・製造計画の正本
 
 - `docs/PRODUCTION_PLAN.md`

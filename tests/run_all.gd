@@ -8,6 +8,7 @@ const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
+const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _failures: Array[String] = []
@@ -32,6 +33,7 @@ func _init() -> void:
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
 	_test_ranked_matchmaker_query()
+	_test_ranked_character_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -253,6 +255,12 @@ func _test_ranked_matchmaker_query() -> void:
 		"+properties.mode:ranked +properties.rating:>=1400 +properties.rating:<=1600",
 		"Ranked Matchmaker初期queryはRating ±100"
 	)
+
+
+func _test_ranked_character_contract() -> void:
+	_expect_true(OnlineConfigScript.is_supported_ranked_character_id("LONG_TEST"), "LONG_TESTをRanked characterとして許可する")
+	_expect_true(OnlineConfigScript.is_supported_ranked_character_id("SHORT_TEST"), "SHORT_TESTをRanked characterとして許可する")
+	_expect_false(OnlineConfigScript.is_supported_ranked_character_id("UNKNOWN"), "未知character_idを拒否する")
 
 
 func _test_combat_input_protocol() -> void:
