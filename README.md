@@ -203,7 +203,25 @@ AHOGE LEGEND attack state smoke: PASS
 ```
 
 戦闘時間はserver側設定へ集約し、既存Godot CombatConfigと同じ暫定値を使用します。
-この段階ではContact到達までをserver authoritativeとし、Defense / Clash / Hit / 85秒タイマー / BO3勝敗は後続Issueで接続します。
+Contact到達に加え、DEFENDはserver authoritativeなPARRY / DODGE stateへ接続されています。
+
+## Authoritative Defense state
+
+DEFEND入力をNakama側でPARRY / DODGEへ変換し、攻撃中Defense cancelとCooldown一時停止・再開をserver tickで管理します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-defense-state-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND defense state smoke: PASS
+```
+
+PARRYは0.18秒、DODGEは0.22秒、Just受付は0.07秒の暫定値を30Hz tickへ量子化して保持します。
+この段階ではDefense stateまでをserver authoritativeとし、Contact到達時のParry / Dodge / Just結果、Clash、Hitは後続Issueで確定します。
 
 ## 設計・製造計画の正本
 

@@ -15,12 +15,14 @@ const _ALLOWED_ACTIONS := {
 	ACTION_DEFEND: true,
 }
 
-const _ALLOWED_ATTACK_STATES := {
+const _ALLOWED_COMBAT_STATES := {
 	"IDLE": true,
 	"CHARGING": true,
 	"WINDUP": true,
 	"STRIKE": true,
 	"COOLDOWN": true,
+	"PARRY": true,
+	"DODGE": true,
 }
 
 
@@ -57,7 +59,7 @@ static func parse_combat_state_changed_payload(payload: String) -> Dictionary:
 	if not parsed.has("user_id") 			or not parsed.has("state") 			or not parsed.has("server_tick") 			or not parsed.has("charge_ratio"):
 		return {}
 
-	if not bool(_ALLOWED_ATTACK_STATES.get(str(parsed["state"]), false)):
+	if not bool(_ALLOWED_COMBAT_STATES.get(str(parsed["state"]), false)):
 		return {}
 
 	return parsed

@@ -8,7 +8,10 @@ const SERVER_COMBAT_CONFIG = {
   chargedReleaseWindupSeconds: 0.08,
   chargedStrikeSeconds: 0.13,
   chargedCooldownSeconds: 0.82,
-  attackContactRatio: 0.70
+  attackContactRatio: 0.70,
+  parryActiveSeconds: 0.18,
+  dodgeActiveSeconds: 0.22,
+  justDefenseSeconds: 0.07
 };
 
 interface ServerAttackTiming {
@@ -70,5 +73,22 @@ function combatAttackTiming(chargeRatio: number): ServerAttackTiming {
         AUTHORITATIVE_MATCH_TICK_RATE
       )
     )
+  };
+}
+
+
+interface ServerDefenseTiming {
+  activeTicks: number;
+  justTicks: number;
+}
+
+function combatDefenseTiming(ahogeAvailable: boolean): ServerDefenseTiming {
+  return {
+    activeTicks: combatSecondsToTicks(
+      ahogeAvailable
+        ? SERVER_COMBAT_CONFIG.parryActiveSeconds
+        : SERVER_COMBAT_CONFIG.dodgeActiveSeconds
+    ),
+    justTicks: combatSecondsToTicks(SERVER_COMBAT_CONFIG.justDefenseSeconds)
   };
 }
