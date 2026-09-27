@@ -432,6 +432,27 @@ AttackDefinition
 - `ahoge_available = true`
 - 右クリックは再びパリィへ戻る
 
+オンラインauthoritative matchでは、選択済み `character_id` をMatchmakerからmatch stateへ引き渡し、初期縦切りでは `LONG_TEST / SHORT_TEST` を識別する。
+
+`SHORT_TEST` のTHROW攻撃は、WINDUPからSTRIKEへ入ったserver tickをdetach開始tickとする。
+
+- `ahoge_available = false`
+- `regrow_until_tick = detach_tick + ceil(0.60 * 30)`
+- 初期値は18tick
+- detach時点の `COMBAT_STATE_CHANGED` を両クライアントへ通知する
+
+Regrowタイマーは現在のaction stateから独立して進行する。DODGE、COOLDOWN、STAGGERへ遷移しても `regrow_until_tick` を保持し、`server_tick >= regrow_until_tick` で次を行う。
+
+- `ahoge_available = true`
+- `regrow_until_tick = -1`
+- 現在action stateを維持したまま `COMBAT_STATE_CHANGED` を両クライアントへ通知する
+
+`ahoge_available = false` 中の `DEFEND` は既存Defense規則どおりDODGEへ分岐し、通常DODGE / JUST_DODGE判定を使用する。Regrow後の `DEFEND` は再びPARRYへ分岐する。
+
+`LONG_TEST` は攻撃時にdetachせず、`ahoge_available = true` を維持する。
+
+Projectileの見た目・軌道・再生表現はGodotクライアント側の責務とし、server判定には使用しない。
+
 ## 8. 防御判定
 
 ### 8.1 DefenseContext
@@ -912,8 +933,13 @@ match成立前のticketはcancel可能とする。
 - min count = 2
 - max count = 2
 - string property: `mode=ranked`
+- string property: `character_id`
 - numeric property: `rating`
 - 初期Rating範囲: 自分のRating ±100
+
+`character_id` はCharacterSelectで確定した選択結果をMatchmakerへ渡すための契約とする。初期縦切りでserverが受理する値は `LONG_TEST / SHORT_TEST` とし、Matchmaker queryの検索条件には含めない。Matchmaker Matched hookはmatched userごとの `character_id` をauthoritative match init paramへ引き渡し、match stateでuser IDに対応付けて保持する。
+
+CharacterSelect画面とオンラインGameFlowの本接続は後続工程で行うが、OnlineSessionのRanked Matchmaker開始APIは `rating` と `character_id` を受け取る形へ先に固定する。
 
 この骨格上へ後続Issueで85秒タイマー、戦闘入力、ContactEvent、防御、相殺、BO3勝敗を順次移管する。
 
@@ -1424,6 +1450,10 @@ SHORT_TEST
 - Just Defense成功時は攻撃側をSTAGGERへ遷移させる
 - AttackClash確定時は両者をSTAGGERへ遷移させる
 - Stagger 0.45秒は30Hzで14tickへ量子化し、終了後はIDLEへ復帰する
+- Matchmaker propertyの `character_id` をauthoritative matchへ引き渡し、初期縦切りではLONG_TEST / SHORT_TESTを識別する
+- SHORT_TESTはStrike開始tickでahogeをdetachし、`ahoge_available=false` とする
+- SHORT Regrow 0.60秒は30Hzで18tickへ量子化し、action stateと独立して進行する
+- detach中DEFENDはDODGE / JUST_DODGE、regrow後DEFENDはPARRY / JUST_PARRYへ分岐する
 - Hit数、勝敗は後続Issueでserver authoritative stateへ接続する
 - 遅延補正の初期上限は100msとし、実通信試験で見直す
 
