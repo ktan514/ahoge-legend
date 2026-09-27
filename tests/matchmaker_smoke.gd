@@ -45,7 +45,12 @@ func _run() -> void:
 		_fail("ticket取消後もmatchmaking状態です。")
 		return
 
-	var second_client = Nakama.create_client(
+	var nakama = get_root().get_node_or_null("Nakama")
+	if nakama == null:
+		_fail("Nakama Autoloadが見つかりません。")
+		return
+
+	var second_client = nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
 		OnlineConfigScript.PORT,
@@ -59,7 +64,7 @@ func _run() -> void:
 		_fail("P2 Device認証に失敗しました。")
 		return
 
-	_second_socket = Nakama.create_socket_from(second_client)
+	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
 	var second_connect = await _second_socket.connect_async(
 		second_session,
