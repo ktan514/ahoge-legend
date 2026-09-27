@@ -38,6 +38,7 @@ func _run() -> void:
 	var round_one_started := [false]
 	var p1_charging := [false]
 	var p1_idle_after_attack := [false]
+	var p1_release_accepted := [false]
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
@@ -54,6 +55,11 @@ func _run() -> void:
 				p1_charging[0] = true
 			elif state_name == "IDLE":
 				p1_idle_after_attack[0] = true
+	)
+	online_session.combat_input_accepted.connect(
+		func(user_id: String, input_sequence: int, action: String, _server_tick: int) -> void:
+			if user_id == p1_user_id 					and input_sequence == 2 					and action == CombatInputProtocolScript.ACTION_ATTACK_RELEASE:
+				p1_release_accepted[0] = true
 	)
 	online_session.reconnect_started.connect(func(_grace_seconds: int) -> void:
 		_reconnect_started = true
@@ -150,11 +156,19 @@ func _run() -> void:
 		_fail("切断前ATTACK_PRESSがserverでCHARGINGへ適用されませんでした。")
 		return
 
+	await create_timer(0.05).timeout
 	var release: Dictionary = await online_session.send_combat_input(
 		CombatInputProtocolScript.ACTION_ATTACK_RELEASE
 	)
 	if int(release.get("input_sequence", -1)) != 2:
 		_fail("切断前ATTACK_RELEASE sequenceが2ではありません。")
+		return
+
+	var accepted_deadline := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < accepted_deadline and not p1_release_accepted[0]:
+		await create_timer(0.02).timeout
+	if not p1_release_accepted[0]:
+		_fail("切断前ATTACK_RELEASE sequence=2をserverが受理しませんでした。")
 		return
 
 	var idle_deadline := Time.get_ticks_msec() + 4000
