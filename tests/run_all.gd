@@ -29,6 +29,7 @@ func _init() -> void:
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
+	_test_ranked_matchmaker_query()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -235,6 +236,20 @@ func _test_device_identity_persists() -> void:
 	var absolute_path := ProjectSettings.globalize_path(test_path)
 	if FileAccess.file_exists(test_path):
 		DirAccess.remove_absolute(absolute_path)
+
+
+func _test_ranked_matchmaker_query() -> void:
+	var online_session = get_root().get_node_or_null("OnlineSession")
+	_expect_true(online_session != null, "OnlineSession Autoloadが存在する")
+	if online_session == null:
+		return
+
+	var query: String = online_session.build_ranked_matchmaker_query(1500)
+	_expect_equal(
+		query,
+		"+properties.mode:ranked +properties.rating:>=1400 +properties.rating:<=1600",
+		"Ranked Matchmaker初期queryはRating ±100"
+	)
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
