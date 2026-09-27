@@ -212,49 +212,8 @@ func _run() -> void:
 	if round_result.is_empty():
 		return
 
-	if _latest_count(_p1_counts, p1_user_id) != 1:
-		_fail("timeout時P1 Hit数が1ではありません。")
-		return
-	if _latest_count(_p1_counts, p2_user_id) != 0:
-		_fail("timeout時P2 Hit数が0ではありません。")
-		return
-	if _p1_counts != _p2_counts:
-		_fail("P1/P2のHit count event列が一致しません。")
-		return
-	if _p1_timers != _p2_timers:
-		_fail("P1/P2のtimer event列が一致しません。")
-		return
-
-	# timeout後は入力を送れてもserver戦闘状態へ適用されない。
-	var state_count_p1 := _p1_states.size()
-	var state_count_p2 := _p2_states.size()
-	var hit_count := _p1_hits.size()
-	var count_event_count := _p1_counts.size()
-	var timer_count := _p1_timers.size()
-
-	var post_press: Dictionary = await online_session.send_combat_input(
-		CombatInputProtocolScript.ACTION_ATTACK_PRESS
-	)
-	if not bool(post_press.get("ok", false)):
-		_fail("timeout後P1 ATTACK_PRESSの送信に失敗しました。")
-		return
-	if not await _send_p2(CombatInputProtocolScript.ACTION_ATTACK_PRESS):
-		return
-
-	await create_timer(1.2).timeout
-
-	if _p1_states.size() != state_count_p1 or _p2_states.size() != state_count_p2:
-		_fail("timeout後に新規combat stateが発生しました。")
-		return
-	if _p1_hits.size() != hit_count or _p2_hits.size() != hit_count:
-		_fail("timeout後に新規Hitが発生しました。")
-		return
-	if _p1_counts.size() != count_event_count or _p2_counts.size() != count_event_count:
-		_fail("timeout後にHit countが増加しました。")
-		return
-	if _p1_timers.size() != timer_count or _p2_timers.size() != timer_count:
-		_fail("timeout後にtimer eventが増加しました。")
-		return
+	# BO3ではtimeout勝利の次server tickから次Roundへresetする。
+	# このsmokeはtimeout終了tickのROUND_LOCKED / TIMEOUT Resultまでを検証する。
 
 	await online_session.realtime_socket.leave_match_async(p1_joined[0])
 	await _second_socket.leave_match_async(_second_match_id)
