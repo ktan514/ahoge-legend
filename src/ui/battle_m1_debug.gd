@@ -401,6 +401,7 @@ func _on_match_result(
 	_loser_user_id: String,
 	round_wins_by_user: Dictionary,
 	final_round_number: int,
+	finish_cause: String,
 	_server_tick: int
 ) -> void:
 	_apply_round_wins(round_wins_by_user)
@@ -409,8 +410,12 @@ func _on_match_result(
 	_match_finished = true
 	_input_ready = false
 	hud.set_connection_status("M1 AUTHORITATIVE: MATCH FINISHED")
+	var result_prefix := "MATCH WINNER"
+	if finish_cause == "DISCONNECT_TIMEOUT":
+		result_prefix = "DISCONNECT WINNER"
 	hud.flash_message(
-		"MATCH WINNER: %s  %d-%d" % [
+		"%s: %s  %d-%d" % [
+			result_prefix,
 			_player_label(winner_user_id),
 			int(_snapshot["player_one_rounds"]),
 			int(_snapshot["player_two_rounds"]),
