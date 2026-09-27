@@ -880,7 +880,25 @@ func _assert_countdown_reset(
 	if not await _wait_state_at_tick_pair(p2_user_id, "ROUND_LOCKED", start_tick, timeout_ms):
 		_fail("Countdown中にP2がROUND_LOCKEDではありません。")
 		return false
+	var go_tick := int(countdown.get("go_tick", -1))
+	if _timer_changed_during_countdown(_p1_timers, start_tick, go_tick) 			or _timer_changed_during_countdown(_p2_timers, start_tick, go_tick):
+		_fail("Countdown中にRound timerが85から進みました。")
+		return false
 	return true
+
+
+func _timer_changed_during_countdown(
+	events: Array[Dictionary],
+	start_tick: int,
+	go_tick: int
+) -> bool:
+	for event in events:
+		var server_tick := int(event.get("server_tick", -1))
+		if server_tick < start_tick or server_tick >= go_tick:
+			continue
+		if int(event.get("remaining_seconds", -1)) != 85:
+			return true
+	return false
 
 
 func _wait_round_started_pair(
