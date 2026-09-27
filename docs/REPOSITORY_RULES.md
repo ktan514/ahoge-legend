@@ -231,6 +231,15 @@ PR fastではGodot importをjob冒頭で1回だけ実行し、各client smokeか
 
 同一PRへ新しいcommitがpushされた場合、旧HEAD向けの実行はcancelし、最新HEADを優先する。
 
+PR fastのonline smokeは独立Runnerで並列実行する。各Runnerは独立したDocker Compose/Nakamaを持ち、異なるsmoke groupのMatchmaker clientを同一Nakamaへ混在させない。
+
+初期group:
+
+- `foundation`: auth / realtime / matchmaker / combat input / attack / Defense state / Defense result
+- `combat`: Contact outcome / Stagger / SHORT / combat integration / Hit count
+- `round`: 5 Hit / Round Result / M1 Battle UI
+- `match`: BO3 / Match Result
+
 ### full regression
 
 `main` pushおよび手動 `workflow_dispatch` では、PR fast項目に加えて上記3本も実行し、productionの85秒を実時間で通す。
