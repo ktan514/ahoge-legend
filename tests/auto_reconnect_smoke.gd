@@ -151,7 +151,7 @@ func _run() -> void:
 		_fail("切断前攻撃がIDLEへ復帰しませんでした。")
 		return
 
-	var original_match_id := online_session.current_match_id
+	var original_match_id: String = str(online_session.current_match_id)
 	online_session.realtime_socket.close()
 
 	var reconnect_deadline := Time.get_ticks_msec() + 8000
