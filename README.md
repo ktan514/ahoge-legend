@@ -110,6 +110,14 @@ npm run build
 
 生成される `server/nakama/build/` と `node_modules/` はcommitしません。
 
+## CIのfast / full区分
+
+Pull Requestの `Online foundation` は開発反復を優先したfast regressionです。85秒を実時間で待つRound timer / timeout winner / Overtimeの3本はPRでは省略し、その他のonline smokeを実行します。
+
+`main` pushと手動実行ではfull regressionとして3本も含め、productionの85秒を実時間で確認します。ゲーム本体のRound時間はどちらの区分でも85秒仕様のままです。
+
+CIではGodot importを最初の1回に集約し、同一PRの古いrunは新しいcommitでcancelします。
+
 ## Godot → Nakamaローカル認証
 
 Nakama起動後に、GodotクライアントからDevice認証できることを確認します。

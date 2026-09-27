@@ -213,6 +213,30 @@ npm run build
 
 コマンドを実行していない場合はPASS扱いしない。
 
+## CI実行区分
+
+`Online foundation` は、開発中のPR反復速度と本番相当の回帰保証を分離する。
+
+### PR fast regression
+
+Pull Request更新時は、通常の認証・Realtime・Matchmaker・combat・Round / BO3 / Match Result・M1 headless smokeを実行する。ただし、85秒を実時間で待つ次の3本はPR fastから除外する。
+
+- `client-round-timer-smoke.sh`
+- `client-timeout-winner-smoke.sh`
+- `client-overtime-smoke.sh`
+
+85秒というproduction定数、2550tick換算、timeout / Overtimeのルール自体はheadless unit / protocol testで回帰する。
+
+PR fastではGodot importをjob冒頭で1回だけ実行し、各client smokeからの重複importを省略する。
+
+同一PRへ新しいcommitがpushされた場合、旧HEAD向けの実行はcancelし、最新HEADを優先する。
+
+### full regression
+
+`main` pushおよび手動 `workflow_dispatch` では、PR fast項目に加えて上記3本も実行し、productionの85秒を実時間で通す。
+
+full regressionを実行していない状態で「85秒authoritative E2E PASS」と記録しない。
+
 ## 保護対象branch
 
 - `main`
