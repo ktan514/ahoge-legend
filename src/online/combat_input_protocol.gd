@@ -29,6 +29,7 @@ const _ALLOWED_COMBAT_STATES := {
 	"PARRY": true,
 	"DODGE": true,
 	"STAGGER": true,
+	"ROUND_LOCKED": true,
 }
 
 const _ALLOWED_DEFENSE_RESULTS := {
