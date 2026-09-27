@@ -76,6 +76,12 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-matchmaker-smoke.sh
 ```
 
+2-client authoritative combat input smoke test:
+
+```bash
+./scripts/client-combat-input-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -125,7 +131,8 @@ npm run build
 - `scripts/client-online-smoke.sh`: ローカルNakama起動確認後にGodot headless認証smoke testを実行する。
 - `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 - `scripts/client-matchmaker-smoke.sh`: 2クライアントをDevice認証・Realtime接続し、Matchmaker成立から同一authoritative matchへのjoinまで検証する。
-- `server/nakama/src/ranked_match.ts`: 2人用authoritative match骨格とMatchmaker Matched hookを定義し、戦闘ルールそのものは後続Issueで追加する。
+- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、戦闘入力のsequence/tick検証を定義する。Hit・Defense・勝敗等の戦闘結果は後続Issueで追加する。
+- `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 
 ## アセット管理
 
