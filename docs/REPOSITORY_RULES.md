@@ -166,6 +166,12 @@ Godot → Nakama Realtime Socket smoke test:
 ./scripts/client-bo3-smoke.sh
 ```
 
+2-client authoritative Match Result smoke test:
+
+```bash
+./scripts/client-match-result-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -216,7 +222,7 @@ npm run build
 - `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 - `scripts/client-matchmaker-smoke.sh`: 2クライアントをDevice認証・Realtime接続し、Matchmaker成立から同一authoritative matchへのjoinまで検証する。
 - `server/nakama/src/combat_config.ts`: server authoritative戦闘の暫定時間値と30Hz tick換算・補間を一元管理する。
-- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数、85秒timer、5 Hitラウンド終了、timeout Hit数比較、Overtime次Hit終了、Round Result、2本先取BO3、Round resetを定義する。正式なMatch Result通知は後続Issueで追加する。
+- `server/nakama/src/ranked_match.ts`: 2人用authoritative match、Matchmaker Matched hook、character_id保持、戦闘入力のsequence/tick検証、攻撃状態遷移、Defense state、ContactEvent、DefenseResult、AttackClash、Hit、Stagger、SHORT detach / regrow、現在ラウンドHit数、85秒timer、5 Hitラウンド終了、timeout Hit数比較、Overtime次Hit終了、Round Result、2本先取BO3、Round reset、Match Result通知を定義する。
 - `scripts/client-combat-input-smoke.sh`: 2クライアントでauthoritative matchへjoinし、正常入力の確定通知とduplicate / out-of-order / same-tick rejectionを検証する。
 - `scripts/client-attack-state-smoke.sh`: 2クライアントで同じauthoritative攻撃状態遷移とContactEventを受信できることを検証する。
 - `scripts/client-defense-state-smoke.sh`: 2クライアントでPARRY / DODGE状態、攻撃キャンセル、Defense終了後復帰、Cooldown一時停止・再開を検証する。
@@ -227,11 +233,12 @@ npm run build
 - `scripts/client-combat-integration-smoke.sh`: 工程1の攻撃・Defense cancel・PARRY / DODGE / Just・Hit・Clash・Stagger・SHORT detach / Regrowを同一match内で連続実行し、両clientのイベント列・状態列一致を検証する。
 - `scripts/client-hit-count-smoke.sh`: 初期0、Hit加算、Defense / Clash非加算、複数Hit累積、両clientのHit count一致を検証する。
 - `scripts/client-round-timer-smoke.sh`: 85開始、1秒ごとの整数減算、0到達、2550tick経過、0後停止、両clientのtimer event列一致を検証する。
-- `scripts/client-hit-limit-smoke.sh`: 1〜4 Hit継続、5 Hit目のcount=5、両者ROUND_LOCKED、timer停止、終了後のcombat / Hit / count停止を検証する。
-- `scripts/client-timeout-winner-smoke.sh`: 1-0のHit数で85秒を完走し、timer 0、両者ROUND_LOCKED、timeout後のcombat / Hit / count / timer停止、両client event一致を検証する。
+- `scripts/client-hit-limit-smoke.sh`: 1〜4 Hit継続、5 Hit目のcount=5、終了tickの両者ROUND_LOCKEDとRound Resultを検証する。次Round lifecycleはBO3 smokeで検証する。
+- `scripts/client-timeout-winner-smoke.sh`: 1-0のHit数で85秒を完走し、timer 0、終了tickの両者ROUND_LOCKED、TIMEOUT Round Result、両client event一致を検証する。次Round lifecycleはBO3 smokeで検証する。
 - `scripts/client-overtime-smoke.sh`: 0-0 timeout、次tick Overtime開始、timer 0維持、PARRY / Clash継続、次の有効Hitでcount更新後ROUND_LOCKED、両client一致を検証する。
 - `scripts/client-round-result-smoke.sh`: HIT_LIMIT Round Resultのround番号、winner / loser、Hit数、finish cause、server tick、1回限り通知、両client一致を検証する。TIMEOUT / OVERTIME_HITは既存各smokeで同契約を回帰する。
-- `scripts/client-bo3-smoke.sh`: 1-0→1-1→2-1の最大3Roundを通し、Round Started、score、Hit数0 / timer85 / IDLE reset、input sequence継続、2勝後のmatch停止、両client一致を検証する。
+- `scripts/client-bo3-smoke.sh`: 1-0→1-1→2-1の最大3Roundを通し、Round Started、score、Hit数0 / timer85 / IDLE reset、input sequence継続、2勝後のmatch停止、Match Result、両client一致を検証する。
+- `scripts/client-match-result-smoke.sh`: 1勝・1-1ではMatch Result非通知、2勝確定時のwinner / loser / final score / final round / server tick、1回限り通知、終了後停止を検証する。
 
 ## アセット管理
 
