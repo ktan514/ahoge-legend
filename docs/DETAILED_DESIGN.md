@@ -1979,6 +1979,20 @@ combat_state_by_user
 
 clientはsnapshotを正本として現在表示・入力sequenceを更新する。切断中に受信できなかったeventをclient側で再計算・再生して追いつこうとしない。
 
+
+表示同期も同じsnapshot / server eventの時刻情報を正本とする。頭部・アホ毛の描画座標を毎frame network同期するのではなく、次の論理情報からclientが現在の描画位相を算出する。
+
+- action state
+- action開始 / 終了server tick
+- Contact予定tick
+- Defense active / Just終了tick
+- Stagger終了tick
+- SHORT regrow終了tick
+- charge ratio
+- 現在server tick
+
+基準位置と各actionのmotion範囲はclient定義を使用する。呼吸やアホ毛の細かな二次動作はclientローカルでよいが、Hit / Clash / Defense / Round結果は見た目座標へ依存させない。
+
 #### 21.5.3 再接続待機中のフェーズ管理
 
 serverは「active Round」と「Round境界」を区別する。
@@ -1996,6 +2010,19 @@ post-Round / Result hold
 ```
 
 15秒猶予はRound phaseの停止とは独立して実時間相当server tickで進行する。
+
+
+#### 21.5.4 再接続期限超過
+
+片側だけが切断した状態で、そのplayerのreconnect deadlineへ到達した場合はserver authoritativeにmatchを終了する。
+
+- match finish cause: `DISCONNECT_TIMEOUT`
+- 接続中playerをwinner、期限超過playerをloserとする
+- BO3 Round取得数を人工的に2へ変更しない
+- `MATCH_RESULT` は通常BO3と同じeventを使い、`finish_cause` で区別する
+- 通常2本先取は `finish_cause=BO3`
+- disconnect敗北では現在Round番号・現在Round取得数をそのままResultへ含める
+- clientはdisconnect timeoutを独自判定せず、serverのMatch Resultを正本とする
 
 
 ### 21.6 プレイヤーランキング初期値
