@@ -11,6 +11,7 @@ var _states: Label
 var _message: Label
 var _connection: Label
 var _countdown: Label
+var _network_overlay: Label
 var _player_one_name: Label
 var _player_two_name: Label
 var _player_one_visual
@@ -107,6 +108,16 @@ func _ready() -> void:
 	_countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	countdown_layer.add_child(_countdown)
 
+	_network_overlay = Label.new()
+	_network_overlay.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_network_overlay.position = Vector2(-260.0, 120.0)
+	_network_overlay.size = Vector2(520.0, 100.0)
+	_network_overlay.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_network_overlay.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_network_overlay.add_theme_font_size_override("font_size", 32)
+	_network_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	countdown_layer.add_child(_network_overlay)
+
 	# HUDは画面全体を覆うため、そのままだとControl群がマウスイベントを消費して
 	# Battle._input()へ届かない。操作ボタン以外は入力を透過する。
 	_apply_mouse_passthrough(self)
@@ -141,6 +152,14 @@ func show_round_countdown(round_number: int, countdown_value: int) -> void:
 
 func clear_round_countdown() -> void:
 	_countdown.text = ""
+
+
+func show_network_overlay(text: String) -> void:
+	_network_overlay.text = text
+
+
+func clear_network_overlay() -> void:
+	_network_overlay.text = ""
 
 
 func render(match_flow, player_one_state, player_two_state) -> void:
