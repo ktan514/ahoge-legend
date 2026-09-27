@@ -42,6 +42,7 @@ func _init() -> void:
 	_test_authoritative_stagger_protocol()
 	_test_authoritative_hit_count_protocol()
 	_test_authoritative_round_timer_protocol()
+	_test_authoritative_round_locked_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -486,6 +487,17 @@ func _test_authoritative_round_timer_protocol() -> void:
 			})
 		)
 		_expect_true(invalid.is_empty(), "範囲外Round timerを拒否する")
+
+
+func _test_authoritative_round_locked_protocol() -> void:
+	var payload := JSON.stringify({
+		"user_id": "player-1",
+		"state": "ROUND_LOCKED",
+		"server_tick": 800,
+		"charge_ratio": 0.0,
+	})
+	var event := CombatInputProtocolScript.parse_combat_state_changed_payload(payload)
+	_expect_equal(event["state"], "ROUND_LOCKED", "ROUND_LOCKED状態をdecodeできる")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
