@@ -11,6 +11,8 @@ const OPCODE_ROUND_HIT_COUNT_CHANGED: int = 107
 const OPCODE_ROUND_TIMER_CHANGED: int = 108
 const OPCODE_ROUND_OVERTIME_STARTED: int = 109
 const OPCODE_ROUND_RESULT: int = 110
+const OPCODE_BO3_SCORE_CHANGED: int = 111
+const OPCODE_ROUND_STARTED: int = 112
 
 const ACTION_ATTACK_PRESS: String = "ATTACK_PRESS"
 const ACTION_ATTACK_RELEASE: String = "ATTACK_RELEASE"
@@ -207,6 +209,58 @@ static func parse_round_result_payload(payload: String) -> Dictionary:
 	if finish_cause not in ["HIT_LIMIT", "TIMEOUT", "OVERTIME_HIT"]:
 		return {}
 	if int(parsed["winner_hits"]) < 0 or int(parsed["loser_hits"]) < 0:
+		return {}
+	if int(parsed["server_tick"]) < 0:
+		return {}
+	return parsed
+
+
+static func _valid_round_wins(value) -> bool:
+	if not value is Dictionary:
+		return false
+	for user_id in value.keys():
+		if str(user_id).is_empty():
+			return false
+		var rounds := int(value[user_id])
+		if rounds < 0 or rounds > 2:
+			return false
+	return true
+
+
+static func parse_bo3_score_changed_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	for key in [
+		"completed_round_number",
+		"round_winner_user_id",
+		"round_wins_by_user",
+		"match_finished",
+		"server_tick",
+	]:
+		if not parsed.has(key):
+			return {}
+	if int(parsed["completed_round_number"]) < 1 or int(parsed["completed_round_number"]) > 3:
+		return {}
+	if str(parsed["round_winner_user_id"]).is_empty():
+		return {}
+	if not _valid_round_wins(parsed["round_wins_by_user"]):
+		return {}
+	if int(parsed["server_tick"]) < 0:
+		return {}
+	return parsed
+
+
+static func parse_round_started_payload(payload: String) -> Dictionary:
+	var parsed = JSON.parse_string(payload)
+	if not parsed is Dictionary:
+		return {}
+	for key in ["round_number", "round_wins_by_user", "server_tick"]:
+		if not parsed.has(key):
+			return {}
+	if int(parsed["round_number"]) < 1 or int(parsed["round_number"]) > 3:
+		return {}
+	if not _valid_round_wins(parsed["round_wins_by_user"]):
 		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
