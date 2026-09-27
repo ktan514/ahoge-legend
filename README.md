@@ -323,7 +323,7 @@ LONG_TEST / SHORT_TESTを同じmatchへ参加させ、Hit、Defense cancel、Par
 AHOGE LEGEND hit count smoke: PASS
 ```
 
-PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝利やRound resetは後続Issueで接続します。
+PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝利は後続節で接続済みで、Round resetは後続Issueで接続します。
 
 ## Authoritative 85秒 Round timer
 
@@ -340,7 +340,7 @@ PARRY / DODGE / Just / AttackClashではHit数を加算しません。5 Hit勝�
 AHOGE LEGEND round timer smoke: PASS
 ```
 
-serverは85から0までの値が変化したときだけ両クライアントへ通知します。0到達時のHit数比較・Overtime・Round終了は後続Issueで接続します。
+serverは85から0までの値が変化したときだけ両クライアントへ通知します。0到達時のHit数比較とOvertimeは後続節で接続済みで、Round Result / resetは後続Issueで接続します。
 
 ## Authoritative 5 Hit Round win
 
