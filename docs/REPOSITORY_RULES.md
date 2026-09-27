@@ -64,6 +64,12 @@ Godot → Nakama認証smoke test:
 ./scripts/client-online-smoke.sh
 ```
 
+Godot → Nakama Realtime Socket smoke test:
+
+```bash
+./scripts/client-realtime-smoke.sh
+```
+
 オンライン基盤起動:
 
 ```bash
@@ -111,6 +117,7 @@ npm run build
 - `addons/com.heroiclabs.nakama/`: 公式Nakama Godot SDK 3.4.0をvendorし、独自改変しない。
 - `src/online/`: Godotクライアント側のNakama接続・認証・Session管理を置き、UIや戦闘ルールへ依存させない。
 - `scripts/client-online-smoke.sh`: ローカルNakama起動確認後にGodot headless認証smoke testを実行する。
+- `scripts/client-realtime-smoke.sh`: 認証後にNakama Realtime Socketへ接続し、接続状態と明示切断を検証する。
 
 ## アセット管理
 

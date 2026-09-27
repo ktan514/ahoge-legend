@@ -9,3 +9,6 @@ const DEVICE_ID_PATH: String = "user://ahoge_device_id.txt"
 const CLIENT_TIMEOUT_SECONDS: int = 3
 # NakamaLogger.LOG_LEVEL.ERROR。DEBUGはAuthorization Bearerをrequest logへ含めるため使用しない。
 const CLIENT_LOG_LEVEL: int = 1
+
+const SOCKET_CONNECT_TIMEOUT_SECONDS: int = 3
+const SOCKET_APPEAR_ONLINE: bool = false

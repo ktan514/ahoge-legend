@@ -7,12 +7,14 @@ on:
       - "server/nakama/**"
       - "scripts/server-*.sh"
       - "scripts/client-online-smoke.sh"
+      - "scripts/client-realtime-smoke.sh"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
       - "src/online/**"
       - "src/config/online_config.gd"
       - "tests/online_smoke.gd"
+      - "tests/realtime_smoke.gd"
       - ".github/workflows/online-foundation.yml"
   push:
     branches:
@@ -81,6 +83,9 @@ jobs:
 
       - name: Godot client authentication smoke
         run: ./scripts/client-online-smoke.sh
+
+      - name: Godot realtime socket smoke
+        run: ./scripts/client-realtime-smoke.sh
 
       - name: Verify restart with persistent volume
         shell: bash

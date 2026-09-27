@@ -5,10 +5,14 @@ const DeviceIdentityStoreScript := preload("res://src/online/device_identity_sto
 
 signal authentication_succeeded(user_id: String, username: String)
 signal authentication_failed(step: String, message: String)
+signal realtime_connected(user_id: String)
+signal realtime_disconnected
+signal realtime_connection_failed(message: String)
 
 var client = null
 var session = null
 var account = null
+var realtime_socket = null
 var _identity_store = null
 
 
@@ -73,18 +77,121 @@ func is_authenticated() -> bool:
 	return session != null and session.valid and not session.expired
 
 
+func connect_realtime_socket() -> Dictionary:
+	if not is_authenticated():
+		return _realtime_fail("Nakama認証前はRealtime Socketへ接続できません。")
+
+	if realtime_socket != null:
+		if realtime_socket.is_connected_to_host():
+			return {
+				"ok": true,
+				"already_connected": true,
+			}
+		realtime_socket.close()
+		realtime_socket = null
+
+	var candidate = Nakama.create_socket_from(client)
+	if candidate == null:
+		return _realtime_fail("Realtime Socketを生成できませんでした。")
+
+	candidate.connected.connect(_on_realtime_connected.bind(candidate))
+	candidate.closed.connect(_on_realtime_closed.bind(candidate))
+	candidate.connection_error.connect(_on_realtime_connection_error.bind(candidate))
+	candidate.received_error.connect(_on_realtime_received_error.bind(candidate))
+	realtime_socket = candidate
+
+	var connect_result = await candidate.connect_async(
+		session,
+		OnlineConfigScript.SOCKET_APPEAR_ONLINE,
+		OnlineConfigScript.SOCKET_CONNECT_TIMEOUT_SECONDS
+	)
+
+	if connect_result == null or connect_result.is_exception():
+		var message := _result_error_message(connect_result, "Realtime Socket接続に失敗しました。")
+		if realtime_socket == candidate:
+			realtime_socket = null
+		candidate.close()
+		return _realtime_fail(message)
+
+	if not candidate.is_connected_to_host():
+		if realtime_socket == candidate:
+			realtime_socket = null
+		candidate.close()
+		return _realtime_fail("Realtime Socketが接続状態になりませんでした。")
+
+	return {
+		"ok": true,
+		"already_connected": false,
+	}
+
+
+func is_realtime_connected() -> bool:
+	return realtime_socket != null and realtime_socket.is_connected_to_host()
+
+
+func disconnect_realtime_socket() -> bool:
+	if realtime_socket == null:
+		return false
+
+	var candidate = realtime_socket
+	candidate.close()
+	return true
+
+
 func clear_session() -> void:
+	disconnect_realtime_socket()
 	session = null
 	account = null
 
 
+func _on_realtime_connected(candidate) -> void:
+	if realtime_socket != candidate:
+		return
+	print("Nakama realtime socket connected: user_id=%s" % str(session.user_id))
+	realtime_connected.emit(str(session.user_id))
+
+
+func _on_realtime_closed(candidate) -> void:
+	if realtime_socket == candidate:
+		realtime_socket = null
+	realtime_disconnected.emit()
+
+
+func _on_realtime_connection_error(error, candidate) -> void:
+	if realtime_socket == candidate:
+		realtime_socket = null
+	var message := "Realtime Socket connection error: %s" % str(error)
+	printerr(message)
+	realtime_connection_failed.emit(message)
+
+
+func _on_realtime_received_error(error, candidate) -> void:
+	if realtime_socket != candidate:
+		return
+	var message := "Realtime Socket server error: %s" % str(error)
+	printerr(message)
+	realtime_connection_failed.emit(message)
+
+
 func _fail_from_result(step: String, result) -> Dictionary:
-	var message := "Unknown Nakama error"
+	return _fail(step, _result_error_message(result, "Unknown Nakama error"))
+
+
+func _result_error_message(result, fallback: String) -> String:
 	if result != null and result.has_method("get_exception"):
 		var exception = result.get_exception()
-		if exception != null:
-			message = str(exception.message)
-	return _fail(step, message)
+		if exception != null and not str(exception.message).is_empty():
+			return str(exception.message)
+	return fallback
+
+
+func _realtime_fail(message: String) -> Dictionary:
+	printerr("Nakama realtime connection failed: %s" % message)
+	realtime_connection_failed.emit(message)
+	return {
+		"ok": false,
+		"message": message,
+	}
 
 
 func _fail(step: String, message: String) -> Dictionary:

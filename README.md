@@ -133,6 +133,24 @@ raw auth tokenは通常ログへ出力しません。
 
 SDKは `heroiclabs/nakama-godot` v3.4.0を `addons/com.heroiclabs.nakama/` へvendorしています。
 
+## Godot → Nakama Realtime Socket
+
+Device認証済みSessionからRealtime Socketへ接続できることを確認します。
+
+```bash
+./scripts/server-up.sh
+./scripts/client-realtime-smoke.sh
+```
+
+成功時:
+
+```text
+AHOGE LEGEND realtime smoke: PASS
+```
+
+この段階では接続・接続状態確認・明示切断までを対象とし、Matchmakerや対戦同期は後続Issueで実装します。
+Socket接続時もraw auth tokenはログへ出力しません。
+
 ## 設計正本
 
 - `docs/BASIC_DESIGN.md`
