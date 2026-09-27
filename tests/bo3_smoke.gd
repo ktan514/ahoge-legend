@@ -25,6 +25,8 @@ var _p1_scores: Array[Dictionary] = []
 var _p2_scores: Array[Dictionary] = []
 var _p1_started: Array[Dictionary] = []
 var _p2_started: Array[Dictionary] = []
+var _p1_match_results: Array[Dictionary] = []
+var _p2_match_results: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -145,6 +147,11 @@ func _run() -> void:
 	):
 		return
 
+	await create_timer(0.1).timeout
+	if not _p1_match_results.is_empty() or not _p2_match_results.is_empty():
+		_fail("1勝時にMatch Resultが通知されました。")
+		return
+
 	var round_two := await _wait_round_started_pair(2, p1_user_id, 1, p2_user_id, 0, 5000)
 	if round_two.is_empty():
 		_fail("Round 2開始通知を受信できませんでした。")
@@ -162,6 +169,11 @@ func _run() -> void:
 		1,
 		false
 	):
+		return
+
+	await create_timer(0.1).timeout
+	if not _p1_match_results.is_empty() or not _p2_match_results.is_empty():
+		_fail("1-1時にMatch Resultが通知されました。")
 		return
 
 	var round_three := await _wait_round_started_pair(3, p1_user_id, 1, p2_user_id, 1, 5000)
@@ -183,6 +195,19 @@ func _run() -> void:
 	):
 		return
 
+	var final_score := _find_score(_p1_scores, 3)
+	var match_result := await _wait_match_result_pair(
+		p1_user_id,
+		p2_user_id,
+		2,
+		1,
+		3,
+		int(final_score.get("server_tick", -1)),
+		5000
+	)
+	if match_result.is_empty():
+		return
+
 	if _p1_started.size() != 3 or _p2_started.size() != 3:
 		_fail("BO3終了後にRound 4が開始されたか、Round Started回数が不正です。")
 		return
@@ -194,6 +219,12 @@ func _run() -> void:
 		return
 	if _p1_started != _p2_started or _p1_results != _p2_results or _p1_scores != _p2_scores:
 		_fail("P1/P2でBO3イベント列が一致しません。")
+		return
+	if _p1_match_results.size() != 1 or _p2_match_results.size() != 1:
+		_fail("Match Resultが1matchにつき1回ではありません。")
+		return
+	if _p1_match_results != _p2_match_results:
+		_fail("P1/P2でMatch Result payloadが一致しません。")
 		return
 
 	var state_count_p1 := _p1_states.size()
@@ -413,13 +444,33 @@ func _send_p2(action: String) -> bool:
 
 
 func _on_first_match_state(match_state) -> void:
-	_collect(match_state, _p1_states, _p1_hits, _p1_counts, _p1_timers, _p1_results, _p1_scores, _p1_started)
+	_collect(
+		match_state,
+		_p1_states,
+		_p1_hits,
+		_p1_counts,
+		_p1_timers,
+		_p1_results,
+		_p1_scores,
+		_p1_started,
+		_p1_match_results
+	)
 
 
 func _on_second_match_state(match_state) -> void:
 	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
 		return
-	_collect(match_state, _p2_states, _p2_hits, _p2_counts, _p2_timers, _p2_results, _p2_scores, _p2_started)
+	_collect(
+		match_state,
+		_p2_states,
+		_p2_hits,
+		_p2_counts,
+		_p2_timers,
+		_p2_results,
+		_p2_scores,
+		_p2_started,
+		_p2_match_results
+	)
 
 
 func _collect(
@@ -430,7 +481,8 @@ func _collect(
 	timers: Array[Dictionary],
 	results: Array[Dictionary],
 	scores: Array[Dictionary],
-	started: Array[Dictionary]
+	started: Array[Dictionary],
+	match_results: Array[Dictionary]
 ) -> void:
 	var op_code := int(match_state.op_code)
 	if op_code == CombatInputProtocolScript.OPCODE_COMBAT_STATE_CHANGED:
@@ -467,6 +519,11 @@ func _collect(
 		var event := CombatInputProtocolScript.parse_round_started_payload(str(match_state.data))
 		if not event.is_empty():
 			started.append(event)
+		return
+	if op_code == CombatInputProtocolScript.OPCODE_MATCH_RESULT:
+		var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
+		if not event.is_empty():
+			match_results.append(event)
 
 
 func _on_second_matchmaker_matched(matched) -> void:
@@ -754,6 +811,38 @@ func _wait_round_started_pair(
 				return {}
 			return first
 		await create_timer(0.02).timeout
+	return {}
+
+
+func _wait_match_result_pair(
+	winner_user_id: String,
+	loser_user_id: String,
+	winner_rounds: int,
+	loser_rounds: int,
+	final_round_number: int,
+	expected_server_tick: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if not _p1_match_results.is_empty() and not _p2_match_results.is_empty():
+			var first := _p1_match_results[0]
+			var second := _p2_match_results[0]
+			if first != second:
+				_fail("P1/P2でMatch Result payloadが一致しません。")
+				return {}
+			var scores = first.get("round_wins_by_user", {})
+			if str(first.get("winner_user_id", "")) != winner_user_id \
+					or str(first.get("loser_user_id", "")) != loser_user_id \
+					or int(scores.get(winner_user_id, -1)) != winner_rounds \
+					or int(scores.get(loser_user_id, -1)) != loser_rounds \
+					or int(first.get("final_round_number", -1)) != final_round_number \
+					or int(first.get("server_tick", -1)) != expected_server_tick:
+				_fail("Match Result内容が期待値と一致しません。")
+				return {}
+			return first
+		await create_timer(0.02).timeout
+	_fail("Match Resultを両clientで受信できませんでした。")
 	return {}
 
 
