@@ -150,6 +150,8 @@ func build_ranked_matchmaker_query(rating: int) -> String:
 	return RankedMatchmakerQueryScript.build(rating)
 
 
+# CharacterSelectで確定したIDをMatchmaker propertyとしてserverへ渡す。
+# character_id自体は対戦相手の検索条件には使用しない。
 func start_ranked_matchmaking(rating: int, character_id: String) -> Dictionary:
 	if not is_realtime_connected():
 		return _matchmaking_fail("start", "Realtime Socket接続前はMatchmakerを開始できません。")
