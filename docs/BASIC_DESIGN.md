@@ -363,6 +363,10 @@ HTMLプロトタイプでは約5:4の対戦枠と中央寄りのキャラクタ�
 - フレンドマッチは対象外とする
 - 毎月1日0:00（日本時間/JST）に新シーズンへ切り替え、当月ランキングをリセットする
 - 実装開始時はElo方式を使用し、初期Rating 1500、K値32とする
+- 暫定Elo期待勝率は `1 / (1 + 10 ^ ((opponent - self) / 400))` とする
+- Rating更新値は四捨五入して整数とする
+- 片側の `DISCONNECT_TIMEOUT` は通常のRanked勝敗としてRating更新対象とする
+- Friend Match、server障害、両者同時切断はRating更新対象外とする
 - ランク帯は仮定値として Bronze / Silver / Gold / Platinum / Diamond / Master を使用する
 - 月次シーズン開始時は全プレイヤーの当月Ratingを1500から開始する
 - Rating・ランク帯境界は運用データを見て調整可能とする
