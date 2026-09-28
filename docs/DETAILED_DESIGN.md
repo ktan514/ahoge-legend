@@ -1538,6 +1538,58 @@ RankingSeason
 
 月替わり境界時刻は毎月1日0:00（日本時間/JST、UTC+9）とする。内部時刻をUTCで保持する場合も、シーズン境界の判定はJSTへ換算して行う。
 
+
+Season判定はserver共通 `SeasonService` を正本とする。
+
+```text
+season_id_at(unix_ms):
+  shifted = unix_ms + 9時間
+  YYYY-MM = shiftedをUTC年月として読む
+```
+
+境界例:
+
+```text
+2026-09-30T14:59:59.999Z = 2026-09-30 23:59:59.999 JST → 2026-09
+2026-09-30T15:00:00.000Z = 2026-10-01 00:00:00.000 JST → 2026-10
+```
+
+Season metadataはNakama Storageへ保持する。
+
+```text
+collection: ranking_season
+user_id: system
+key: <season_id>
+
+value:
+- season_id
+- starts_at_unix_ms  # その月1日 00:00:00.000 JST
+- ends_at_unix_ms    # 翌月1日 00:00:00.000 JST、exclusive
+```
+
+`state` は保存値にせず、現在の `season_id` と比較して次をresponse時に導出する。
+
+- 現在月: `CURRENT`
+- 過去月: `HISTORICAL`
+
+これにより月替わり時に過去metadataのstate更新処理を必要としない。
+
+現在SeasonのRating / AHOGE集計は新しいseason_idのStorage key / leaderboard IDへ自然に切り替える。前SeasonのStorage / leaderboardは削除・上書きしない。
+
+- 新Seasonでplayer recordが未作成ならRating 1500 / wins 0 / losses 0
+- 新SeasonでAHOGE recordが未作成ならtotal_match_wins 0 / total_ranked_matches 0
+- Match settlementは結果確定時刻のseason_idへ記録する
+- settlement object自体にもseason_idを保持する
+
+PLAYER Ranking / AHOGE LEGEND Ranking取得RPCはpayloadの `season_id` を任意指定できる。
+
+- 未指定: 現在Season
+- 指定: `YYYY-MM` 形式を検証し、そのSeasonを取得
+- 現在より未来のseason_idは拒否
+- 過去Season指定時も現在Seasonのデータを変更しない
+
+Season metadata取得RPCを用意し、現在 / 過去Seasonの境界とstateをclientが参照できるようにする。
+
 ### 16.2 プレイヤーランキング
 
 個人プレイヤー単位のランキングとする。
