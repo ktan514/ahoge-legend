@@ -43,6 +43,21 @@ func _run() -> void:
 		_fail("同じDevice IDで同じNakama Userへ再認証されませんでした。")
 		return
 
+	var rating_rpc = await online_session.client.rpc_async(
+		online_session.session,
+		"ahoge_current_rating"
+	)
+	if rating_rpc == null or rating_rpc.is_exception():
+		_fail("初期Rating RPCを取得できませんでした。")
+		return
+	var rating = JSON.parse_string(str(rating_rpc.payload))
+	if not rating is Dictionary:
+		_fail("初期Rating RPC payloadが不正です。")
+		return
+	if int(rating.get("rating", -1)) != 1500 			or int(rating.get("wins", -1)) != 0 			or int(rating.get("losses", -1)) != 0:
+		_fail("新規Playerの初期Ratingが1500 / 0勝 / 0敗ではありません。")
+		return
+
 	print("AHOGE LEGEND online smoke: PASS user_id=%s" % first_user_id)
 	quit(0)
 

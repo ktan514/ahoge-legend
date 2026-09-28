@@ -69,6 +69,20 @@ func _run() -> void:
 		return
 	var p2_user_id := str(second_session.user_id)
 
+	var initial_p1_rating := await _read_current_rating(
+		online_session.client,
+		online_session.session
+	)
+	var initial_p2_rating := await _read_current_rating(second_client, second_session)
+	if initial_p1_rating.is_empty() or initial_p2_rating.is_empty():
+		_fail("Match開始前Ratingを取得できませんでした。")
+		return
+	var expected_after_match := _expected_elo_pair(
+		initial_p1_rating,
+		initial_p2_rating,
+		true
+	)
+
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
 	_second_socket.received_match_state.connect(_on_second_match_state)
@@ -254,6 +268,19 @@ func _run() -> void:
 		_fail("P1/P2でMatch Result payloadが一致しません。")
 		return
 
+	var ratings := await _wait_rating_pair(
+		online_session.client,
+		online_session.session,
+		second_client,
+		second_session,
+		expected_after_match["p1"],
+		expected_after_match["p2"],
+		5000
+	)
+	if ratings.is_empty():
+		_fail("通常BO3後のRatingがElo期待値へ更新されませんでした。")
+		return
+
 	var state_count_p1 := _p1_states.size()
 	var state_count_p2 := _p2_states.size()
 	var hit_count := _p1_hits.size()
@@ -289,12 +316,90 @@ func _run() -> void:
 		return
 
 	await online_session.realtime_socket.leave_match_async(p1_joined[0])
+	var finished_rejoin = await online_session.realtime_socket.join_match_async(p1_joined[0])
+	if finished_rejoin == null or finished_rejoin.is_exception():
+		_fail("終了済みmatchへの再joinに失敗しました。")
+		return
+	await create_timer(0.4).timeout
+
+	var ratings_after_rejoin := await _wait_rating_pair(
+		online_session.client,
+		online_session.session,
+		second_client,
+		second_session,
+		expected_after_match["p1"],
+		expected_after_match["p2"],
+		3000
+	)
+	if ratings_after_rejoin.is_empty():
+		_fail("終了済みmatch再join後にRatingが二重更新されました。")
+		return
+
+	await online_session.realtime_socket.leave_match_async(p1_joined[0])
 	await _second_socket.leave_match_async(_second_match_id)
 	online_session.disconnect_realtime_socket()
 	_second_socket.close()
 
 	print("AHOGE LEGEND match result smoke: PASS match_id=%s" % p1_joined[0])
 	quit(0)
+
+
+func _read_current_rating(client, session) -> Dictionary:
+	var rpc_result = await client.rpc_async(session, "ahoge_current_rating")
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _expected_elo_pair(
+	p1_before: Dictionary,
+	p2_before: Dictionary,
+	p1_wins: bool
+) -> Dictionary:
+	var p1_rating := int(p1_before.get("rating", 1500))
+	var p2_rating := int(p2_before.get("rating", 1500))
+	var p1_expected := 1.0 / (1.0 + pow(10.0, float(p2_rating - p1_rating) / 400.0))
+	var p2_expected := 1.0 / (1.0 + pow(10.0, float(p1_rating - p2_rating) / 400.0))
+	var p1_score := 1.0 if p1_wins else 0.0
+	var p2_score := 0.0 if p1_wins else 1.0
+	return {
+		"p1": {
+			"rating": int(round(p1_rating + 32.0 * (p1_score - p1_expected))),
+			"wins": int(p1_before.get("wins", 0)) + (1 if p1_wins else 0),
+			"losses": int(p1_before.get("losses", 0)) + (0 if p1_wins else 1),
+		},
+		"p2": {
+			"rating": int(round(p2_rating + 32.0 * (p2_score - p2_expected))),
+			"wins": int(p2_before.get("wins", 0)) + (0 if p1_wins else 1),
+			"losses": int(p2_before.get("losses", 0)) + (1 if p1_wins else 0),
+		},
+	}
+
+
+func _wait_rating_pair(
+	p1_client,
+	p1_session,
+	p2_client,
+	p2_session,
+	expected_p1: Dictionary,
+	expected_p2: Dictionary,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var p1_rating := await _read_current_rating(p1_client, p1_session)
+		var p2_rating := await _read_current_rating(p2_client, p2_session)
+		if not p1_rating.is_empty() and not p2_rating.is_empty():
+			if int(p1_rating.get("rating", -1)) == int(expected_p1.get("rating", -2)) 					and int(p2_rating.get("rating", -1)) == int(expected_p2.get("rating", -2)) 					and int(p1_rating.get("wins", -1)) == int(expected_p1.get("wins", -2)) 					and int(p1_rating.get("losses", -1)) == int(expected_p1.get("losses", -2)) 					and int(p2_rating.get("wins", -1)) == int(expected_p2.get("wins", -2)) 					and int(p2_rating.get("losses", -1)) == int(expected_p2.get("losses", -2)):
+				return {
+					"p1": p1_rating,
+					"p2": p2_rating,
+				}
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _play_round(
