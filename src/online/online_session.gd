@@ -397,7 +397,8 @@ func resume_saved_match_after_login(
 	joined_match = join_result
 	current_match_id = str(join_result.match_id)
 
-	var deadline := Time.get_ticks_msec() + 4000
+	var snapshot_timeout_seconds := maxi(4, connect_timeout_seconds)
+	var deadline := Time.get_ticks_msec() + snapshot_timeout_seconds * 1000
 	while Time.get_ticks_msec() < deadline and _saved_resume_snapshot.is_empty():
 		await get_tree().create_timer(0.02).timeout
 
