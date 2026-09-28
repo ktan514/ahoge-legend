@@ -785,6 +785,8 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 ### 17.3 PLAYER
 
+PLAYERタブはRating降順で表示する。同Ratingは同順位とし、wins / lossesは順位決定には使用しない。
+
 表示候補:
 
 - 順位
