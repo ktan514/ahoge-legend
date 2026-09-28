@@ -1176,6 +1176,7 @@ func clear_runtime_session_preserving_match() -> void:
 	joined_match = null
 	current_match_id = ""
 	current_match_mode = ""
+	_pending_join_match_id = ""
 	latest_match_snapshot = {}
 	_next_input_sequence = 0
 	session = null
