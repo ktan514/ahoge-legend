@@ -8,6 +8,7 @@ const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
 const MatchResumeStoreScript := preload("res://src/online/match_resume_store.gd")
+const MatchResumeRouterScript := preload("res://src/online/match_resume_router.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
@@ -34,6 +35,7 @@ func _init() -> void:
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
 	_test_match_resume_store_lock_context()
+	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
 	_test_ranked_character_contract()
 	_test_combat_input_protocol()
@@ -283,6 +285,38 @@ func _test_match_resume_store_lock_context() -> void:
 
 	_expect_true(store.clear(), "保存match情報を解決後に消去できる")
 	_expect_true(store.load_for_user("user-a").is_empty(), "消去後は未解決matchを返さない")
+
+
+func _test_match_resume_router() -> void:
+	_expect_equal(
+		MatchResumeRouterScript.resolve({
+			"match_mode": "ranked",
+			"match_finished": false,
+		}),
+		MatchResumeRouterScript.DESTINATION_BATTLE,
+		"進行中RankedはBattleへ復帰する"
+	)
+	_expect_equal(
+		MatchResumeRouterScript.resolve({
+			"match_mode": "ranked",
+			"match_finished": true,
+		}),
+		MatchResumeRouterScript.DESTINATION_RANKED_RESULT,
+		"終了済みRankedはResultだけ表示する"
+	)
+	_expect_equal(
+		MatchResumeRouterScript.resolve({
+			"match_mode": "friend",
+			"match_finished": true,
+		}),
+		MatchResumeRouterScript.DESTINATION_FRIEND_CHARACTER_SELECT,
+		"終了済みFriendはCharacter Selectへ戻す"
+	)
+	_expect_equal(
+		MatchResumeRouterScript.resolve({}),
+		MatchResumeRouterScript.DESTINATION_NONE,
+		"空snapshotには復帰先を与えない"
+	)
 
 func _test_ranked_matchmaker_query() -> void:
 	var query: String = RankedMatchmakerQueryScript.build(1500)
