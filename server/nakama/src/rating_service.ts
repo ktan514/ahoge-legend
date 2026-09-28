@@ -192,6 +192,7 @@ function rankedMatchSettlementExists(
   matchId: string
 ): boolean {
   const objects = nk.storageRead([
+    ...ahogeWrites,
     {
       collection: RANKED_MATCH_SETTLEMENT_COLLECTION,
       key: matchId,
@@ -215,6 +216,7 @@ function settleRankedMatchRating(
   matchMode: string,
   winnerUserId: string,
   loserUserId: string,
+  characterIdByUser: {[key: string]: string},
   finishCause: string,
   unixMilliseconds: number
 ): boolean {
@@ -231,12 +233,27 @@ function settleRankedMatchRating(
 
   const seasonId = currentSeasonIdJst(unixMilliseconds);
 
+  const winnerCharacterId = String(characterIdByUser[winnerUserId] || "");
+  const loserCharacterId = String(characterIdByUser[loserUserId] || "");
+  if (!winnerCharacterId || !loserCharacterId) {
+    logger.error("ahoge ranking settlement rejected missing character IDs.");
+    return false;
+  }
+
   if (rankedMatchSettlementExists(nk, matchId)) {
-    return syncRankedMatchLeaderboardProjection(
-      nk,
-      winnerUserId,
-      loserUserId,
-      seasonId
+    return (
+      syncRankedMatchLeaderboardProjection(
+        nk,
+        winnerUserId,
+        loserUserId,
+        seasonId
+      ) &&
+      syncAhogeLegendProjection(
+        nk,
+        winnerCharacterId,
+        loserCharacterId,
+        seasonId
+      )
     );
   }
   const winnerRecord = readPlayerSeasonRank(nk, winnerUserId, seasonId);
@@ -258,6 +275,13 @@ function settleRankedMatchRating(
     wins: loserRecord.value.wins,
     losses: loserRecord.value.losses + 1
   };
+
+  const ahogeWrites = buildAhogeSeasonRankWrites(
+    nk,
+    winnerCharacterId,
+    loserCharacterId,
+    seasonId
+  );
 
   const writes: nkruntime.StorageWriteRequest[] = [
     {
@@ -287,6 +311,8 @@ function settleRankedMatchRating(
         season_id: seasonId,
         winner_user_id: winnerUserId,
         loser_user_id: loserUserId,
+        winner_character_id: winnerCharacterId,
+        loser_character_id: loserCharacterId,
         finish_cause: finishCause,
         settled_at_unix_ms: unixMilliseconds
       },
@@ -313,6 +339,20 @@ function settleRankedMatchRating(
       return false;
     }
 
+    if (!syncAhogeLegendProjection(
+      nk,
+      winnerCharacterId,
+      loserCharacterId,
+      seasonId
+    )) {
+      logger.warn(
+        "ahoge legend ranking projection will retry. match_id=%s season=%s",
+        matchId,
+        seasonId
+      );
+      return false;
+    }
+
     logger.info(
       "ahoge ranked rating settled. match_id=%s season=%s winner=%s loser=%s winner_rating=%d loser_rating=%d",
       matchId,
@@ -326,11 +366,19 @@ function settleRankedMatchRating(
   } catch (error) {
     // 同一matchの並行settlementで他方が先に成功した場合は完了扱い。
     if (rankedMatchSettlementExists(nk, matchId)) {
-      return syncRankedMatchLeaderboardProjection(
-        nk,
-        winnerUserId,
-        loserUserId,
-        seasonId
+      return (
+        syncRankedMatchLeaderboardProjection(
+          nk,
+          winnerUserId,
+          loserUserId,
+          seasonId
+        ) &&
+        syncAhogeLegendProjection(
+          nk,
+          winnerCharacterId,
+          loserCharacterId,
+          seasonId
+        )
       );
     }
     logger.warn(
