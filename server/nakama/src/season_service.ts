@@ -132,19 +132,43 @@ const seasonMetadataRpc: nkruntime.RpcFunction = function (
   }
 
   let requestedSeasonId = "";
+  let requestedAtUnixMilliseconds: number | null = null;
   if (payload) {
     try {
       const parsed = JSON.parse(payload);
       if (parsed && parsed.season_id !== undefined) {
         requestedSeasonId = String(parsed.season_id || "");
       }
-    } catch (_error) {
+      if (parsed && parsed.at_unix_ms !== undefined) {
+        const value = Number(parsed.at_unix_ms);
+        if (!isFinite(value) || Math.floor(value) !== value || value < 0) {
+          throw new Error("invalid at_unix_ms");
+        }
+        requestedAtUnixMilliseconds = value;
+      }
+    } catch (error) {
+      if (String(error).indexOf("invalid at_unix_ms") >= 0) {
+        throw error;
+      }
       throw new Error("invalid payload");
     }
   }
 
+  if (requestedSeasonId && requestedAtUnixMilliseconds !== null) {
+    throw new Error("season_id and at_unix_ms are mutually exclusive");
+  }
+
   const now = Date.now();
-  const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
+  if (
+    requestedAtUnixMilliseconds !== null &&
+    requestedAtUnixMilliseconds > now
+  ) {
+    throw new Error("future at_unix_ms is not allowed");
+  }
+
+  const seasonId = requestedAtUnixMilliseconds !== null
+    ? currentSeasonIdJst(requestedAtUnixMilliseconds)
+    : resolveRequestedSeasonId(requestedSeasonId, now);
   const metadata = ensureSeasonMetadata(nk, seasonId);
 
   return JSON.stringify({
