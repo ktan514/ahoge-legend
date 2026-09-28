@@ -83,6 +83,19 @@ func _run() -> void:
 		true
 	)
 
+	var ahoge_before := await _read_ahoge_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ahoge_before.is_empty():
+		_fail("Match開始前AHOGE LEGEND Rankingを取得できませんでした。")
+		return
+	var long_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
 	_second_socket.received_match_state.connect(_on_second_match_state)
@@ -313,6 +326,37 @@ func _run() -> void:
 		_fail("authoritative PLAYER Rankingへclientから直接writeできました。")
 		return
 
+	var ahoge_after := await _read_ahoge_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ahoge_after.is_empty():
+		_fail("Match終了後AHOGE LEGEND Rankingを取得できませんでした。")
+		return
+	var long_after := _ahoge_counts(
+		ahoge_after,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	if int(long_after.get("wins", -1)) != int(long_before.get("wins", 0)) + 1 			or int(long_after.get("matches", -1)) != int(long_before.get("matches", 0)) + 2:
+		_fail("同character対戦のAHOGE集計が wins+1 / matches+2 ではありません。")
+		return
+
+	var ahoge_season_id := str(ahoge_after.get("season_id", ""))
+	if ahoge_season_id.is_empty():
+		_fail("AHOGE LEGEND Rankingにseason_idがありません。")
+		return
+	var ahoge_direct_write = await online_session.client.write_leaderboard_record_async(
+		online_session.session,
+		"ahoge_legend_%s" % ahoge_season_id,
+		999999,
+		0,
+		"{}"
+	)
+	if ahoge_direct_write == null or not ahoge_direct_write.is_exception():
+		_fail("authoritative AHOGE LEGEND Rankingへclientから直接writeできました。")
+		return
+
 	var state_count_p1 := _p1_states.size()
 	var state_count_p2 := _p2_states.size()
 	var hit_count := _p1_hits.size()
@@ -374,6 +418,40 @@ func _run() -> void:
 
 	print("AHOGE LEGEND match result smoke: PASS match_id=%s" % p1_joined[0])
 	quit(0)
+
+
+func _read_ahoge_ranking(client, session, limit: int) -> Dictionary:
+	var rpc_result = await client.rpc_async(
+		session,
+		"ahoge_legend_ranking",
+		JSON.stringify({"limit": limit})
+	)
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _find_ahoge_record(ranking: Dictionary, character_id: String) -> Dictionary:
+	var records = ranking.get("records", [])
+	if not records is Array:
+		return {}
+	for record in records:
+		if record is Dictionary and str(record.get("character_id", "")) == character_id:
+			return record
+	return {}
+
+
+func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
+	var record := _find_ahoge_record(ranking, character_id)
+	if record.is_empty():
+		return {"wins": 0, "matches": 0}
+	return {
+		"wins": int(record.get("total_match_wins", 0)),
+		"matches": int(record.get("total_ranked_matches", 0)),
+	}
 
 
 func _read_player_ranking(client, session, limit: int) -> Dictionary:
