@@ -183,9 +183,11 @@ func _start_authoritative_match() -> void:
 
 func _process(_delta: float) -> void:
 	if OnlineSession.is_reconnecting():
-		hud.show_network_overlay(
-			"RECONNECTING...\n%d" % OnlineSession.reconnect_remaining_seconds()
-		)
+		var remaining := OnlineSession.reconnect_remaining_seconds()
+		if remaining > 0:
+			hud.show_network_overlay("RECONNECTING...\n%d" % remaining)
+		else:
+			hud.show_network_overlay("RESTORING ORIGINAL MATCH...")
 
 
 func _input(event: InputEvent) -> void:
@@ -424,8 +426,12 @@ func _on_reconnect_started(_grace_seconds: int) -> void:
 
 func _on_reconnect_succeeded(_match_id: String) -> void:
 	hud.clear_network_overlay()
+	if _match_finished:
+		hud.set_connection_status("M1 AUTHORITATIVE: MATCH FINISHED")
+		_input_ready = false
+		return
 	hud.set_connection_status("M1 AUTHORITATIVE: READY")
-	_input_ready = not _match_finished and not _round_countdown_active
+	_input_ready = not _round_countdown_active
 
 
 func _on_reconnect_failed(message: String) -> void:
@@ -474,6 +480,23 @@ func _on_match_snapshot_received(snapshot: Dictionary) -> void:
 	var combat_states: Dictionary = snapshot.get("combat_state_by_user", {})
 	_apply_snapshot_combat_state(_p1_user_id, combat_states.get(_p1_user_id, {}))
 	_apply_snapshot_combat_state(_p2_user_id, combat_states.get(_p2_user_id, {}))
+
+	if _match_finished:
+		_input_ready = false
+		hud.set_connection_status("M1 AUTHORITATIVE: MATCH FINISHED")
+		var winner_user_id := str(snapshot.get("match_winner_user_id", ""))
+		var finish_cause := str(snapshot.get("match_finish_cause", ""))
+		var result_prefix := "MATCH WINNER"
+		if finish_cause == "DISCONNECT_TIMEOUT":
+			result_prefix = "DISCONNECT WINNER"
+		hud.flash_message(
+			"%s: %s  %d-%d" % [
+				result_prefix,
+				_player_label(winner_user_id),
+				int(_snapshot["player_one_rounds"]),
+				int(_snapshot["player_two_rounds"]),
+			]
+		)
 
 	_render()
 
