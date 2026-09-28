@@ -49,6 +49,7 @@ signal saved_match_resume_failed(message: String)
 signal combat_input_failed(message: String)
 
 var client = null
+var _client_timeout_seconds: int = 0
 var session = null
 var account = null
 var realtime_socket = null
@@ -80,15 +81,19 @@ func _ready() -> void:
 		_resume_store.clear()
 
 
-func create_local_client():
+func create_local_client(
+	timeout_seconds: int = OnlineConfigScript.CLIENT_TIMEOUT_SECONDS
+):
+	var safe_timeout := maxi(1, timeout_seconds)
 	client = Nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
 		OnlineConfigScript.PORT,
 		OnlineConfigScript.SCHEME,
-		OnlineConfigScript.CLIENT_TIMEOUT_SECONDS,
+		safe_timeout,
 		OnlineConfigScript.CLIENT_LOG_LEVEL
 	)
+	_client_timeout_seconds = safe_timeout
 	return client
 
 
@@ -98,9 +103,12 @@ func get_or_create_device_id() -> String:
 	return _identity_store.load_or_create()
 
 
-func authenticate_local_device() -> Dictionary:
-	if client == null:
-		create_local_client()
+func authenticate_local_device(
+	timeout_seconds: int = OnlineConfigScript.CLIENT_TIMEOUT_SECONDS
+) -> Dictionary:
+	var safe_timeout := maxi(1, timeout_seconds)
+	if client == null or _client_timeout_seconds != safe_timeout:
+		create_local_client(safe_timeout)
 
 	var device_id := get_or_create_device_id()
 	if device_id.is_empty():
@@ -222,7 +230,56 @@ func acknowledge_saved_match_destination() -> bool:
 	return clear_saved_match_context()
 
 
-func repair_unresolved_match_context() -> Dictionary:
+func restore_unresolved_match_with_retry() -> Dictionary:
+	var max_attempts := OnlineConfigScript.MATCH_RECOVERY_RETRY_LIMIT + 1
+	var last_message := "元の対戦をserverで確認できませんでした。"
+
+	for attempt_index in range(max_attempts):
+		if not is_authenticated():
+			var auth_result: Dictionary = await authenticate_local_device(
+				OnlineConfigScript.MATCH_RECOVERY_TIMEOUT_SECONDS
+			)
+			if not bool(auth_result.get("ok", false)):
+				last_message = str(
+					auth_result.get("message", "元の対戦へ復帰するための認証に失敗しました。")
+				)
+				if attempt_index < max_attempts - 1:
+					clear_runtime_session_preserving_match()
+					continue
+				break
+
+		var repaired: Dictionary = await repair_unresolved_match_context(
+			OnlineConfigScript.MATCH_RECOVERY_TIMEOUT_SECONDS
+		)
+		if bool(repaired.get("ok", false)):
+			var completed := repaired.duplicate(true)
+			completed["attempts"] = attempt_index + 1
+			return completed
+
+		last_message = str(
+			repaired.get("message", "元の対戦をserverで確認できませんでした。")
+		)
+		if str(repaired.get("reason", "")) != "server_unconfirmed":
+			var non_retryable := repaired.duplicate(true)
+			non_retryable["attempts"] = attempt_index + 1
+			return non_retryable
+
+		if attempt_index < max_attempts - 1:
+			clear_runtime_session_preserving_match()
+
+	clear_runtime_session_preserving_match()
+	return {
+		"ok": false,
+		"repaired": false,
+		"reason": "retry_exhausted",
+		"attempts": max_attempts,
+		"message": last_message,
+	}
+
+
+func repair_unresolved_match_context(
+	connect_timeout_seconds: int = OnlineConfigScript.SOCKET_CONNECT_TIMEOUT_SECONDS
+) -> Dictionary:
 	if not is_authenticated():
 		return {
 			"ok": false,
@@ -262,7 +319,7 @@ func repair_unresolved_match_context() -> Dictionary:
 				"message": "元の対戦情報を保存できないためlockを維持します。",
 			}
 
-	var result: Dictionary = await resume_saved_match_after_login()
+	var result: Dictionary = await resume_saved_match_after_login(connect_timeout_seconds)
 	if bool(result.get("ok", false)):
 		if bool(result.get("resumed", false)):
 			return {
@@ -296,7 +353,9 @@ func repair_unresolved_match_context() -> Dictionary:
 	}
 
 
-func resume_saved_match_after_login() -> Dictionary:
+func resume_saved_match_after_login(
+	connect_timeout_seconds: int = OnlineConfigScript.SOCKET_CONNECT_TIMEOUT_SECONDS
+) -> Dictionary:
 	if not is_authenticated():
 		return _saved_resume_fail("再ログイン復帰には認証が必要です。")
 
@@ -308,7 +367,7 @@ func resume_saved_match_after_login() -> Dictionary:
 			"destination": "none",
 		}
 
-	var connect_result: Dictionary = await connect_realtime_socket()
+	var connect_result: Dictionary = await connect_realtime_socket(connect_timeout_seconds)
 	if not bool(connect_result.get("ok", false)):
 		return _saved_resume_fail("保存済み対戦へのRealtime再接続に失敗しました。")
 
@@ -363,7 +422,9 @@ func resume_saved_match_after_login() -> Dictionary:
 	}
 
 
-func connect_realtime_socket() -> Dictionary:
+func connect_realtime_socket(
+	timeout_seconds: int = OnlineConfigScript.SOCKET_CONNECT_TIMEOUT_SECONDS
+) -> Dictionary:
 	_intentional_disconnect = false
 	if not is_authenticated():
 		return _realtime_fail("Nakama認証前はRealtime Socketへ接続できません。")
@@ -392,7 +453,7 @@ func connect_realtime_socket() -> Dictionary:
 	var connect_result = await candidate.connect_async(
 		session,
 		OnlineConfigScript.SOCKET_APPEAR_ONLINE,
-		OnlineConfigScript.SOCKET_CONNECT_TIMEOUT_SECONDS
+		maxi(1, timeout_seconds)
 	)
 
 	if connect_result == null or connect_result.is_exception():
@@ -661,6 +722,10 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 
 	ranked_match_found.emit(match_id)
 
+	# 前matchのsnapshotだけをjoin開始前に破棄する。
+	# join直後にserverから届いた新snapshotをawait完了後に消してはならない。
+	latest_match_snapshot = {}
+	_next_input_sequence = 0
 	var join_result = await candidate.join_match_async(match_id)
 	if join_result == null or join_result.is_exception():
 		_matchmaking_fail(
@@ -674,8 +739,6 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 		return
 
 	joined_match = join_result
-	latest_match_snapshot = {}
-	_next_input_sequence = 0
 	if not register_joined_online_match(
 		str(join_result.match_id),
 		MatchResumeStoreScript.MODE_RANKED

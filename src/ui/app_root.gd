@@ -36,37 +36,24 @@ func _ready() -> void:
 
 
 func _restore_saved_match_flow() -> void:
-	var auth_result: Dictionary = await _online_session.authenticate_local_device()
-	if not bool(auth_result.get("ok", false)):
-		_show_top_menu()
-		return
-
-	var resumed: Dictionary = await _online_session.resume_saved_match_after_login()
-	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
-		_show_top_menu()
-		return
-
-	var snapshot: Dictionary = resumed.get("snapshot", {})
-	var destination := str(resumed.get("destination", ""))
-	if str(snapshot.get("match_mode", "")) != "ranked":
-		# Friend UIは工程4後半。lockは解除せず、新規対戦開始を防ぐ。
-		_show_top_menu()
-		return
-
-	if destination == "battle":
-		_ranked_rating_before = {}
-		_show_ranked_online_battle(snapshot)
-	elif destination == "ranked_result":
-		_show_ranked_result_from_snapshot(snapshot)
-	else:
-		_show_top_menu()
+	await _force_resume_unresolved_ranked_match()
 
 
 func _show_top_menu() -> void:
 	var screen = _replace_screen(TOP_MENU_SCENE)
 	screen.connect("local_test_requested", Callable(self, "_show_local_character_select"))
-	screen.connect("online_battle_requested", Callable(self, "_show_battle_mode_select"))
+	screen.connect("online_battle_requested", Callable(self, "_on_online_battle_requested"))
 	screen.connect("exit_requested", Callable(self, "_on_exit_requested"))
+
+
+func _on_online_battle_requested() -> void:
+	if (
+		_online_session.has_saved_match_context_file()
+		or _online_session.has_unresolved_match_context()
+	):
+		await _force_resume_unresolved_ranked_match()
+		return
+	_show_battle_mode_select()
 
 
 func _show_battle_mode_select() -> void:
@@ -76,7 +63,10 @@ func _show_battle_mode_select() -> void:
 
 
 func _on_ranked_requested(screen: Control) -> void:
-	if _online_session.has_unresolved_match_context():
+	if (
+		_online_session.has_saved_match_context_file()
+		or _online_session.has_unresolved_match_context()
+	):
 		await _force_resume_unresolved_ranked_match()
 		return
 
@@ -90,7 +80,10 @@ func _on_ranked_requested(screen: Control) -> void:
 				screen.call("set_status", str(auth_result.get("message", "認証に失敗しました。")))
 			return
 
-	if _online_session.has_unresolved_match_context():
+	if (
+		_online_session.has_saved_match_context_file()
+		or _online_session.has_unresolved_match_context()
+	):
 		await _force_resume_unresolved_ranked_match()
 		return
 
@@ -113,36 +106,22 @@ func _on_ranked_requested(screen: Control) -> void:
 func _force_resume_unresolved_ranked_match() -> void:
 	_show_loading("RESTORING ORIGINAL MATCH...")
 
-	if not _online_session.is_authenticated():
-		var auth_result: Dictionary = await _online_session.authenticate_local_device()
-		if not bool(auth_result.get("ok", false)):
-			_show_battle_mode_select()
-			if is_instance_valid(_current_screen):
-				_current_screen.call(
-					"set_status",
-					str(auth_result.get("message", "元の対戦へ復帰するための認証に失敗しました。"))
-				)
-			return
-
-	var repaired: Dictionary = await _online_session.repair_unresolved_match_context()
-	if not bool(repaired.get("ok", false)):
-		_show_battle_mode_select()
-		if is_instance_valid(_current_screen):
-			_current_screen.call(
-				"set_status",
-				str(repaired.get("message", "元の対戦への復帰に失敗しました。"))
-			)
+	var restored: Dictionary = await _online_session.restore_unresolved_match_with_retry()
+	if not bool(restored.get("ok", false)):
+		_show_top_menu()
 		return
 
-	var destination := str(repaired.get("destination", ""))
-	var snapshot: Dictionary = repaired.get("snapshot", {})
-	if not bool(repaired.get("repaired", false)) or snapshot.is_empty():
-		_show_battle_mode_select()
-		if is_instance_valid(_current_screen):
-			_current_screen.call("set_status", "元の対戦をserverで確認できませんでした。")
+	var destination := str(restored.get("destination", ""))
+	var snapshot: Dictionary = restored.get("snapshot", {})
+	if (
+		not bool(restored.get("repaired", false))
+		or snapshot.is_empty()
+	):
+		_show_top_menu()
 		return
 
 	if str(snapshot.get("match_mode", "")) != "ranked":
+		# Friend UIは工程4後半。lockは解除せずTopへ戻す。
 		_show_top_menu()
 		return
 
@@ -155,9 +134,7 @@ func _force_resume_unresolved_ranked_match() -> void:
 		_show_ranked_result_from_snapshot(snapshot)
 		return
 
-	_show_battle_mode_select()
-	if is_instance_valid(_current_screen):
-		_current_screen.call("set_status", "元の対戦の復帰先を決定できませんでした。")
+	_show_top_menu()
 
 
 func _show_local_character_select() -> void:
@@ -177,7 +154,10 @@ func _show_ranked_character_select() -> void:
 
 
 func _show_ranked_matching(character_id: String) -> void:
-	if _online_session.has_unresolved_match_context():
+	if (
+		_online_session.has_saved_match_context_file()
+		or _online_session.has_unresolved_match_context()
+	):
 		await _force_resume_unresolved_ranked_match()
 		return
 
