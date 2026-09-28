@@ -178,6 +178,80 @@ func acknowledge_saved_match_destination() -> bool:
 	return clear_saved_match_context()
 
 
+func repair_unresolved_match_context() -> Dictionary:
+	if not is_authenticated():
+		return {
+			"ok": false,
+			"repaired": false,
+			"reason": "not_authenticated",
+			"message": "対戦状態の再確認には認証が必要です。",
+		}
+
+	var saved: Dictionary = get_saved_match_for_current_user()
+	if saved.is_empty():
+		if current_match_id.is_empty():
+			return {
+				"ok": true,
+				"repaired": false,
+				"reason": "no_lock",
+				"destination": MatchResumeRouterScript.DESTINATION_NONE,
+			}
+
+		if current_match_mode not in [
+			MatchResumeStoreScript.MODE_RANKED,
+			MatchResumeStoreScript.MODE_FRIEND,
+		]:
+			return {
+				"ok": false,
+				"repaired": false,
+				"reason": "unsafe_local_state",
+				"message": "保存情報が不足しているため、自動解除せず元の対戦状態を保持します。",
+			}
+
+		if _resume_store == null:
+			_resume_store = MatchResumeStoreScript.new()
+		if not _resume_store.save(current_match_id, current_match_mode, str(session.user_id)):
+			return {
+				"ok": false,
+				"repaired": false,
+				"reason": "persist_failed",
+				"message": "元の対戦情報を保存できないためlockを維持します。",
+			}
+
+	var result: Dictionary = await resume_saved_match_after_login()
+	if bool(result.get("ok", false)):
+		if bool(result.get("resumed", false)):
+			return {
+				"ok": true,
+				"repaired": true,
+				"reason": "match_resolved",
+				"destination": str(result.get("destination", "")),
+				"snapshot": result.get("snapshot", {}),
+			}
+		return {
+			"ok": true,
+			"repaired": false,
+			"reason": "no_lock",
+			"destination": MatchResumeRouterScript.DESTINATION_NONE,
+		}
+
+	# resume_saved_match_after_loginはMatch Not Found時だけ保存lockを解除する。
+	if get_saved_match_for_current_user().is_empty() and current_match_id.is_empty():
+		return {
+			"ok": true,
+			"repaired": true,
+			"reason": "match_not_found",
+			"destination": MatchResumeRouterScript.DESTINATION_NONE,
+		}
+
+	return {
+		"ok": false,
+		"repaired": false,
+		"reason": "server_unconfirmed",
+		"message": str(result.get("message", "server確認に失敗したためlockを維持します。")),
+	}
+
+
 func resume_saved_match_after_login() -> Dictionary:
 	if not is_authenticated():
 		return _saved_resume_fail("再ログイン復帰には認証が必要です。")
