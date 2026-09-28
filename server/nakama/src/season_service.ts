@@ -20,6 +20,19 @@ function validSeasonId(seasonId: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(seasonId);
 }
 
+function parseOptionalSeasonId(parsed: any): string {
+  if (!parsed || parsed.season_id === undefined) {
+    return "";
+  }
+  if (
+    typeof parsed.season_id !== "string" ||
+    !validSeasonId(parsed.season_id)
+  ) {
+    throw new Error("invalid season_id");
+  }
+  return parsed.season_id;
+}
+
 function seasonBoundsJst(seasonId: string): RankingSeasonMetadata {
   if (!validSeasonId(seasonId)) {
     throw new Error("invalid season_id");
@@ -136,9 +149,7 @@ const seasonMetadataRpc: nkruntime.RpcFunction = function (
   if (payload) {
     try {
       const parsed = JSON.parse(payload);
-      if (parsed && parsed.season_id !== undefined) {
-        requestedSeasonId = String(parsed.season_id || "");
-      }
+      requestedSeasonId = parseOptionalSeasonId(parsed);
       if (parsed && parsed.at_unix_ms !== undefined) {
         const value = Number(parsed.at_unix_ms);
         if (!isFinite(value) || Math.floor(value) !== value || value < 0) {
