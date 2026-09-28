@@ -193,29 +193,15 @@ func _run() -> void:
 		_fail("DISCONNECT_TIMEOUT後のRatingがElo期待値へ更新されませんでした。")
 		return
 
-	var ahoge_after := await _read_ahoge_ranking(
+	var ahoge_after := await _wait_ahoge_counts(
 		online_session.client,
 		online_session.session,
-		100
+		long_before,
+		short_before,
+		5000
 	)
 	if ahoge_after.is_empty():
-		_fail("DISCONNECT_TIMEOUT後AHOGE LEGEND Rankingを取得できませんでした。")
-		return
-
-	var long_after := _ahoge_counts(
-		ahoge_after,
-		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
-	)
-	var short_after := _ahoge_counts(
-		ahoge_after,
-		OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
-	)
-
-	if int(long_after.get("wins", -1)) != int(long_before.get("wins", 0)) 			or int(long_after.get("matches", -1)) != int(long_before.get("matches", 0)) + 1:
-		_fail("切断敗北loser LONG集計が wins不変 / matches+1 ではありません。")
-		return
-	if int(short_after.get("wins", -1)) != int(short_before.get("wins", 0)) + 1 			or int(short_after.get("matches", -1)) != int(short_before.get("matches", 0)) + 1:
-		_fail("切断勝者SHORT集計が wins+1 / matches+1 ではありません。")
+		_fail("DISCONNECT_TIMEOUT後AHOGE LEGEND Rankingが期待集計へ更新されませんでした。")
 		return
 
 	var forbidden: Dictionary = await online_session.start_ranked_matchmaking(
@@ -291,6 +277,36 @@ func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
 		"wins": int(record.get("total_match_wins", 0)),
 		"matches": int(record.get("total_ranked_matches", 0)),
 	}
+
+
+func _wait_ahoge_counts(
+	client,
+	session,
+	long_before: Dictionary,
+	short_before: Dictionary,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var ranking := await _read_ahoge_ranking(client, session, 100)
+		if not ranking.is_empty():
+			var long_after := _ahoge_counts(
+				ranking,
+				OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+			)
+			var short_after := _ahoge_counts(
+				ranking,
+				OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+			)
+			if (
+				int(long_after.get("wins", -1)) == int(long_before.get("wins", 0))
+				and int(long_after.get("matches", -1)) == int(long_before.get("matches", 0)) + 1
+				and int(short_after.get("wins", -1)) == int(short_before.get("wins", 0)) + 1
+				and int(short_after.get("matches", -1)) == int(short_before.get("matches", 0)) + 1
+			):
+				return ranking
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _read_current_rating(client, session) -> Dictionary:
