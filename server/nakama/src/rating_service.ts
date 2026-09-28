@@ -301,6 +301,7 @@ function settleRankedMatchRating(
       permissionRead: 1,
       permissionWrite: 0
     },
+    ...ahogeWrites,
     {
       collection: RANKED_MATCH_SETTLEMENT_COLLECTION,
       key: matchId,
