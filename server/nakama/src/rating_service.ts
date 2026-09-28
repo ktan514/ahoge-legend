@@ -3,7 +3,6 @@ const RANKED_MATCH_SETTLEMENT_COLLECTION = "ranked_match_settlement";
 const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 const ELO_INITIAL_RATING = 1500;
 const ELO_K_FACTOR = 32;
-const JST_OFFSET_MILLISECONDS = 9 * 60 * 60 * 1000;
 const PLAYER_RATING_LEADERBOARD_PREFIX = "player_rating_";
 const PLAYER_RANKING_MAX_LIMIT = 100;
 
@@ -25,14 +24,6 @@ interface EloUpdateResult {
   loserRating: number;
   winnerExpected: number;
   loserExpected: number;
-}
-
-function currentSeasonIdJst(unixMilliseconds: number): string {
-  const shifted = new Date(unixMilliseconds + JST_OFFSET_MILLISECONDS);
-  const year = shifted.getUTCFullYear();
-  const month = shifted.getUTCMonth() + 1;
-  const monthText = month < 10 ? "0" + month : String(month);
-  return String(year) + "-" + monthText;
 }
 
 function eloExpectedScore(selfRating: number, opponentRating: number): number {
@@ -231,6 +222,7 @@ function settleRankedMatchRating(
   }
 
   const seasonId = currentSeasonIdJst(unixMilliseconds);
+  ensureSeasonMetadata(nk, seasonId);
 
   const winnerCharacterId = String(characterIdByUser[winnerUserId] || "");
   const loserCharacterId = String(characterIdByUser[loserUserId] || "");
@@ -394,17 +386,28 @@ const currentRatingRpc: nkruntime.RpcFunction = function (
   ctx,
   _logger,
   nk,
-  _payload
+  payload
 ): string {
   if (!ctx.userId) {
     throw new Error("authentication required");
   }
 
-  const seasonId = currentSeasonIdJst(Date.now());
+  let requestedSeasonId = "";
+  if (payload) {
+    try {
+      const parsed = JSON.parse(payload);
+      requestedSeasonId = parseOptionalSeasonId(parsed);
+    } catch (_error) {
+      throw new Error("invalid payload");
+    }
+  }
+
+  const now = Date.now();
+  const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
+  ensureSeasonMetadata(nk, seasonId);
   const record = readPlayerSeasonRank(nk, ctx.userId, seasonId);
   return JSON.stringify(record.value);
 };
-
 
 const playerRankingRpc: nkruntime.RpcFunction = function (
   ctx,
@@ -417,19 +420,23 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
   }
 
   let requestedLimit = 20;
+  let requestedSeasonId = "";
   if (payload) {
     try {
       const parsed = JSON.parse(payload);
       if (parsed && typeof parsed.limit === "number") {
         requestedLimit = Math.floor(parsed.limit);
       }
+      requestedSeasonId = parseOptionalSeasonId(parsed);
     } catch (_error) {
       throw new Error("invalid payload");
     }
   }
   const limit = Math.max(1, Math.min(PLAYER_RANKING_MAX_LIMIT, requestedLimit));
 
-  const seasonId = currentSeasonIdJst(Date.now());
+  const now = Date.now();
+  const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
+  ensureSeasonMetadata(nk, seasonId);
   const leaderboardId = ensurePlayerRatingLeaderboard(nk, seasonId);
   const result = nk.leaderboardRecordsList(
     leaderboardId,

@@ -108,6 +108,7 @@ interface AhogeRankedMatchState {
   matchFinished: boolean;
   matchWinnerUserId: string;
   matchFinishCause: string;
+  matchFinishedAtUnixMs: number;
   ratingSettlementDone: boolean;
   ratingSettlementRetryTick: number;
 }
@@ -173,6 +174,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       matchFinished: false,
       matchWinnerUserId: "",
       matchFinishCause: MATCH_FINISH_CAUSE_NONE,
+      matchFinishedAtUnixMs: -1,
       ratingSettlementDone: false,
       ratingSettlementRetryTick: 0
     },
@@ -799,6 +801,7 @@ function finishRound(
     state.matchFinished = true;
     state.matchWinnerUserId = winnerUserId;
     state.matchFinishCause = MATCH_FINISH_CAUSE_BO3;
+    state.matchFinishedAtUnixMs = Date.now();
     state.roundResetPending = false;
     state.roundResultHoldUntilTick = -1;
   } else {
@@ -1460,7 +1463,7 @@ function settleRankedRatingIfNeeded(
     loserUserId,
     state.characterIdByUser,
     state.matchFinishCause,
-    Date.now()
+    state.matchFinishedAtUnixMs >= 0 ? state.matchFinishedAtUnixMs : Date.now()
   );
 
   if (settled) {
@@ -1510,6 +1513,7 @@ function resolveReconnectTimeout(
   state.matchFinished = true;
   state.matchWinnerUserId = winnerUserId;
   state.matchFinishCause = MATCH_FINISH_CAUSE_DISCONNECT_TIMEOUT;
+  state.matchFinishedAtUnixMs = Date.now();
   state.roundResetPending = false;
   state.roundCountdownActive = false;
   state.roundBoundaryPauseStartTick = -1;

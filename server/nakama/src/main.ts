@@ -23,6 +23,7 @@ let InitModule: nkruntime.InitModule = function (
   initializer: nkruntime.Initializer
 ): void {
   initializer.registerRpc("ahoge_health", healthRpc);
+  initializer.registerRpc("ahoge_season_metadata", seasonMetadataRpc);
   initializer.registerRpc("ahoge_current_rating", currentRatingRpc);
   initializer.registerRpc("ahoge_player_ranking", playerRankingRpc);
   initializer.registerRpc("ahoge_legend_ranking", ahogeLegendRankingRpc);

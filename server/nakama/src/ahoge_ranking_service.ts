@@ -225,19 +225,23 @@ const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
   }
 
   let requestedLimit = 20;
+  let requestedSeasonId = "";
   if (payload) {
     try {
       const parsed = JSON.parse(payload);
       if (parsed && typeof parsed.limit === "number") {
         requestedLimit = Math.floor(parsed.limit);
       }
+      requestedSeasonId = parseOptionalSeasonId(parsed);
     } catch (_error) {
       throw new Error("invalid payload");
     }
   }
   const limit = Math.max(1, Math.min(AHOGE_LEGEND_MAX_LIMIT, requestedLimit));
 
-  const seasonId = currentSeasonIdJst(Date.now());
+  const now = Date.now();
+  const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
+  ensureSeasonMetadata(nk, seasonId);
   const leaderboardId = ensureAhogeLegendLeaderboard(nk, seasonId);
   const result = nk.leaderboardRecordsList(
     leaderboardId,
