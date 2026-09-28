@@ -396,9 +396,7 @@ const currentRatingRpc: nkruntime.RpcFunction = function (
   if (payload) {
     try {
       const parsed = JSON.parse(payload);
-      if (parsed && parsed.season_id !== undefined) {
-        requestedSeasonId = String(parsed.season_id || "");
-      }
+      requestedSeasonId = parseOptionalSeasonId(parsed);
     } catch (_error) {
       throw new Error("invalid payload");
     }
@@ -429,9 +427,7 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
       if (parsed && typeof parsed.limit === "number") {
         requestedLimit = Math.floor(parsed.limit);
       }
-      if (parsed && parsed.season_id !== undefined) {
-        requestedSeasonId = String(parsed.season_id || "");
-      }
+      requestedSeasonId = parseOptionalSeasonId(parsed);
     } catch (_error) {
       throw new Error("invalid payload");
     }
