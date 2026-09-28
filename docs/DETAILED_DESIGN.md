@@ -2115,7 +2115,61 @@ Eloの暫定式を使用する。
 ```text
 initial_rating = 1500
 K = 32
+
+expected(self, opponent)
+  = 1 / (1 + 10 ^ ((opponent - self) / 400))
+
+new_rating
+  = round(old_rating + K * (score - expected))
 ```
+
+- 勝者 `score = 1`
+- 敗者 `score = 0`
+- 更新後Ratingは標準的な四捨五入で整数化する
+- 通常BO3と `DISCONNECT_TIMEOUT` は同じRating更新対象
+- Friend MatchはRating更新対象外
+- server障害 / 両者同時切断など勝敗を通常確定しない終了はRating更新しない
+
+Rating保存はNakama Storageをserver authoritativeに使用する。
+
+```text
+collection: player_season_rank
+key: <season_id>
+user_id: <player_id>
+
+value:
+- season_id
+- rating
+- wins
+- losses
+```
+
+当月オブジェクトが存在しないplayerはRating 1500 / wins 0 / losses 0として扱い、最初のRanked結果で作成する。
+
+season_idはJSTの対象月を `YYYY-MM` 形式で表す。月次Season切替の完全な運用は後続Season Issueで実装するが、Rating保存keyは最初からseason単位に分離する。
+
+clientはRating Storageへ直接writeできない。
+
+Match Resultごとの二重更新防止:
+
+```text
+collection: ranked_match_settlement
+key: <authoritative match_id>
+user_id: system(00000000-0000-0000-0000-000000000000)
+
+value:
+- match_id
+- season_id
+- winner_user_id
+- loser_user_id
+- finish_cause
+- settled_at_unix_ms
+```
+
+settlementが既に存在するmatchはRatingを再更新しない。
+
+勝者Rating、敗者Rating、settlementは1回のserver-side batched Storage writeで保存する。どれか1つだけ成功する部分更新を許可しない。
+
 
 暫定ランク帯:
 
