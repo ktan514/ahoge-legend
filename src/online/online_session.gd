@@ -121,6 +121,31 @@ func is_authenticated() -> bool:
 	return session != null and session.valid and not session.expired
 
 
+func has_unresolved_match_context() -> bool:
+	if not current_match_id.is_empty():
+		return true
+	if not is_authenticated():
+		return false
+	return not get_saved_match_for_current_user().is_empty()
+
+
+func can_start_new_online_match() -> bool:
+	return not has_unresolved_match_context()
+
+
+func register_joined_online_match(match_id: String, match_mode: String) -> bool:
+	if not is_authenticated() or match_id.is_empty():
+		return false
+	if match_mode not in [MatchResumeStoreScript.MODE_RANKED, MatchResumeStoreScript.MODE_FRIEND]:
+		return false
+	if _resume_store == null:
+		_resume_store = MatchResumeStoreScript.new()
+
+	current_match_id = match_id
+	current_match_mode = match_mode
+	return _resume_store.save(current_match_id, current_match_mode, str(session.user_id))
+
+
 func get_saved_match_for_current_user() -> Dictionary:
 	if not is_authenticated():
 		return {}
@@ -132,7 +157,10 @@ func get_saved_match_for_current_user() -> Dictionary:
 func clear_saved_match_context() -> bool:
 	if _resume_store == null:
 		_resume_store = MatchResumeStoreScript.new()
+	current_match_id = ""
 	current_match_mode = ""
+	joined_match = null
+	_next_input_sequence = 0
 	return _resume_store.clear()
 
 
@@ -265,6 +293,12 @@ func build_ranked_matchmaker_query(rating: int) -> String:
 # CharacterSelectで確定したIDをMatchmaker propertyとしてserverへ渡す。
 # character_id自体は対戦相手の検索条件には使用しない。
 func start_ranked_matchmaking(rating: int, character_id: String) -> Dictionary:
+	if has_unresolved_match_context():
+		return _matchmaking_fail(
+			"unresolved_match",
+			"未解決の対戦があります。元の対戦を復帰または終了処理してから新しい対戦を開始してください。"
+		)
+
 	if not is_realtime_connected():
 		return _matchmaking_fail("start", "Realtime Socket接続前はMatchmakerを開始できません。")
 
@@ -373,12 +407,13 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 		return
 
 	joined_match = join_result
-	current_match_id = str(join_result.match_id)
-	current_match_mode = MatchResumeStoreScript.MODE_RANKED
 	_next_input_sequence = 0
-	if _resume_store == null:
-		_resume_store = MatchResumeStoreScript.new()
-	_resume_store.save(current_match_id, current_match_mode, str(session.user_id))
+	if not register_joined_online_match(
+		str(join_result.match_id),
+		MatchResumeStoreScript.MODE_RANKED
+	):
+		_matchmaking_fail("persist_match", "対戦復帰情報を保存できませんでした。")
+		return
 	ranked_match_joined.emit(current_match_id)
 
 
@@ -709,11 +744,7 @@ func _cancel_reconnect() -> void:
 
 
 func _run_reconnect_loop(generation: int) -> void:
-	while (
-		_reconnect_in_progress
-		and generation == _reconnect_generation
-		and Time.get_ticks_msec() < _reconnect_deadline_msec
-	):
+	while _reconnect_in_progress and generation == _reconnect_generation:
 		var connect_result: Dictionary = await connect_realtime_socket()
 		if bool(connect_result.get("ok", false)) and realtime_socket != null:
 			var reconnect_match_id := current_match_id
@@ -721,7 +752,8 @@ func _run_reconnect_loop(generation: int) -> void:
 			if join_result != null and not join_result.is_exception() and bool(join_result.authoritative):
 				joined_match = join_result
 				current_match_id = str(join_result.match_id)
-				# serverからMATCH_SNAPSHOTを受信した時点でreconnect_succeededとする。
+				# 15秒以内なら進行中snapshot、超過後なら終了済みsnapshotをserverが返す。
+				# MATCH_SNAPSHOT受信時点でreconnect_succeededとする。
 				return
 
 			var failed_socket = realtime_socket
@@ -730,14 +762,6 @@ func _run_reconnect_loop(generation: int) -> void:
 				failed_socket.close()
 
 		await get_tree().create_timer(OnlineConfigScript.RECONNECT_RETRY_SECONDS).timeout
-
-	if not _reconnect_in_progress or generation != _reconnect_generation:
-		return
-
-	_reconnect_in_progress = false
-	var message := "15秒以内にauthoritative matchへ再接続できませんでした。"
-	reconnect_failed.emit(message)
-	realtime_connection_failed.emit(message)
 
 
 func _on_realtime_connection_error(error, candidate) -> void:
