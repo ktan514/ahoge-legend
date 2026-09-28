@@ -13,6 +13,8 @@ signal realtime_connected(user_id: String)
 signal realtime_disconnected
 signal realtime_connection_failed(message: String)
 signal ranked_matchmaking_started(min_rating: int, max_rating: int)
+signal ranked_matchmaking_range_changed(min_rating: int, max_rating: int, elapsed_seconds: int)
+signal ranked_matchmaking_prolonged_wait(elapsed_seconds: int, min_rating: int, max_rating: int)
 signal ranked_matchmaking_cancelled
 signal ranked_match_found(match_id: String)
 signal ranked_match_joined(match_id: String)
@@ -46,6 +48,11 @@ var session = null
 var account = null
 var realtime_socket = null
 var matchmaker_ticket: String = ""
+var _matchmaking_generation: int = 0
+var _ranked_matchmaking_rating: int = 0
+var _ranked_matchmaking_character_id: String = ""
+var _ranked_matchmaking_range: int = 0
+var _ranked_matchmaking_started_msec: int = 0
 var joined_match = null
 var current_match_id: String = ""
 var current_match_mode: String = ""
@@ -374,6 +381,152 @@ func build_ranked_matchmaker_query(rating: int) -> String:
 	return RankedMatchmakerQueryScript.build(rating)
 
 
+func current_ranked_matchmaking_range() -> int:
+	return _ranked_matchmaking_range
+
+
+func ranked_matchmaking_elapsed_seconds() -> int:
+	if _ranked_matchmaking_started_msec <= 0:
+		return 0
+	return maxi(0, int((Time.get_ticks_msec() - _ranked_matchmaking_started_msec) / 1000))
+
+
+func _create_ranked_matchmaker_ticket(
+	rating: int,
+	character_id: String,
+	rating_range: int
+) -> Dictionary:
+	if not is_realtime_connected():
+		return {
+			"ok": false,
+			"message": "Realtime Socketが切断されています。",
+		}
+
+	var query := RankedMatchmakerQueryScript.build_with_range(rating, rating_range)
+	var result = await realtime_socket.add_matchmaker_async(
+		query,
+		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
+		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
+		{
+			"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
+			"character_id": character_id,
+		},
+		{"rating": float(rating)}
+	)
+	if result == null or result.is_exception():
+		return {
+			"ok": false,
+			"message": _result_error_message(result, "Matchmaker ticketを作成できませんでした。"),
+		}
+
+	return {
+		"ok": true,
+		"ticket": str(result.ticket),
+		"min_rating": rating - rating_range,
+		"max_rating": rating + rating_range,
+	}
+
+
+func _start_ranked_matchmaking_expansion(rating: int, character_id: String) -> void:
+	_matchmaking_generation += 1
+	_ranked_matchmaking_rating = rating
+	_ranked_matchmaking_character_id = character_id
+	_ranked_matchmaking_range = OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
+	_ranked_matchmaking_started_msec = Time.get_ticks_msec()
+	var generation := _matchmaking_generation
+	call_deferred("_run_ranked_matchmaking_expansion", generation)
+
+
+func _stop_ranked_matchmaking_expansion() -> void:
+	_matchmaking_generation += 1
+	_ranked_matchmaking_rating = 0
+	_ranked_matchmaking_character_id = ""
+	_ranked_matchmaking_range = 0
+	_ranked_matchmaking_started_msec = 0
+
+
+func _run_ranked_matchmaking_expansion(generation: int) -> void:
+	while (
+		generation == _matchmaking_generation
+		and not matchmaker_ticket.is_empty()
+		and _ranked_matchmaking_range < OnlineConfigScript.RANKED_MAX_RATING_RANGE
+	):
+		await get_tree().create_timer(
+			float(OnlineConfigScript.RANKED_RANGE_EXPAND_INTERVAL_SECONDS)
+		).timeout
+
+		if generation != _matchmaking_generation 				or matchmaker_ticket.is_empty() 				or not is_realtime_connected():
+			return
+
+		var next_range := mini(
+			_ranked_matchmaking_range + OnlineConfigScript.RANKED_RATING_RANGE_STEP,
+			OnlineConfigScript.RANKED_MAX_RATING_RANGE
+		)
+		var previous_ticket := matchmaker_ticket
+		var remove_result = await realtime_socket.remove_matchmaker_async(previous_ticket)
+
+		# matched/cancel/切断がawait中に成立した場合、後続ticketを作らない。
+		if generation != _matchmaking_generation or matchmaker_ticket != previous_ticket:
+			return
+
+		if remove_result == null or remove_result.is_exception():
+			_matchmaking_fail(
+				"expand_remove",
+				_result_error_message(remove_result, "検索幅拡大前のticket取消に失敗しました。")
+			)
+			return
+
+		var create_result: Dictionary = await _create_ranked_matchmaker_ticket(
+			_ranked_matchmaking_rating,
+			_ranked_matchmaking_character_id,
+			next_range
+		)
+
+		if generation != _matchmaking_generation:
+			if bool(create_result.get("ok", false)) and is_realtime_connected():
+				var superseded_ticket := str(create_result.get("ticket", ""))
+				if not superseded_ticket.is_empty():
+					await realtime_socket.remove_matchmaker_async(superseded_ticket)
+			return
+
+		if not bool(create_result.get("ok", false)):
+			matchmaker_ticket = ""
+			_stop_ranked_matchmaking_expansion()
+			_matchmaking_fail(
+				"expand_add",
+				str(create_result.get("message", "検索幅拡大後のticket作成に失敗しました。"))
+			)
+			return
+
+		matchmaker_ticket = str(create_result["ticket"])
+		_ranked_matchmaking_range = next_range
+		ranked_matchmaking_range_changed.emit(
+			int(create_result["min_rating"]),
+			int(create_result["max_rating"]),
+			ranked_matchmaking_elapsed_seconds()
+		)
+
+	if generation != _matchmaking_generation or matchmaker_ticket.is_empty():
+		return
+
+	var elapsed := ranked_matchmaking_elapsed_seconds()
+	var prolonged_wait_remaining := maxi(
+		0,
+		OnlineConfigScript.RANKED_PROLONGED_WAIT_SECONDS - elapsed
+	)
+	if prolonged_wait_remaining > 0:
+		await get_tree().create_timer(float(prolonged_wait_remaining)).timeout
+
+	if generation != _matchmaking_generation 			or matchmaker_ticket.is_empty() 			or not is_realtime_connected():
+		return
+
+	ranked_matchmaking_prolonged_wait.emit(
+		ranked_matchmaking_elapsed_seconds(),
+		_ranked_matchmaking_rating - _ranked_matchmaking_range,
+		_ranked_matchmaking_rating + _ranked_matchmaking_range
+	)
+
+
 # CharacterSelectで確定したIDをMatchmaker propertyとしてserverへ渡す。
 # character_id自体は対戦相手の検索条件には使用しない。
 func start_ranked_matchmaking(rating: int, character_id: String) -> Dictionary:
@@ -392,38 +545,28 @@ func start_ranked_matchmaking(rating: int, character_id: String) -> Dictionary:
 	if not OnlineConfigScript.is_supported_ranked_character_id(character_id):
 		return _matchmaking_fail("start", "未対応character_idです: %s" % character_id)
 
-	var min_rating := rating - OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
-	var max_rating := rating + OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
-	var query := build_ranked_matchmaker_query(rating)
-	var string_properties := {
-		"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
-		"character_id": character_id,
-	}
-	var numeric_properties := {
-		"rating": float(rating),
-	}
-
-	var ticket_result = await realtime_socket.add_matchmaker_async(
-		query,
-		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
-		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
-		string_properties,
-		numeric_properties
+	var ticket_result: Dictionary = await _create_ranked_matchmaker_ticket(
+		rating,
+		character_id,
+		OnlineConfigScript.RANKED_INITIAL_RATING_RANGE
 	)
-
-	if ticket_result == null or ticket_result.is_exception():
+	if not bool(ticket_result.get("ok", false)):
 		return _matchmaking_fail(
 			"add_matchmaker",
-			_result_error_message(ticket_result, "Matchmaker ticketを作成できませんでした。")
+			str(ticket_result.get("message", "Matchmaker ticketを作成できませんでした。"))
 		)
 
-	matchmaker_ticket = str(ticket_result.ticket)
-	ranked_matchmaking_started.emit(min_rating, max_rating)
+	matchmaker_ticket = str(ticket_result["ticket"])
+	_start_ranked_matchmaking_expansion(rating, character_id)
+	ranked_matchmaking_started.emit(
+		int(ticket_result["min_rating"]),
+		int(ticket_result["max_rating"])
+	)
 
 	return {
 		"ok": true,
-		"min_rating": min_rating,
-		"max_rating": max_rating,
+		"min_rating": int(ticket_result["min_rating"]),
+		"max_rating": int(ticket_result["max_rating"]),
 		"character_id": character_id,
 	}
 
@@ -432,11 +575,13 @@ func cancel_ranked_matchmaking() -> Dictionary:
 	if matchmaker_ticket.is_empty():
 		return _matchmaking_fail("cancel", "取消対象のMatchmaker ticketがありません。")
 
+	var ticket_to_remove := matchmaker_ticket
+	_stop_ranked_matchmaking_expansion()
+
 	if not is_realtime_connected():
 		matchmaker_ticket = ""
 		return _matchmaking_fail("cancel", "Realtime Socketが切断されています。")
 
-	var ticket_to_remove := matchmaker_ticket
 	var result = await realtime_socket.remove_matchmaker_async(ticket_to_remove)
 	if result == null or result.is_exception():
 		return _matchmaking_fail(
@@ -470,6 +615,7 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 	if matchmaker_ticket.is_empty() or matched_ticket != matchmaker_ticket:
 		return
 
+	_stop_ranked_matchmaking_expansion()
 	matchmaker_ticket = ""
 	var match_id := str(matched.match_id)
 	if match_id.is_empty():
@@ -760,6 +906,7 @@ func disconnect_realtime_socket() -> bool:
 func clear_runtime_session_preserving_match() -> void:
 	_intentional_disconnect = true
 	_cancel_reconnect()
+	_stop_ranked_matchmaking_expansion()
 	disconnect_realtime_socket()
 	matchmaker_ticket = ""
 	joined_match = null
@@ -800,6 +947,7 @@ func _on_realtime_closed(candidate) -> void:
 		return
 
 	realtime_socket = null
+	_stop_ranked_matchmaking_expansion()
 	matchmaker_ticket = ""
 	joined_match = null
 	realtime_disconnected.emit()
