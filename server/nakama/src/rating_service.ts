@@ -396,14 +396,6 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
     return String(record.ownerId);
   });
 
-  const accounts = ownerIds.length > 0 ? nk.accountsGetId(ownerIds, []) : [];
-  const usernameByUser: {[key: string]: string} = {};
-  accounts.forEach(function (account): void {
-    if (account.user && account.user.id) {
-      usernameByUser[String(account.user.id)] = String(account.user.username || "");
-    }
-  });
-
   const storageObjects = ownerIds.length > 0
     ? nk.storageRead(ownerIds.map(function (userId): nkruntime.StorageReadRequest {
         return {
@@ -440,7 +432,7 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
     return {
       display_rank: displayRank,
       player_id: userId,
-      player_name: usernameByUser[userId] || String(record.username || ""),
+      player_name: String(record.username || ""),
       rating: rating,
       rank_tier: rankTierForRating(rating),
       wins: value.wins,
