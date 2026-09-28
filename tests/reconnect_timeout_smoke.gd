@@ -118,8 +118,8 @@ func _run() -> void:
 		_fail("Round 1が開始しませんでした。")
 		return
 
-	var original_match_id := p1_joined[0]
-	var saved := online_session.get_saved_match_for_current_user()
+	var original_match_id: String = str(p1_joined[0])
+	var saved: Dictionary = online_session.get_saved_match_for_current_user()
 	if str(saved.get("match_id", "")) != original_match_id:
 		_fail("P1の未解決match情報が保存されていません。")
 		return
