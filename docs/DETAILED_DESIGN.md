@@ -1542,6 +1542,46 @@ RankingSeason
 
 個人プレイヤー単位のランキングとする。
 
+PLAYER Rankingの順位決定値は `Rating` のみとする。wins / losses / 勝率をsecondary tie-breakへ使用しない。
+
+同じRatingのplayerは同じ表示順位とする。
+
+```text
+1  1600
+2  1550
+2  1550
+4  1516
+```
+
+server保存はseason単位のauthoritative Nakama leaderboardを使用する。
+
+```text
+leaderboard_id = player_rating_<YYYY-MM>
+authoritative  = true
+sort           = desc
+operator       = set
+score          = Rating
+subscore       = 0
+```
+
+Rating settlement成功後、winner / loserのleaderboard recordをserver runtimeだけが更新する。leaderboard書込が一時失敗した場合、既存の `player_season_rank` Storageから再同期してretryできる構造とする。
+
+PLAYER Ranking取得RPCは当月leaderboardの先頭から最大100件を返す。
+
+```text
+season_id
+records[]
+- display_rank
+- player_id
+- player_name
+- rating
+- rank_tier
+- wins
+- losses
+```
+
+Nakama内部の同score record順序は表示順位に使用せず、response生成時に同Ratingを同じ `display_rank` へ正規化する。
+
 ```text
 PlayerSeasonRank
 - season_id
