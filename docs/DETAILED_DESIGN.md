@@ -1508,13 +1508,113 @@ Countdown中に届いたclient戦闘入力は `INPUT_ACCEPTED` を返さず破�
 
 ### 15.2 フレンドマッチ
 
-- ホストがルームを作成
-- ルームコードを発行
-- 参加者がルームコードを入力
-- Ratingは変動させない
-- 対戦後は再戦可能
+Friend Matchのroom lifecycleはNakama TypeScript Runtimeを正本とし、クライアントはroom codeからmatch IDを生成・推測しない。
 
-フレンドルームコードは暫定で6文字とし、文字集合は `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` を使用する。曖昧な `0/O/1/I` は除外する。ルーム終了時に無効化し、放置ルームは2時間で失効させる。
+#### 15.2.1 Room code
+
+- ホストがroomを作成した時点でserverが6文字codeを生成する
+- 文字集合は `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
+- 曖昧な `0/O/1/I` は使用しない
+- secure random bytesから各文字を選ぶ
+- Storageのcreate-only version checkでcode予約を行い、既存codeとの衝突時は別codeを再生成する
+- roomが終了・失効したcodeはjoin不可とする
+
+#### 15.2.2 Room Storage
+
+```text
+collection = friend_room
+user_id    = system
+key        = <room_code>
+
+value:
+- room_code
+- host_user_id
+- guest_user_id
+- host_character_id
+- guest_character_id
+- host_ready
+- guest_ready
+- state
+- current_match_id
+- match_generation
+- created_at_unix_ms
+- last_activity_at_unix_ms
+- expires_at_unix_ms
+```
+
+room stateは次を使用する。
+
+```text
+WAITING    # hostのみ
+LOBBY      # host/guestが入室しCharacter Select / Ready待ち
+STARTING   # 両者Ready成立後、authoritative match生成中
+IN_MATCH   # Friend authoritative match進行中
+POST_MATCH # Match Result確定後、同roomで再戦待ち
+```
+
+放置roomは最後の有効なroom更新から2時間で失効する。status readだけでは失効時刻を延長しない。失効roomをread/joinした場合はserverが失効として拒否し、可能な場合はStorageを削除する。
+
+#### 15.2.3 Lobby / Ready
+
+- roomにはhost 1名、guest 1名だけ参加できる
+- host/guestは自分の `character_id` だけ更新できる
+- character変更時は自分のReadyを解除する
+- 両者が入室し、両者が対応characterを選択した後にReady可能とする
+- 両者Readyが成立した1回の状態遷移だけがauthoritative match生成を開始する
+- match生成中は `STARTING` とし、重複Readyによる二重match生成を防止する
+- 生成するmatchは既存 `ahoge_ranked` handlerを戦闘コアとして再利用し、`matchMode=friend` を渡す
+- expected user ID / character IDはroom Storageを正本としてmatch init paramsへ渡す
+- clientはroom statusでserver確定 `current_match_id` を受け取り、そのIDへjoinする
+
+#### 15.2.4 Rating / Ranking
+
+Friend Matchは `matchMode=friend` とし、Match Resultが確定しても次を更新しない。
+
+- Player Rating
+- PLAYER Ranking
+- AHOGE LEGEND Ranking
+
+Round / BO3 / Reconnect / Match ResultはRankedと同じserver authoritative battle handlerを使用する。
+
+#### 15.2.5 Rematch
+
+Match Result確定時、serverは対応roomを `POST_MATCH` へ戻し、両者のReadyを解除する。選択characterは保持する。
+
+`REMATCH` は同じroomのLobbyへ戻る操作として扱う。両者が再度Readyになった時点で新しいauthoritative Friend matchを生成する。これにより片側だけの操作で再戦を強制せず、同じroom codeを維持したまま複数matchを行える。
+
+`CHANGE CHARACTER` ではcharacter更新によりReadyを解除し、両者Ready成立後に次matchを生成する。
+
+#### 15.2.6 Leave / room終了
+
+- active matchが `STARTING / IN_MATCH` の間はroom leave/closeで対戦結果を独自確定しない
+- active match中の意図的退出・両者同時切断・server障害の勝敗契約は #71 の責務とし、本Issueでは追加しない
+- guestがLobby / POST_MATCHで退出した場合はguest slotを空け、roomを `WAITING` へ戻す
+- hostがLobby / WAITING / POST_MATCHで退出した場合はroomを終了し、Storageを削除してcodeを無効化する
+- room終了後のcodeではjoinできない
+
+#### 15.2.7 Reconnect / 未解決match lock
+
+Friend matchへjoinした後は既存 `MatchResumeStore` に `match_mode=friend` として保存する。
+
+- 進行中Friend matchへは既存15秒Reconnect契約で同一matchへ復帰する
+- 終了済みFriend matchへ再ログインした場合はResultを再表示せずFriend文脈のCharacter Selectへ戻す
+- 未解決match contextがある間、`OnlineSession` は新しいFriend room作成・参加・対戦開始を拒否する
+- Match Not Found / Invalid Match IDの安全解除契約を変更しない
+
+#### 15.2.8 RPC
+
+初期Friend Match基盤では次のserver RPCを使用する。
+
+```text
+ahoge_friend_room_create
+ahoge_friend_room_join
+ahoge_friend_room_status
+ahoge_friend_room_character
+ahoge_friend_room_ready
+ahoge_friend_room_leave
+```
+
+RPCはすべて認証済みuserのみ利用可能とし、room membership / room state / character ID / code形式をserverで検証する。
 
 ## 16. ランキング
 
