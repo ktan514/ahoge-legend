@@ -585,6 +585,10 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - 切断側: 新しい入力は停止するが、serverが切断前に受理済みのaction stateはauthoritative tickで進行する
 - Round開始前 / Round終了後の片側切断: 両者が揃うまで次のRound進行へ移らない
 - 再接続成功時: server authoritative snapshotを受信し、復帰時点の状態へ同期する
+- 対戦中のゲーム終了 / client再起動後も、再ログイン時に保存済みmatch IDへ復帰を試みる
+- 再ログイン時にmatchが進行中ならBattleへ復帰する
+- 再ログイン時にRanked matchが終了済みならBattleを再表示せず、authoritative結果をUI-11へ表示する
+- 再ログイン時にFriend matchが終了済みなら結果画面を再表示せず、Character Select（選択メニュー）へ戻す
 - フレンドルームコード: 6文字
 - プレイヤーRating初期値: 1500
 - Elo K値: 32
