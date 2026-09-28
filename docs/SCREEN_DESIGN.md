@@ -870,6 +870,7 @@ RECONNECTING...
 - 保存済みFriend matchが終了済み: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
 - 未解決matchがある間は新しいRanked / Friend開始操作を無効化し、元matchの復帰または終了処理を優先する
 - 15秒を超えても回線が未復旧の場合、clientは元matchを破棄せず接続復旧を待つ。復旧後に終了済み結果を取得する
+- serverが元matchに対して確定的に `NOT_FOUND` を返した場合のみ「元の対戦は復旧できませんでした」と通信エラー表示し、古い対戦lockを解除する
 
 
 ### 18.3 退出確認
