@@ -325,6 +325,40 @@ func _test_ranked_matchmaker_query() -> void:
 		"+properties.mode:ranked +properties.rating:>=1400 +properties.rating:<=1600",
 		"Ranked Matchmaker初期queryはRating ±100"
 	)
+	_expect_equal(
+		RankedMatchmakerQueryScript.build_with_range(1500, 500),
+		"+properties.mode:ranked +properties.rating:>=1000 +properties.rating:<=2000",
+		"Ranked Matchmaker最大queryはRating ±500"
+	)
+
+	var expected_ranges := {
+		0: 100,
+		9: 100,
+		10: 200,
+		20: 300,
+		30: 400,
+		40: 500,
+		50: 500,
+		60: 500,
+		120: 500,
+	}
+	for elapsed_seconds in expected_ranges.keys():
+		_expect_equal(
+			RankedMatchmakerQueryScript.rating_range_for_elapsed_seconds(
+				int(elapsed_seconds)
+			),
+			int(expected_ranges[elapsed_seconds]),
+			"Ranked検索幅は経過秒に応じて段階拡大する: %d秒" % int(elapsed_seconds)
+		)
+
+	_expect_false(
+		RankedMatchmakerQueryScript.is_prolonged_wait(59),
+		"59秒では待機延長扱いにしない"
+	)
+	_expect_true(
+		RankedMatchmakerQueryScript.is_prolonged_wait(60),
+		"60秒から待機延長扱いにする"
+	)
 
 
 func _test_ranked_character_contract() -> void:
