@@ -77,6 +77,23 @@ func _run() -> void:
 		false
 	)
 
+	var ahoge_before := await _read_ahoge_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ahoge_before.is_empty():
+		_fail("切断試験開始前AHOGE LEGEND Rankingを取得できませんでした。")
+		return
+	var long_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	var short_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+	)
+
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
 	_second_socket.received_match_state.connect(_on_second_match_state)
@@ -103,7 +120,7 @@ func _run() -> void:
 		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
 		{
 			"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
-			"character_id": OnlineConfigScript.RANKED_CHARACTER_LONG_TEST,
+			"character_id": OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST,
 		},
 		{"rating": 1500.0}
 	)
@@ -176,6 +193,31 @@ func _run() -> void:
 		_fail("DISCONNECT_TIMEOUT後のRatingがElo期待値へ更新されませんでした。")
 		return
 
+	var ahoge_after := await _read_ahoge_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ahoge_after.is_empty():
+		_fail("DISCONNECT_TIMEOUT後AHOGE LEGEND Rankingを取得できませんでした。")
+		return
+
+	var long_after := _ahoge_counts(
+		ahoge_after,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	var short_after := _ahoge_counts(
+		ahoge_after,
+		OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+	)
+
+	if int(long_after.get("wins", -1)) != int(long_before.get("wins", 0)) 			or int(long_after.get("matches", -1)) != int(long_before.get("matches", 0)) + 1:
+		_fail("切断敗北loser LONG集計が wins不変 / matches+1 ではありません。")
+		return
+	if int(short_after.get("wins", -1)) != int(short_before.get("wins", 0)) + 1 			or int(short_after.get("matches", -1)) != int(short_before.get("matches", 0)) + 1:
+		_fail("切断勝者SHORT集計が wins+1 / matches+1 ではありません。")
+		return
+
 	var forbidden: Dictionary = await online_session.start_ranked_matchmaking(
 		1500,
 		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
@@ -215,6 +257,40 @@ func _run() -> void:
 
 	print("AHOGE LEGEND reconnect timeout smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _read_ahoge_ranking(client, session, limit: int) -> Dictionary:
+	var rpc_result = await client.rpc_async(
+		session,
+		"ahoge_legend_ranking",
+		JSON.stringify({"limit": limit})
+	)
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _find_ahoge_record(ranking: Dictionary, character_id: String) -> Dictionary:
+	var records = ranking.get("records", [])
+	if not records is Array:
+		return {}
+	for record in records:
+		if record is Dictionary and str(record.get("character_id", "")) == character_id:
+			return record
+	return {}
+
+
+func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
+	var record := _find_ahoge_record(ranking, character_id)
+	if record.is_empty():
+		return {"wins": 0, "matches": 0}
+	return {
+		"wins": int(record.get("total_match_wins", 0)),
+		"matches": int(record.get("total_ranked_matches", 0)),
+	}
 
 
 func _read_current_rating(client, session) -> Dictionary:

@@ -1458,6 +1458,7 @@ function settleRankedRatingIfNeeded(
     state.matchMode,
     state.matchWinnerUserId,
     loserUserId,
+    state.characterIdByUser,
     state.matchFinishCause,
     Date.now()
   );

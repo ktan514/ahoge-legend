@@ -3,6 +3,7 @@
     "./node_modules/nakama-runtime/index.d.ts",
     "./src/combat_config.ts",
     "./src/round_config.ts",
+    "./src/ahoge_ranking_service.ts",
     "./src/rating_service.ts",
     "./src/ranked_match.ts",
     "./src/main.ts"
