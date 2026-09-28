@@ -304,11 +304,24 @@ Rankedでは `REMATCH` を表示しない。
 
 強制復帰は既存 `repair_unresolved_match_context()` / `resume_saved_match_after_login()` の契約を再利用し、serverが返したsnapshotだけで復帰先を決定する。
 
-- 進行中Ranked → UI-10へ強制復帰
-- 終了済みRanked → UI-11へ強制復帰
-- server未確認 / network error → lock維持。新規Rankedは開始しない
+復帰時の接続契約は次で固定する。
+
+- 1回のserver接続timeoutは10秒
+- 初回失敗後のretry上限は2回（初回を含め最大3 attempts）
+- retry対象は認証・Realtime接続・server snapshot確認など、server確認が成立しなかった場合
+- retry上限まで失敗した場合は未解決match lockを保持したままUI-01 TopMenuへ戻す
+- TopMenuへ戻った後、ユーザーが再度 `ONLINE BATTLE` を選択した時点で同じ復帰処理を初回から再実行する
+- 復帰不能中は新規matchmakingを開始しない
+
+復帰結果は次のとおり扱う。
+
+- 進行中Ranked → 同じauthoritative matchのserver snapshotを取得してUI-10へ強制復帰
+- 終了済みRanked → serverから確定済みMatch Resultを含むsnapshotを取得してUI-11へ表示し、その後は通常の `NEXT MATCH / CHANGE CHARACTER / EXIT` へ進む
+- server未確認 / network error → 上記10秒timeout・最大2 retryを適用し、上限到達後はlock維持のままTopMenuへ戻す
 - Match Not Found / Invalid Match ID → 既存安全解除契約に従う
 - clientは元matchの勝敗・状態・復帰先を推測しない
+
+通常Ranked joinでは、前matchの `latest_match_snapshot` をjoin開始前に破棄する。serverからjoin直後に届いた新しい `MATCH_SNAPSHOT` を `join_match_async()` 完了後に再度消去してはならない。UI-09 / UI-10はこの最初のserver snapshotを初期状態の正本として使用する。
 
 ### 4.2 フレンドマッチ
 
