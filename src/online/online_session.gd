@@ -204,6 +204,9 @@ func resume_saved_match_after_login() -> Dictionary:
 		_saved_resume_waiting = false
 		_saved_resume_snapshot = {}
 		joined_match = null
+		if _is_match_not_found_result(join_result):
+			clear_saved_match_context()
+			return _saved_resume_fail("元の対戦はserver上に存在せず、復帰できませんでした。")
 		return _saved_resume_fail(
 			_result_error_message(join_result, "保存済みauthoritative matchへjoinできませんでした。")
 		)
@@ -770,6 +773,13 @@ func _run_reconnect_loop(generation: int) -> void:
 				# MATCH_SNAPSHOT受信時点でreconnect_succeededとする。
 				return
 
+			if _is_match_not_found_result(join_result):
+				_reconnect_in_progress = false
+				clear_saved_match_context()
+				var missing_message := "元の対戦はserver上に存在せず、復帰できませんでした。"
+				reconnect_failed.emit(missing_message)
+				return
+
 			var failed_socket = realtime_socket
 			realtime_socket = null
 			if failed_socket != null:
@@ -796,6 +806,15 @@ func _on_realtime_received_error(error, candidate) -> void:
 
 func _fail_from_result(step: String, result) -> Dictionary:
 	return _fail(step, _result_error_message(result, "Unknown Nakama error"))
+
+
+func _is_match_not_found_result(result) -> bool:
+	if result == null or not result.has_method("get_exception"):
+		return false
+	var exception = result.get_exception()
+	if exception == null:
+		return false
+	return int(exception.grpc_status_code) == 5 or int(exception.status_code) == 404
 
 
 func _result_error_message(result, fallback: String) -> String:
