@@ -2041,6 +2041,8 @@ clientは元matchの解決を最優先する。元matchの解決とは次のい�
 3. `match_finished=true / friend` のsnapshotを受信し、Character Selectへ遷移
 4. server側から元matchが存在しないことを確定的に返され、復帰不能処理が完了
 
+Nakamaの `NOT_FOUND`（gRPC code 5 / HTTP 404）を、保存済みmatchがserver上に存在しないことを示す確定的な復帰不能として扱う。この場合だけ古い未解決match lockを解除し、復帰不能エラー画面を経て新しい対戦を開始可能にする。通信失敗・timeout・UNAVAILABLE等ではlockを解除しない。
+
 1〜3では遷移先が確定するまでlockを解除しない。
 
 ```text
