@@ -4,6 +4,8 @@ const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 const ELO_INITIAL_RATING = 1500;
 const ELO_K_FACTOR = 32;
 const JST_OFFSET_MILLISECONDS = 9 * 60 * 60 * 1000;
+const PLAYER_RATING_LEADERBOARD_PREFIX = "player_rating_";
+const PLAYER_RANKING_MAX_LIMIT = 100;
 
 interface PlayerSeasonRankValue {
   season_id: string;
@@ -100,6 +102,92 @@ function readPlayerSeasonRank(
   };
 }
 
+function rankTierForRating(rating: number): string {
+  if (rating >= 2000) return "MASTER";
+  if (rating >= 1800) return "DIAMOND";
+  if (rating >= 1600) return "PLATINUM";
+  if (rating >= 1400) return "GOLD";
+  if (rating >= 1200) return "SILVER";
+  return "BRONZE";
+}
+
+function playerRatingLeaderboardId(seasonId: string): string {
+  return PLAYER_RATING_LEADERBOARD_PREFIX + seasonId;
+}
+
+function ensurePlayerRatingLeaderboard(
+  nk: nkruntime.Nakama,
+  seasonId: string
+): string {
+  const id = playerRatingLeaderboardId(seasonId);
+  nk.leaderboardCreate(
+    id,
+    true,
+    nkruntime.SortOrder.DESCENDING,
+    nkruntime.Operator.SET,
+    "",
+    {
+      season_id: seasonId,
+      ranking_type: "PLAYER"
+    },
+    true
+  );
+  return id;
+}
+
+function playerUsername(
+  nk: nkruntime.Nakama,
+  userId: string
+): string {
+  try {
+    const account = nk.accountGetId(userId);
+    if (account && account.user && account.user.username) {
+      return String(account.user.username);
+    }
+  } catch (_error) {
+    // Ranking自体の更新をusername取得失敗で止めない。
+  }
+  return "";
+}
+
+function syncPlayerRankingRecord(
+  nk: nkruntime.Nakama,
+  userId: string,
+  seasonId: string
+): void {
+  const record = readPlayerSeasonRank(nk, userId, seasonId);
+  const leaderboardId = ensurePlayerRatingLeaderboard(nk, seasonId);
+  nk.leaderboardRecordWrite(
+    leaderboardId,
+    userId,
+    playerUsername(nk, userId),
+    record.value.rating,
+    0,
+    {
+      season_id: seasonId,
+      wins: record.value.wins,
+      losses: record.value.losses,
+      rank_tier: rankTierForRating(record.value.rating)
+    },
+    nkruntime.OverrideOperator.SET
+  );
+}
+
+function syncRankedMatchLeaderboardProjection(
+  nk: nkruntime.Nakama,
+  winnerUserId: string,
+  loserUserId: string,
+  seasonId: string
+): boolean {
+  try {
+    syncPlayerRankingRecord(nk, winnerUserId, seasonId);
+    syncPlayerRankingRecord(nk, loserUserId, seasonId);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
 function rankedMatchSettlementExists(
   nk: nkruntime.Nakama,
   matchId: string
@@ -142,11 +230,16 @@ function settleRankedMatchRating(
     return false;
   }
 
-  if (rankedMatchSettlementExists(nk, matchId)) {
-    return true;
-  }
-
   const seasonId = currentSeasonIdJst(unixMilliseconds);
+
+  if (rankedMatchSettlementExists(nk, matchId)) {
+    return syncRankedMatchLeaderboardProjection(
+      nk,
+      winnerUserId,
+      loserUserId,
+      seasonId
+    );
+  }
   const winnerRecord = readPlayerSeasonRank(nk, winnerUserId, seasonId);
   const loserRecord = readPlayerSeasonRank(nk, loserUserId, seasonId);
   const elo = calculateEloUpdate(
@@ -206,6 +299,21 @@ function settleRankedMatchRating(
 
   try {
     nk.storageWrite(writes);
+
+    if (!syncRankedMatchLeaderboardProjection(
+      nk,
+      winnerUserId,
+      loserUserId,
+      seasonId
+    )) {
+      logger.warn(
+        "ahoge player ranking projection will retry. match_id=%s season=%s",
+        matchId,
+        seasonId
+      );
+      return false;
+    }
+
     logger.info(
       "ahoge ranked rating settled. match_id=%s season=%s winner=%s loser=%s winner_rating=%d loser_rating=%d",
       matchId,
@@ -219,7 +327,12 @@ function settleRankedMatchRating(
   } catch (error) {
     // 同一matchの並行settlementで他方が先に成功した場合は完了扱い。
     if (rankedMatchSettlementExists(nk, matchId)) {
-      return true;
+      return syncRankedMatchLeaderboardProjection(
+        nk,
+        winnerUserId,
+        loserUserId,
+        seasonId
+      );
     }
     logger.warn(
       "ahoge ranked rating settlement will retry. match_id=%s error=%s",
@@ -243,4 +356,102 @@ const currentRatingRpc: nkruntime.RpcFunction = function (
   const seasonId = currentSeasonIdJst(Date.now());
   const record = readPlayerSeasonRank(nk, ctx.userId, seasonId);
   return JSON.stringify(record.value);
+};
+
+
+const playerRankingRpc: nkruntime.RpcFunction = function (
+  ctx,
+  _logger,
+  nk,
+  payload
+): string {
+  if (!ctx.userId) {
+    throw new Error("authentication required");
+  }
+
+  let requestedLimit = 20;
+  if (payload) {
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && typeof parsed.limit === "number") {
+        requestedLimit = Math.floor(parsed.limit);
+      }
+    } catch (_error) {
+      throw new Error("invalid payload");
+    }
+  }
+  const limit = Math.max(1, Math.min(PLAYER_RANKING_MAX_LIMIT, requestedLimit));
+
+  const seasonId = currentSeasonIdJst(Date.now());
+  const leaderboardId = ensurePlayerRatingLeaderboard(nk, seasonId);
+  const result = nk.leaderboardRecordsList(
+    leaderboardId,
+    [],
+    limit,
+    null,
+    0
+  );
+
+  const rawRecords = result.records || [];
+  const ownerIds = rawRecords.map(function (record): string {
+    return String(record.ownerId);
+  });
+
+  const accounts = ownerIds.length > 0 ? nk.accountsGetId(ownerIds, []) : [];
+  const usernameByUser: {[key: string]: string} = {};
+  accounts.forEach(function (account): void {
+    if (account.user && account.user.id) {
+      usernameByUser[String(account.user.id)] = String(account.user.username || "");
+    }
+  });
+
+  const storageObjects = ownerIds.length > 0
+    ? nk.storageRead(ownerIds.map(function (userId): nkruntime.StorageReadRequest {
+        return {
+          collection: PLAYER_SEASON_RANK_COLLECTION,
+          key: seasonId,
+          userId: userId
+        };
+      }))
+    : [];
+  const rankValueByUser: {[key: string]: PlayerSeasonRankValue} = {};
+  storageObjects.forEach(function (object): void {
+    const raw = object.value as any;
+    rankValueByUser[object.userId] = {
+      season_id: String(raw.season_id || seasonId),
+      rating: Number(raw.rating === undefined ? ELO_INITIAL_RATING : raw.rating),
+      wins: Number(raw.wins || 0),
+      losses: Number(raw.losses || 0)
+    };
+  });
+
+  let previousRating: number | null = null;
+  let previousDisplayRank = 0;
+  const records = rawRecords.map(function (record, index): any {
+    const userId = String(record.ownerId);
+    const rating = Number(record.score);
+    let displayRank = index + 1;
+    if (previousRating !== null && rating === previousRating) {
+      displayRank = previousDisplayRank;
+    }
+    previousRating = rating;
+    previousDisplayRank = displayRank;
+
+    const value = rankValueByUser[userId] || defaultPlayerSeasonRank(seasonId);
+    return {
+      display_rank: displayRank,
+      player_id: userId,
+      player_name: usernameByUser[userId] || String(record.username || ""),
+      rating: rating,
+      rank_tier: rankTierForRating(rating),
+      wins: value.wins,
+      losses: value.losses
+    };
+  });
+
+  return JSON.stringify({
+    season_id: seasonId,
+    records: records,
+    rank_count: result.rankCount || rawRecords.length
+  });
 };
