@@ -243,6 +243,68 @@ Exit
 
 ランクマッチでは `Rematch` を持たない。
 
+#### 4.1.1 工程4前半のGodot GameFlow契約
+
+工程4前半では既存ローカル縦切りを残したまま、`AppRoot` に `local / ranked` の画面文脈を持たせる。
+
+```text
+UI-01 TopMenu
+  ONLINE BATTLE
+    → UI-03 BattleModeSelect
+      RANKED MATCH
+        → Device Authentication / Realtime Socket確保
+        → UI-04 CharacterSelect(mode=ranked)
+        → UI-05 RankedMatching
+        → authoritative match join
+        → UI-09 PreBattleDialogue
+        → UI-10 OnlineBattle
+        → UI-11 MatchResult(mode=ranked)
+```
+
+`AppRoot` は画面遷移とonline flow contextだけを保持し、戦闘結果を再計算しない。
+
+Ranked flow contextは少なくとも次を持つ。
+
+```text
+mode = ranked
+selected_character_id
+rating_before
+match_id
+initial_match_snapshot
+authoritative_match_result
+```
+
+UI-04のRanked文脈では自分のcharacterだけを選択する。ローカル縦切り文脈では既存のP1/P2同時選択を維持する。
+
+UI-05は `OnlineSession.start_ranked_matchmaking()` を使用し、検索幅・経過時間・cancelを表示する。match成立前に相手情報を表示しない。
+
+authoritative matchへ通常joinした場合もserverはjoinしたplayerへ `MATCH_SNAPSHOT` を送信する。これによりUI-09/UI-10はclient推測ではなく、server snapshotの `character_id_by_user` / `round_wins_by_user` / `match_mode` を初期状態の正本として使用する。
+
+UI-09初期実装は正式台詞コンテンツを要求せず、snapshotで確定した双方のcharacterと `READY...` を短時間表示する機能優先版とする。スキップ可否は未決のまま追加しない。
+
+UI-10 Rankedは既存M1 HUD表現を再利用するが、M1デバッグ用の第二client自動生成は使用しない。実際の相手はremote playerとし、ローカルplayerの入力だけを `OnlineSession.send_combat_input()` でserverへ送る。
+
+UI-11 Rankedは `MATCH_RESULT` のwinner / final score / finish_causeを勝敗正本として表示する。RatingはMatch Resultからclient計算せず、server settlement後の `ahoge_current_rating` を再取得して `rating_before → rating_after` を表示する。
+
+UI-11 Rankedの操作は次のみとする。
+
+```text
+NEXT MATCH       → UI-04 CharacterSelect
+CHANGE CHARACTER → UI-04 CharacterSelect
+EXIT             → UI-01 TopMenu
+```
+
+Rankedでは `REMATCH` を表示しない。
+
+通常Match ResultをUI-11へ接続した時点で、そのmatchの保存済み未解決contextは遷移先確定済みとして解除する。再ログイン復帰の場合も、`ranked_result` のUI-11表示を確定してから解除する。
+
+起動時に同一userの保存済みmatchがある場合は新規Rankedを開始せず、既存 `resume_saved_match_after_login()` を優先する。
+
+- 進行中Ranked → UI-10へ復帰
+- 終了済みRanked → UI-11へ復帰
+- server未確認 / network error → lock維持
+- Match Not Found / Invalid Match ID → 既存安全解除契約に従う
+
 ### 4.2 フレンドマッチ
 
 ```text
