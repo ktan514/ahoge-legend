@@ -1,6 +1,7 @@
 const AHOGE_SEASON_RANK_COLLECTION = "ahoge_season_rank";
 const AHOGE_LEGEND_LEADERBOARD_PREFIX = "ahoge_legend_";
 const AHOGE_LEGEND_MAX_LIMIT = 100;
+const AHOGE_STORAGE_SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 const CHARACTER_RANK_OWNER_IDS: {[key: string]: string} = {
   LONG_TEST: "10000000-0000-0000-0000-000000000001",
@@ -22,6 +23,13 @@ interface AhogeSeasonRankRecord {
 
 function characterRankingOwnerId(characterId: string): string {
   return CHARACTER_RANK_OWNER_IDS[characterId] || "";
+}
+
+function ahogeSeasonStorageKey(
+  seasonId: string,
+  characterId: string
+): string {
+  return seasonId + ":" + characterId;
 }
 
 function defaultAhogeSeasonRank(
@@ -49,8 +57,8 @@ function readAhogeSeasonRank(
   const objects = nk.storageRead([
     {
       collection: AHOGE_SEASON_RANK_COLLECTION,
-      key: seasonId,
-      userId: ownerId
+      key: ahogeSeasonStorageKey(seasonId, characterId),
+      userId: AHOGE_STORAGE_SYSTEM_USER_ID
     }
   ]);
 
@@ -93,8 +101,8 @@ function buildAhogeSeasonRankWrites(
     return [
       {
         collection: AHOGE_SEASON_RANK_COLLECTION,
-        key: seasonId,
-        userId: winnerOwnerId,
+        key: ahogeSeasonStorageKey(seasonId, winnerCharacterId),
+        userId: AHOGE_STORAGE_SYSTEM_USER_ID,
         value: {
           season_id: seasonId,
           character_id: winnerCharacterId,
@@ -113,8 +121,8 @@ function buildAhogeSeasonRankWrites(
   return [
     {
       collection: AHOGE_SEASON_RANK_COLLECTION,
-      key: seasonId,
-      userId: winnerOwnerId,
+      key: ahogeSeasonStorageKey(seasonId, winnerCharacterId),
+      userId: AHOGE_STORAGE_SYSTEM_USER_ID,
       value: {
         season_id: seasonId,
         character_id: winnerCharacterId,
@@ -127,8 +135,8 @@ function buildAhogeSeasonRankWrites(
     },
     {
       collection: AHOGE_SEASON_RANK_COLLECTION,
-      key: seasonId,
-      userId: loserOwnerId,
+      key: ahogeSeasonStorageKey(seasonId, loserCharacterId),
+      userId: AHOGE_STORAGE_SYSTEM_USER_ID,
       value: {
         season_id: seasonId,
         character_id: loserCharacterId,
