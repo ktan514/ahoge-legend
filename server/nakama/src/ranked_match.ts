@@ -78,6 +78,7 @@ interface AuthoritativeCombatState {
 }
 
 interface AhogeRankedMatchState {
+  matchId: string;
   matchMode: string;
   expectedUserIds: {[key: string]: boolean};
   presences: {[key: string]: nkruntime.Presence};
@@ -107,10 +108,12 @@ interface AhogeRankedMatchState {
   matchFinished: boolean;
   matchWinnerUserId: string;
   matchFinishCause: string;
+  ratingSettlementDone: boolean;
+  ratingSettlementRetryTick: number;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
-  _ctx,
+  ctx,
   logger,
   _nk,
   params
@@ -140,6 +143,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
 
   return {
     state: {
+      matchId: String((ctx as any).matchId || ""),
       matchMode: String(params.matchMode || "ranked"),
       expectedUserIds: expectedUserIds,
       presences: {},
@@ -168,7 +172,9 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundBoundaryPauseStartTick: -1,
       matchFinished: false,
       matchWinnerUserId: "",
-      matchFinishCause: MATCH_FINISH_CAUSE_NONE
+      matchFinishCause: MATCH_FINISH_CAUSE_NONE,
+      ratingSettlementDone: false,
+      ratingSettlementRetryTick: 0
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -1426,6 +1432,45 @@ function advanceCombatStates(
   resolveDueContacts(dispatcher, state, tick);
 }
 
+function settleRankedRatingIfNeeded(
+  nk: nkruntime.Nakama,
+  logger: nkruntime.Logger,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  if (!state.matchFinished || state.ratingSettlementDone) {
+    return;
+  }
+  if (tick < state.ratingSettlementRetryTick) {
+    return;
+  }
+
+  const loserUserId = findOpponentUserId(state, state.matchWinnerUserId);
+  if (!loserUserId) {
+    state.ratingSettlementRetryTick = tick + AUTHORITATIVE_MATCH_TICK_RATE;
+    return;
+  }
+
+  const settled = settleRankedMatchRating(
+    nk,
+    logger,
+    state.matchId,
+    state.matchMode,
+    state.matchWinnerUserId,
+    loserUserId,
+    state.matchFinishCause,
+    Date.now()
+  );
+
+  if (settled) {
+    state.ratingSettlementDone = true;
+    return;
+  }
+
+  state.ratingSettlementRetryTick = tick + AUTHORITATIVE_MATCH_TICK_RATE;
+}
+
+
 function resolveReconnectTimeout(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -1476,7 +1521,7 @@ function resolveReconnectTimeout(
 
 const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = function (
   _ctx,
-  _logger,
+  logger,
   nk,
   dispatcher,
   tick,
@@ -1484,6 +1529,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   messages
 ) {
   resolveReconnectTimeout(dispatcher, state, tick);
+  settleRankedRatingIfNeeded(nk, logger, state, tick);
 
   if (
     state.roundResetPending &&
