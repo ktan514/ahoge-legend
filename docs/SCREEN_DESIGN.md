@@ -861,6 +861,8 @@ RECONNECTING...
 - 保存済みmatchが進行中: `RECONNECTING...` を表示し、snapshot受信後にBattleへ直接復帰
 - 保存済みRanked matchが終了済み: Battleを表示せずUI-11へ直接遷移
 - 保存済みFriend matchが終了済み: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
+- 未解決matchがある間は新しいRanked / Friend開始操作を無効化し、元matchの復帰または終了処理を優先する
+- 15秒を超えても回線が未復旧の場合、clientは元matchを破棄せず接続復旧を待つ。復旧後に終了済み結果を取得する
 
 
 ### 18.3 退出確認
