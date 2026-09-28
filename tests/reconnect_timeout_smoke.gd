@@ -1,13 +1,13 @@
 extends SceneTree
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _second_socket = null
 var _second_ticket: String = ""
 var _second_match_id: String = ""
 var _second_failure: String = ""
-var _match_result: Dictionary = {}
-var _p2_disconnected: bool = false
+var _second_match_result: Dictionary = {}
 
 
 func _init() -> void:
@@ -20,6 +20,8 @@ func _run() -> void:
 	if online_session == null or nakama == null:
 		_fail("OnlineSession / Nakama Autoloadが見つかりません。")
 		return
+
+	online_session.clear_session()
 
 	var auth_result: Dictionary = await online_session.authenticate_local_device()
 	if not bool(auth_result.get("ok", false)):
@@ -42,22 +44,6 @@ func _run() -> void:
 			if round_number == 1:
 				round_one_started[0] = true
 	)
-	online_session.player_connection_changed.connect(
-		func(user_id: String, connected: bool, _deadline: int, _server_tick: int) -> void:
-			if user_id != p1_user_id and not connected:
-				_p2_disconnected = true
-	)
-	online_session.match_result.connect(
-		func(winner_user_id: String, loser_user_id: String, round_wins: Dictionary, final_round_number: int, finish_cause: String, server_tick: int) -> void:
-			_match_result = {
-				"winner_user_id": winner_user_id,
-				"loser_user_id": loser_user_id,
-				"round_wins_by_user": round_wins,
-				"final_round_number": final_round_number,
-				"finish_cause": finish_cause,
-				"server_tick": server_tick,
-			}
-	)
 
 	var second_client = nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
@@ -79,6 +65,7 @@ func _run() -> void:
 
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
+	_second_socket.received_match_state.connect(_on_second_match_state)
 	var second_connect = await _second_socket.connect_async(
 		second_session,
 		OnlineConfigScript.SOCKET_APPEAR_ONLINE,
@@ -131,34 +118,75 @@ func _run() -> void:
 		_fail("Round 1が開始しませんでした。")
 		return
 
-	_second_socket.close()
-	_second_socket = null
-
-	var disconnect_deadline := Time.get_ticks_msec() + 3000
-	while Time.get_ticks_msec() < disconnect_deadline and not _p2_disconnected:
-		await create_timer(0.02).timeout
-	if not _p2_disconnected:
-		_fail("P2切断eventを受信できませんでした。")
+	var original_match_id := p1_joined[0]
+	var saved := online_session.get_saved_match_for_current_user()
+	if str(saved.get("match_id", "")) != original_match_id:
+		_fail("P1の未解決match情報が保存されていません。")
 		return
+
+	# P1のアプリ終了相当。server側ではP1が切断状態になるが保存matchは残す。
+	online_session.clear_runtime_session_preserving_match()
 
 	var result_deadline := Time.get_ticks_msec() + 18000
-	while Time.get_ticks_msec() < result_deadline and _match_result.is_empty():
+	while Time.get_ticks_msec() < result_deadline and _second_match_result.is_empty():
 		await create_timer(0.05).timeout
-	if _match_result.is_empty():
-		_fail("15秒超過後のMatch Resultを受信できませんでした。")
+	if _second_match_result.is_empty():
+		_fail("15秒超過後のMatch ResultをP2が受信できませんでした。")
 		return
 
-	if str(_match_result.get("winner_user_id", "")) != p1_user_id 			or str(_match_result.get("loser_user_id", "")) != p2_user_id 			or str(_match_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT" 			or int(_match_result.get("final_round_number", -1)) != 1:
+	if str(_second_match_result.get("winner_user_id", "")) != p2_user_id 			or str(_second_match_result.get("loser_user_id", "")) != p1_user_id 			or str(_second_match_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT" 			or int(_second_match_result.get("final_round_number", -1)) != 1:
 		_fail("DISCONNECT_TIMEOUT Match Resultが期待値と一致しません。")
 		return
 
-	var scores: Dictionary = _match_result.get("round_wins_by_user", {})
+	var scores: Dictionary = _second_match_result.get("round_wins_by_user", {})
 	if int(scores.get(p1_user_id, -1)) != 0 or int(scores.get(p2_user_id, -1)) != 0:
 		_fail("切断敗北でBO3 scoreが人工的に変更されました。")
 		return
 
-	online_session.disconnect_realtime_socket()
-	print("AHOGE LEGEND reconnect timeout smoke: PASS match_id=%s" % p1_joined[0])
+	# 15秒を超えても元matchは未解決lockとして残る。
+	var reauth: Dictionary = await online_session.authenticate_local_device()
+	if not bool(reauth.get("ok", false)) or str(reauth.get("user_id", "")) != p1_user_id:
+		_fail("P1再ログインに失敗しました。")
+		return
+
+	var forbidden: Dictionary = await online_session.start_ranked_matchmaking(
+		1500,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	if bool(forbidden.get("ok", false)) or str(forbidden.get("step", "")) != "unresolved_match":
+		_fail("切断敗北後の結果未解決中に新しいRankedを開始できました。")
+		return
+
+	var resumed: Dictionary = await online_session.resume_saved_match_after_login()
+	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
+		_fail("15秒超過後の終了済みmatchへ再接続できませんでした。")
+		return
+	if str(resumed.get("destination", "")) != "ranked_result":
+		_fail("終了済みRankedの復帰先がranked_resultではありません。")
+		return
+
+	var snapshot: Dictionary = resumed.get("snapshot", {})
+	if not bool(snapshot.get("match_finished", false)) 			or str(snapshot.get("match_mode", "")) != "ranked" 			or str(snapshot.get("match_winner_user_id", "")) != p2_user_id 			or str(snapshot.get("match_finish_cause", "")) != "DISCONNECT_TIMEOUT":
+		_fail("終了済みRanked snapshotがMatch Resultと一致しません。")
+		return
+
+	if online_session.can_start_new_online_match():
+		_fail("Result遷移確定前に未解決match lockが解除されています。")
+		return
+
+	if not online_session.acknowledge_saved_match_destination():
+		_fail("Result遷移確定後に未解決match情報を消去できませんでした。")
+		return
+	if not online_session.can_start_new_online_match():
+		_fail("Result遷移確定後も新規対戦lockが残っています。")
+		return
+
+	if _second_socket != null:
+		await _second_socket.leave_match_async(_second_match_id)
+		_second_socket.close()
+	online_session.clear_session()
+
+	print("AHOGE LEGEND reconnect timeout smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
 
 
@@ -179,9 +207,22 @@ func _on_second_matchmaker_matched(matched) -> void:
 	_second_match_id = str(join_result.match_id)
 
 
+func _on_second_match_state(match_state) -> void:
+	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
+		return
+	if int(match_state.op_code) != CombatInputProtocolScript.OPCODE_MATCH_RESULT:
+		return
+	var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
+	if not event.is_empty():
+		_second_match_result = event
+
+
 func _fail(message: String) -> void:
 	if _second_socket != null:
 		_second_socket.close()
+	var online_session = get_root().get_node_or_null("OnlineSession")
+	if online_session != null:
+		online_session.clear_session()
 	push_error(message)
 	print("AHOGE LEGEND reconnect timeout smoke: FAIL")
 	quit(1)
