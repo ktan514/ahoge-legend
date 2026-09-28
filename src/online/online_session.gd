@@ -19,6 +19,11 @@ signal ranked_matchmaking_cancelled
 signal ranked_match_found(match_id: String)
 signal ranked_match_joined(match_id: String)
 signal ranked_matchmaking_failed(step: String, message: String)
+signal friend_room_created(room_code: String, room: Dictionary)
+signal friend_room_joined(room_code: String, room: Dictionary)
+signal friend_room_updated(room: Dictionary)
+signal friend_match_joined(match_id: String)
+signal friend_room_failed(step: String, message: String)
 signal combat_input_accepted(user_id: String, input_sequence: int, action: String, server_tick: int)
 signal combat_state_changed(user_id: String, state: String, server_tick: int, charge_ratio: float)
 signal ahoge_state_changed(user_id: String, ahoge_available: bool, regrow_until_tick: int, server_tick: int)
@@ -647,6 +652,151 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 	ranked_match_joined.emit(current_match_id)
 
 
+func _friend_room_rpc(rpc_id: String, payload: Dictionary, step: String) -> Dictionary:
+	if not is_authenticated():
+		return _friend_room_fail(step, "Friend room操作には認証が必要です。")
+
+	var result = await client.rpc_async(session, rpc_id, JSON.stringify(payload))
+	if result == null or result.is_exception():
+		return _friend_room_fail(
+			step,
+			_result_error_message(result, "Friend roomのserver処理に失敗しました。")
+		)
+
+	var parsed = JSON.parse_string(str(result.payload))
+	if not parsed is Dictionary:
+		return _friend_room_fail(step, "Friend roomのserver応答を解析できませんでした。")
+
+	var response: Dictionary = parsed
+	response["ok"] = true
+	friend_room_updated.emit(response)
+	return response
+
+
+func create_friend_room() -> Dictionary:
+	if has_unresolved_match_context():
+		return _friend_room_fail(
+			"create",
+			"未解決の対戦があります。元の対戦を復帰または終了処理してからFriend roomを作成してください。"
+		)
+
+	var response := await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_CREATE,
+		{},
+		"create"
+	)
+	if bool(response.get("ok", false)):
+		friend_room_created.emit(str(response.get("room_code", "")), response)
+	return response
+
+
+func join_friend_room(room_code: String) -> Dictionary:
+	if has_unresolved_match_context():
+		return _friend_room_fail(
+			"join",
+			"未解決の対戦があります。元の対戦を復帰または終了処理してからFriend roomへ参加してください。"
+		)
+
+	var response := await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_JOIN,
+		{"room_code": room_code},
+		"join"
+	)
+	if bool(response.get("ok", false)):
+		friend_room_joined.emit(str(response.get("room_code", "")), response)
+	return response
+
+
+func get_friend_room_status(room_code: String) -> Dictionary:
+	return await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_STATUS,
+		{"room_code": room_code},
+		"status"
+	)
+
+
+func set_friend_room_character(room_code: String, character_id: String) -> Dictionary:
+	if not OnlineConfigScript.is_supported_online_character_id(character_id):
+		return _friend_room_fail(
+			"character",
+			"未対応character_idです: %s" % character_id
+		)
+	return await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_CHARACTER,
+		{
+			"room_code": room_code,
+			"character_id": character_id,
+		},
+		"character"
+	)
+
+
+func set_friend_room_ready(room_code: String, ready: bool) -> Dictionary:
+	if ready and has_unresolved_match_context():
+		return _friend_room_fail(
+			"unresolved_match",
+			"未解決の対戦があります。元の対戦を復帰または終了処理してからFriend matchを開始してください。"
+		)
+	return await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_READY,
+		{
+			"room_code": room_code,
+			"ready": ready,
+		},
+		"ready"
+	)
+
+
+func leave_friend_room(room_code: String) -> Dictionary:
+	return await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_LEAVE,
+		{"room_code": room_code},
+		"leave"
+	)
+
+
+func join_friend_match_from_room(room: Dictionary) -> Dictionary:
+	if has_unresolved_match_context():
+		return _friend_room_fail(
+			"join_match",
+			"未解決の対戦があります。元の対戦を復帰または終了処理してから新しいFriend matchへ参加してください。"
+		)
+	if not is_realtime_connected():
+		return _friend_room_fail(
+			"join_match",
+			"Realtime Socket接続前はFriend matchへ参加できません。"
+		)
+
+	var match_id := str(room.get("current_match_id", ""))
+	if match_id.is_empty():
+		return _friend_room_fail("join_match", "Friend match IDがまだ確定していません。")
+	if str(room.get("state", "")) != "IN_MATCH":
+		return _friend_room_fail("join_match", "Friend roomが対戦開始状態ではありません。")
+
+	var join_result = await realtime_socket.join_match_async(match_id)
+	if join_result == null or join_result.is_exception():
+		return _friend_room_fail(
+			"join_match",
+			_result_error_message(join_result, "Friend authoritative matchへjoinできませんでした。")
+		)
+	if not bool(join_result.authoritative):
+		return _friend_room_fail("join_match", "join先がauthoritative matchではありません。")
+
+	joined_match = join_result
+	_next_input_sequence = 0
+	if not register_joined_online_match(
+		str(join_result.match_id),
+		MatchResumeStoreScript.MODE_FRIEND
+	):
+		return _friend_room_fail("persist_match", "Friend対戦復帰情報を保存できませんでした。")
+
+	friend_match_joined.emit(current_match_id)
+	return {
+		"ok": true,
+		"match_id": current_match_id,
+	}
+
+
 func send_combat_input(action: String) -> Dictionary:
 	if not is_in_authoritative_match():
 		return _combat_input_fail("authoritative matchへjoinしていません。")
@@ -1079,6 +1229,16 @@ func _combat_input_fail(message: String) -> Dictionary:
 	combat_input_failed.emit(message)
 	return {
 		"ok": false,
+		"message": message,
+	}
+
+
+func _friend_room_fail(step: String, message: String) -> Dictionary:
+	printerr("Nakama friend room failed: step=%s message=%s" % [step, message])
+	friend_room_failed.emit(step, message)
+	return {
+		"ok": false,
+		"step": step,
 		"message": message,
 	}
 

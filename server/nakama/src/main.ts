@@ -27,6 +27,12 @@ let InitModule: nkruntime.InitModule = function (
   initializer.registerRpc("ahoge_current_rating", currentRatingRpc);
   initializer.registerRpc("ahoge_player_ranking", playerRankingRpc);
   initializer.registerRpc("ahoge_legend_ranking", ahogeLegendRankingRpc);
+  initializer.registerRpc("ahoge_friend_room_create", friendRoomCreateRpc);
+  initializer.registerRpc("ahoge_friend_room_join", friendRoomJoinRpc);
+  initializer.registerRpc("ahoge_friend_room_status", friendRoomStatusRpc);
+  initializer.registerRpc("ahoge_friend_room_character", friendRoomCharacterRpc);
+  initializer.registerRpc("ahoge_friend_room_ready", friendRoomReadyRpc);
+  initializer.registerRpc("ahoge_friend_room_leave", friendRoomLeaveRpc);
   initializer.registerMatch("ahoge_ranked", rankedMatchHandler);
   initializer.registerMatchmakerMatched(rankedMatchmakerMatched);
   logger.info("AHOGE LEGEND TypeScript runtime loaded.");

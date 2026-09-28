@@ -80,6 +80,10 @@ interface AuthoritativeCombatState {
 interface AhogeRankedMatchState {
   matchId: string;
   matchMode: string;
+  friendRoomCode: string;
+  friendMatchGeneration: number;
+  friendRoomSettlementDone: boolean;
+  friendRoomSettlementRetryTick: number;
   expectedUserIds: {[key: string]: boolean};
   presences: {[key: string]: nkruntime.Presence};
   lastInputSequenceByUser: {[key: string]: number};
@@ -123,6 +127,18 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
   const characterIdByUser: {[key: string]: string} = {};
   const rawExpected = params.expectedUserIds;
   const rawCharacters = params.characterIds;
+  const rawMatchMode = String(params.matchMode || "ranked");
+  const matchMode = rawMatchMode === "friend" ? "friend" : "ranked";
+  const friendRoomCode =
+    matchMode === "friend" ? String(params.friendRoomCode || "") : "";
+  const rawFriendMatchGeneration = Number(params.friendMatchGeneration || 0);
+  const friendMatchGeneration =
+    matchMode === "friend" &&
+    isFinite(rawFriendMatchGeneration) &&
+    Math.floor(rawFriendMatchGeneration) === rawFriendMatchGeneration &&
+    rawFriendMatchGeneration > 0
+      ? rawFriendMatchGeneration
+      : 0;
 
   if (Array.isArray(rawExpected)) {
     rawExpected.forEach(function (userId: any): void {
@@ -145,7 +161,11 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
   return {
     state: {
       matchId: String(ctx.matchId || ""),
-      matchMode: String(params.matchMode || "ranked"),
+      matchMode: matchMode,
+      friendRoomCode: friendRoomCode,
+      friendMatchGeneration: friendMatchGeneration,
+      friendRoomSettlementDone: matchMode !== "friend",
+      friendRoomSettlementRetryTick: 0,
       expectedUserIds: expectedUserIds,
       presences: {},
       lastInputSequenceByUser: {},
@@ -180,7 +200,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
-      mode: "ranked",
+      mode: matchMode,
       phase: "waiting"
     })
   };
@@ -1474,6 +1494,37 @@ function settleRankedRatingIfNeeded(
   state.ratingSettlementRetryTick = tick + AUTHORITATIVE_MATCH_TICK_RATE;
 }
 
+function settleFriendRoomIfNeeded(
+  nk: nkruntime.Nakama,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  if (
+    state.matchMode !== "friend" ||
+    !state.matchFinished ||
+    state.friendRoomSettlementDone
+  ) {
+    return;
+  }
+  if (tick < state.friendRoomSettlementRetryTick) {
+    return;
+  }
+
+  const settled = markFriendRoomMatchFinished(
+    nk,
+    state.friendRoomCode,
+    state.matchId,
+    state.friendMatchGeneration
+  );
+  if (settled) {
+    state.friendRoomSettlementDone = true;
+    return;
+  }
+
+  state.friendRoomSettlementRetryTick =
+    tick + AUTHORITATIVE_MATCH_TICK_RATE;
+}
+
 
 function resolveReconnectTimeout(
   dispatcher: nkruntime.MatchDispatcher,
@@ -1535,6 +1586,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
 ) {
   resolveReconnectTimeout(dispatcher, state, tick);
   settleRankedRatingIfNeeded(nk, logger, state, tick);
+  settleFriendRoomIfNeeded(nk, state, tick);
 
   if (
     state.roundResetPending &&
