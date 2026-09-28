@@ -12,6 +12,7 @@ on:
       - "scripts/client-reconnect-smoke.sh"
       - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
+      - "scripts/client-lock-repair-smoke.sh"
       - "scripts/client-saved-match-resume-smoke.sh"
       - "scripts/client-matchmaker-smoke.sh"
       - "scripts/client-combat-input-smoke.sh"
@@ -46,6 +47,7 @@ on:
       - "tests/reconnect_smoke.gd"
       - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
+      - "tests/lock_repair_smoke.gd"
       - "tests/saved_match_resume_smoke.gd"
       - "tests/matchmaker_smoke.gd"
       - "tests/combat_input_smoke.gd"
@@ -77,6 +79,7 @@ on:
       - "scripts/client-reconnect-smoke.sh"
       - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
+      - "scripts/client-lock-repair-smoke.sh"
       - "scripts/client-saved-match-resume-smoke.sh"
       - "scripts/client-matchmaker-smoke.sh"
       - "scripts/client-combat-input-smoke.sh"
@@ -111,6 +114,7 @@ on:
       - "tests/reconnect_smoke.gd"
       - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
+      - "tests/lock_repair_smoke.gd"
       - "tests/saved_match_resume_smoke.gd"
       - "tests/matchmaker_smoke.gd"
       - "tests/combat_input_smoke.gd"
@@ -265,6 +269,10 @@ jobs:
       - name: Godot reconnect timeout smoke
         if: matrix.group == 'round'
         run: bash ./scripts/client-reconnect-timeout-smoke.sh
+
+      - name: Godot stale lock repair smoke
+        if: matrix.group == 'round'
+        run: bash ./scripts/client-lock-repair-smoke.sh
 
       - name: Godot authoritative 5 Hit round win smoke
         if: matrix.group == 'round'
