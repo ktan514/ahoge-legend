@@ -168,8 +168,7 @@ function syncPlayerRankingRecord(
       wins: record.value.wins,
       losses: record.value.losses,
       rank_tier: rankTierForRating(record.value.rating)
-    },
-    nkruntime.OverrideOperator.SET
+    }
   );
 }
 
@@ -388,7 +387,7 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
     leaderboardId,
     [],
     limit,
-    null,
+    "",
     0
   );
 
