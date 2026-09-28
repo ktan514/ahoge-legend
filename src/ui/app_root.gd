@@ -77,8 +77,7 @@ func _show_battle_mode_select() -> void:
 
 func _on_ranked_requested(screen: Control) -> void:
 	if _online_session.has_unresolved_match_context():
-		if is_instance_valid(screen):
-			screen.call("set_status", "未解決の対戦があります。元の対戦を復帰してください。")
+		await _force_resume_unresolved_ranked_match()
 		return
 
 	if is_instance_valid(screen):
@@ -92,8 +91,7 @@ func _on_ranked_requested(screen: Control) -> void:
 			return
 
 	if _online_session.has_unresolved_match_context():
-		if is_instance_valid(screen) and _current_screen == screen:
-			screen.call("set_status", "保存済み対戦の解決を優先してください。")
+		await _force_resume_unresolved_ranked_match()
 		return
 
 	var realtime_result: Dictionary = await _online_session.connect_realtime_socket()
@@ -110,6 +108,56 @@ func _on_ranked_requested(screen: Control) -> void:
 
 	_ranked_rating_before = rating.duplicate(true)
 	_show_ranked_character_select()
+
+
+func _force_resume_unresolved_ranked_match() -> void:
+	_show_loading("RESTORING ORIGINAL MATCH...")
+
+	if not _online_session.is_authenticated():
+		var auth_result: Dictionary = await _online_session.authenticate_local_device()
+		if not bool(auth_result.get("ok", false)):
+			_show_battle_mode_select()
+			if is_instance_valid(_current_screen):
+				_current_screen.call(
+					"set_status",
+					str(auth_result.get("message", "元の対戦へ復帰するための認証に失敗しました。"))
+				)
+			return
+
+	var repaired: Dictionary = await _online_session.repair_unresolved_match_context()
+	if not bool(repaired.get("ok", false)):
+		_show_battle_mode_select()
+		if is_instance_valid(_current_screen):
+			_current_screen.call(
+				"set_status",
+				str(repaired.get("message", "元の対戦への復帰に失敗しました。"))
+			)
+		return
+
+	var destination := str(repaired.get("destination", ""))
+	var snapshot: Dictionary = repaired.get("snapshot", {})
+	if not bool(repaired.get("repaired", false)) or snapshot.is_empty():
+		_show_battle_mode_select()
+		if is_instance_valid(_current_screen):
+			_current_screen.call("set_status", "元の対戦をserverで確認できませんでした。")
+		return
+
+	if str(snapshot.get("match_mode", "")) != "ranked":
+		_show_top_menu()
+		return
+
+	if destination == "battle":
+		_ranked_rating_before = {}
+		_show_ranked_online_battle(snapshot)
+		return
+
+	if destination == "ranked_result":
+		_show_ranked_result_from_snapshot(snapshot)
+		return
+
+	_show_battle_mode_select()
+	if is_instance_valid(_current_screen):
+		_current_screen.call("set_status", "元の対戦の復帰先を決定できませんでした。")
 
 
 func _show_local_character_select() -> void:
@@ -130,9 +178,7 @@ func _show_ranked_character_select() -> void:
 
 func _show_ranked_matching(character_id: String) -> void:
 	if _online_session.has_unresolved_match_context():
-		_show_battle_mode_select()
-		if is_instance_valid(_current_screen):
-			_current_screen.call("set_status", "未解決の対戦があります。")
+		await _force_resume_unresolved_ranked_match()
 		return
 
 	_ranked_character_id = character_id

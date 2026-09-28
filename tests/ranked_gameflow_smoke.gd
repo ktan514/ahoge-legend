@@ -122,6 +122,23 @@ func _run() -> void:
 		_fail("Ranked初期snapshotのmatch_modeが不正です。", app)
 		return
 
+	# 未解決match中にUI-03へ戻ってRANKED MATCHを選択しても警告停止せず、
+	# 元のauthoritative matchへ強制復帰する。
+	var original_match_id := str(online_session.current_match_id)
+	app.call("_show_battle_mode_select")
+	await process_frame
+	if str(app.call("current_screen_name")) != "BattleModeSelect":
+		_fail("未解決match検証用にBattleModeSelectへ戻れませんでした。", app)
+		return
+	var forced_resume_screen = app.get_child(0)
+	forced_resume_screen.emit_signal("ranked_requested")
+	if not await _wait_screen(app, "OnlineBattle", 7000):
+		_fail("未解決RankedでRANKED MATCHを選択しても元の対戦へ強制復帰しません。", app)
+		return
+	if str(online_session.current_match_id) != original_match_id:
+		_fail("強制復帰後のmatch IDが元のauthoritative matchと一致しません。", app)
+		return
+
 	# P2を切断し、既存15秒Reconnect契約でserver authoritativeに勝敗確定させる。
 	_second_socket.close()
 	_second_socket = null

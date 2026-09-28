@@ -300,10 +300,15 @@ Rankedでは `REMATCH` を表示しない。
 
 起動時に同一userの保存済みmatchがある場合は新規Rankedを開始せず、既存 `resume_saved_match_after_login()` を優先する。
 
-- 進行中Ranked → UI-10へ復帰
-- 終了済みRanked → UI-11へ復帰
-- server未確認 / network error → lock維持
+さらに、未解決Ranked match contextが残っている状態でUI-03の `RANKED MATCH` を選択した場合、警告表示だけで操作を止めてはならない。AppRootは新規matchmakingへ進まず、`RESTORING ORIGINAL MATCH...` を表示して既存matchのserver確認と復帰を強制開始する。UI-04からUI-05へ進む直前に未解決contextを検出した場合も同じ強制復帰を行う。
+
+強制復帰は既存 `repair_unresolved_match_context()` / `resume_saved_match_after_login()` の契約を再利用し、serverが返したsnapshotだけで復帰先を決定する。
+
+- 進行中Ranked → UI-10へ強制復帰
+- 終了済みRanked → UI-11へ強制復帰
+- server未確認 / network error → lock維持。新規Rankedは開始しない
 - Match Not Found / Invalid Match ID → 既存安全解除契約に従う
+- clientは元matchの勝敗・状態・復帰先を推測しない
 
 ### 4.2 フレンドマッチ
 
