@@ -3,6 +3,7 @@ extends Node
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
 const MatchResumeStoreScript := preload("res://src/online/match_resume_store.gd")
+const MatchResumeRouterScript := preload("res://src/online/match_resume_router.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
@@ -226,12 +227,9 @@ func resume_saved_match_after_login() -> Dictionary:
 	_saved_resume_waiting = false
 	_saved_resume_snapshot = {}
 
-	var destination := "battle"
-	if bool(snapshot.get("match_finished", false)):
-		if str(snapshot.get("match_mode", current_match_mode)) == MatchResumeStoreScript.MODE_FRIEND:
-			destination = "friend_character_select"
-		else:
-			destination = "ranked_result"
+	var destination := MatchResumeRouterScript.resolve(snapshot)
+	if destination == MatchResumeRouterScript.DESTINATION_NONE:
+		return _saved_resume_fail("保存済みmatch snapshotから復帰先を決定できませんでした。")
 
 	saved_match_resume_resolved.emit(destination, snapshot)
 	return {
