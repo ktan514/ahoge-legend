@@ -192,7 +192,6 @@ function rankedMatchSettlementExists(
   matchId: string
 ): boolean {
   const objects = nk.storageRead([
-    ...ahogeWrites,
     {
       collection: RANKED_MATCH_SETTLEMENT_COLLECTION,
       key: matchId,
