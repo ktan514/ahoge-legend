@@ -195,6 +195,10 @@ func register_joined_online_match(match_id: String, match_mode: String) -> bool:
 	return _resume_store.save(current_match_id, current_match_mode, str(session.user_id))
 
 
+func has_saved_match_context_file() -> bool:
+	return FileAccess.file_exists(MatchResumeStoreScript.DEFAULT_PATH)
+
+
 func get_saved_match_for_current_user() -> Dictionary:
 	if not is_authenticated():
 		return {}
