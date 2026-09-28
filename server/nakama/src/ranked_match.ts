@@ -143,7 +143,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
 
   return {
     state: {
-      matchId: String((ctx as any).matchId || ""),
+      matchId: String(ctx.matchId || ""),
       matchMode: String(params.matchMode || "ranked"),
       expectedUserIds: expectedUserIds,
       presences: {},
