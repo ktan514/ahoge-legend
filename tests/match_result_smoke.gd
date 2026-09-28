@@ -426,7 +426,6 @@ func _assert_player_ranking(
 
 	var previous_rating := 2147483647
 	var previous_display_rank := 0
-	var previous_index := 0
 	for index in range(records.size()):
 		var record = records[index]
 		if not record is Dictionary:
@@ -447,7 +446,6 @@ func _assert_player_ranking(
 				return false
 		previous_rating = rating
 		previous_display_rank = display_rank
-		previous_index = index
 
 	var p1_record := _find_player_ranking_record(records, p1_user_id)
 	var p2_record := _find_player_ranking_record(records, p2_user_id)
