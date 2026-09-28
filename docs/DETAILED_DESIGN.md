@@ -1589,6 +1589,7 @@ PLAYER Ranking / AHOGE LEGEND Ranking取得RPCはpayloadの `season_id` を任�
 - 過去Season指定時も現在Seasonのデータを変更しない
 
 Season metadata取得RPCを用意し、現在 / 過去Seasonの境界とstateをclientが参照できるようにする。
+境界検証・履歴参照用にread-onlyの `at_unix_ms` を任意指定できる。指定時はその時刻が属するseason_idを解決する。現在時刻より未来の `at_unix_ms` は拒否する。
 
 ### 16.2 プレイヤーランキング
 
