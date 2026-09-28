@@ -2052,8 +2052,9 @@ lock永久残留対策として、clientは「対戦状態を修復」操作を�
 2. serverへRealtime接続する
 3. 同じmatch IDへのjoinを試みる
 4. join成功ならsnapshotを受信し、通常の復帰先へ進む
-5. serverが確定的に `Match Not Found` を返した場合のみ古いlockを解除する
-6. timeout / network error / server errorではlockを解除しない
+5. serverが確定的に `Match Not Found` を返した場合は古いlockを解除する
+6. 保存match IDが構文上不正でserverが `Invalid match ID` を返した場合も、実在matchを指し得ないローカル破損としてlockを解除する
+7. timeout / network error / server errorではlockを解除しない
 
 これにより、client側バグや異常終了でlockが残っても復旧可能にしつつ、active matchを手動解除して別対戦へ逃げることはできない。
 
