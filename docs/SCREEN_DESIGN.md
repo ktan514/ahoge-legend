@@ -856,6 +856,13 @@ RECONNECTING...
 
 再接続待機Overlayは最終デザインではなく、工程4の全画面UI見直し対象とする。
 
+再ログイン時の復帰表示:
+
+- 保存済みmatchが進行中: `RECONNECTING...` を表示し、snapshot受信後にBattleへ直接復帰
+- 保存済みRanked matchが終了済み: Battleを表示せずUI-11へ直接遷移
+- 保存済みFriend matchが終了済み: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
+
+
 ### 18.3 退出確認
 
 オンライン対戦中に退出しようとした場合は、対戦を停止せず確認Overlayを表示する。
