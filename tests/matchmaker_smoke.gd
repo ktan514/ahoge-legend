@@ -7,6 +7,7 @@ var _second_ticket: String = ""
 var _second_match_id: String = ""
 var _second_joined_match = null
 var _second_failure: String = ""
+var _range_events: Array[Dictionary] = []
 
 
 func _init() -> void:
@@ -18,6 +19,15 @@ func _run() -> void:
 	if online_session == null:
 		_fail("OnlineSession Autoloadが見つかりません。")
 		return
+
+	online_session.ranked_matchmaking_range_changed.connect(
+		func(min_rating: int, max_rating: int, elapsed_seconds: int) -> void:
+			_range_events.append({
+				"min_rating": min_rating,
+				"max_rating": max_rating,
+				"elapsed_seconds": elapsed_seconds,
+			})
+	)
 
 	var auth_result: Dictionary = await online_session.authenticate_local_device()
 	if not bool(auth_result.get("ok", false)):
@@ -36,6 +46,24 @@ func _run() -> void:
 	if not online_session.is_matchmaking():
 		_fail("ticket作成後にmatchmaking状態になっていません。")
 		return
+	if online_session.current_ranked_matchmaking_range() != 100:
+		_fail("初期検索幅が±100ではありません。")
+		return
+
+	var expand_deadline := Time.get_ticks_msec() + 13000
+	while Time.get_ticks_msec() < expand_deadline and _range_events.is_empty():
+		await create_timer(0.05).timeout
+	if _range_events.is_empty():
+		_fail("10秒後の検索幅拡大通知を受信できませんでした。")
+		return
+
+	var first_expand := _range_events[0]
+	if int(first_expand.get("min_rating", -1)) != 1300 			or int(first_expand.get("max_rating", -1)) != 1700:
+		_fail("初回検索幅拡大がRating ±200ではありません。")
+		return
+	if online_session.current_ranked_matchmaking_range() != 200:
+		_fail("ticket差し替え後の検索幅stateが±200ではありません。")
+		return
 
 	var cancel_result: Dictionary = await online_session.cancel_ranked_matchmaking()
 	if not bool(cancel_result.get("ok", false)):
@@ -43,6 +71,9 @@ func _run() -> void:
 		return
 	if online_session.is_matchmaking():
 		_fail("ticket取消後もmatchmaking状態です。")
+		return
+	if online_session.current_ranked_matchmaking_range() != 0:
+		_fail("ticket取消後も検索幅拡大stateが残っています。")
 		return
 
 	var nakama = get_root().get_node_or_null("Nakama")
@@ -121,6 +152,9 @@ func _run() -> void:
 		return
 	if _second_joined_match == null or not bool(_second_joined_match.authoritative):
 		_fail("P2 join先がauthoritative matchではありません。")
+		return
+	if online_session.current_ranked_matchmaking_range() != 0:
+		_fail("match成立後も検索幅拡大stateが残っています。")
 		return
 
 	await online_session.realtime_socket.leave_match_async(p1_joined[0])
