@@ -586,6 +586,10 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - Round開始前 / Round終了後の片側切断: 両者が揃うまで次のRound進行へ移らない
 - 再接続成功時: server authoritative snapshotを受信し、復帰時点の状態へ同期する
 - 対戦中のゲーム終了 / client再起動後も、再ログイン時に保存済みmatch IDへ復帰を試みる
+- 対戦join後は「未解決の対戦」としてlockし、Battle復帰または終了後遷移が確定するまで新しいRanked / Friend対戦を開始できない
+- 同一プロセス内のSocket切断と再ログイン後の復帰は同じ未解決match復帰契約を使用する
+- 15秒はactive Battleへ戻れるserver側猶予であり、clientが元matchの解決を諦める期限にはしない
+- 15秒を超えてserver側で切断敗北が確定した後も、回線復旧時は同じmatchへ接続して終了済みsnapshotを取得する
 - 再ログイン時にmatchが進行中ならBattleへ復帰する
 - 再ログイン時にRanked matchが終了済みならBattleを再表示せず、authoritative結果をUI-11へ表示する
 - 再ログイン時にFriend matchが終了済みなら結果画面を再表示せず、Character Select（選択メニュー）へ戻す
