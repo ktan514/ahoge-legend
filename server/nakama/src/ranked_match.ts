@@ -983,6 +983,11 @@ function resolveDefenseResult(
   defenderId: string,
   tick: number
 ): string {
+  // 切断中は新規防御入力不能かつ無防備扱い。切断前にPARRY/DODGE中でも防御成立させない。
+  if (!state.presences[defenderId]) {
+    return DEFENSE_RESULT_NONE;
+  }
+
   const defenderState = state.combatStateByUser[defenderId];
   if (!defenderState) {
     return DEFENSE_RESULT_NONE;
