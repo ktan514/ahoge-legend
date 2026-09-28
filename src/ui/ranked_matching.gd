@@ -3,6 +3,8 @@ extends Control
 signal cancel_requested
 signal match_joined(match_id: String)
 
+var _online_session = null
+
 var _character_id: String = "LONG_TEST"
 var _rating: int = 1500
 var _range_label: Label
@@ -18,6 +20,7 @@ func configure(character_id: String, rating: int) -> void:
 
 
 func _ready() -> void:
+	_online_session = get_node("/root/OnlineSession")
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
@@ -69,10 +72,10 @@ func _ready() -> void:
 	cancel.pressed.connect(_on_cancel_pressed)
 	root.add_child(cancel)
 
-	OnlineSession.ranked_matchmaking_range_changed.connect(_on_range_changed)
-	OnlineSession.ranked_matchmaking_prolonged_wait.connect(_on_prolonged_wait)
-	OnlineSession.ranked_match_joined.connect(_on_match_joined)
-	OnlineSession.ranked_matchmaking_failed.connect(_on_matchmaking_failed)
+	_online_session.ranked_matchmaking_range_changed.connect(_on_range_changed)
+	_online_session.ranked_matchmaking_prolonged_wait.connect(_on_prolonged_wait)
+	_online_session.ranked_match_joined.connect(_on_match_joined)
+	_online_session.ranked_matchmaking_failed.connect(_on_matchmaking_failed)
 	_started_msec = Time.get_ticks_msec()
 	call_deferred("_start_matchmaking")
 
@@ -85,7 +88,7 @@ func _process(_delta: float) -> void:
 
 
 func _start_matchmaking() -> void:
-	var result: Dictionary = await OnlineSession.start_ranked_matchmaking(
+	var result: Dictionary = await _online_session.start_ranked_matchmaking(
 		_rating,
 		_character_id
 	)
@@ -96,8 +99,8 @@ func _start_matchmaking() -> void:
 func _on_cancel_pressed() -> void:
 	if _matched:
 		return
-	if OnlineSession.is_matchmaking():
-		var result: Dictionary = await OnlineSession.cancel_ranked_matchmaking()
+	if _online_session.is_matchmaking():
+		var result: Dictionary = await _online_session.cancel_ranked_matchmaking()
 		if not bool(result.get("ok", false)):
 			_status_label.text = str(result.get("message", "Matchmakingを取消できませんでした。"))
 			return

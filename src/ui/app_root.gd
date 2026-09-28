@@ -10,6 +10,8 @@ const BATTLE_SCENE := preload("res://scenes/screens/battle/Battle.tscn")
 const M1_BATTLE_SCENE := preload("res://scenes/screens/battle/BattleM1Debug.tscn")
 const MATCH_RESULT_SCENE := preload("res://scenes/screens/result/MatchResult.tscn")
 
+var _online_session = null
+
 var _current_screen: Control
 var _last_player_one_id: String = "LONG_TEST"
 var _last_player_two_id: String = "SHORT_TEST"
@@ -19,13 +21,14 @@ var _m1_direct_mode: bool = false
 
 
 func _ready() -> void:
+	_online_session = get_node("/root/OnlineSession")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_m1_direct_mode = OS.get_cmdline_user_args().has("--m1-battle")
 	if _m1_direct_mode:
 		_show_m1_authoritative_battle()
 		return
 
-	if OnlineSession.has_saved_match_context_file():
+	if _online_session.has_saved_match_context_file():
 		_show_loading("RESTORING ONLINE MATCH...")
 		call_deferred("_restore_saved_match_flow")
 	else:
@@ -33,12 +36,12 @@ func _ready() -> void:
 
 
 func _restore_saved_match_flow() -> void:
-	var auth_result: Dictionary = await OnlineSession.authenticate_local_device()
+	var auth_result: Dictionary = await _online_session.authenticate_local_device()
 	if not bool(auth_result.get("ok", false)):
 		_show_top_menu()
 		return
 
-	var resumed: Dictionary = await OnlineSession.resume_saved_match_after_login()
+	var resumed: Dictionary = await _online_session.resume_saved_match_after_login()
 	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
 		_show_top_menu()
 		return
@@ -73,7 +76,7 @@ func _show_battle_mode_select() -> void:
 
 
 func _on_ranked_requested(screen: Control) -> void:
-	if OnlineSession.has_unresolved_match_context():
+	if _online_session.has_unresolved_match_context():
 		if is_instance_valid(screen):
 			screen.call("set_status", "未解決の対戦があります。元の対戦を復帰してください。")
 		return
@@ -81,25 +84,25 @@ func _on_ranked_requested(screen: Control) -> void:
 	if is_instance_valid(screen):
 		screen.call("set_status", "Nakamaへ接続中...")
 
-	if not OnlineSession.is_authenticated():
-		var auth_result: Dictionary = await OnlineSession.authenticate_local_device()
+	if not _online_session.is_authenticated():
+		var auth_result: Dictionary = await _online_session.authenticate_local_device()
 		if not bool(auth_result.get("ok", false)):
 			if is_instance_valid(screen) and _current_screen == screen:
 				screen.call("set_status", str(auth_result.get("message", "認証に失敗しました。")))
 			return
 
-	if OnlineSession.has_unresolved_match_context():
+	if _online_session.has_unresolved_match_context():
 		if is_instance_valid(screen) and _current_screen == screen:
 			screen.call("set_status", "保存済み対戦の解決を優先してください。")
 		return
 
-	var realtime_result: Dictionary = await OnlineSession.connect_realtime_socket()
+	var realtime_result: Dictionary = await _online_session.connect_realtime_socket()
 	if not bool(realtime_result.get("ok", false)):
 		if is_instance_valid(screen) and _current_screen == screen:
 			screen.call("set_status", str(realtime_result.get("message", "Realtime接続に失敗しました。")))
 		return
 
-	var rating: Dictionary = await OnlineSession.get_current_rating()
+	var rating: Dictionary = await _online_session.get_current_rating()
 	if not bool(rating.get("ok", false)):
 		if is_instance_valid(screen) and _current_screen == screen:
 			screen.call("set_status", str(rating.get("message", "Ratingを取得できませんでした。")))
@@ -126,14 +129,14 @@ func _show_ranked_character_select() -> void:
 
 
 func _show_ranked_matching(character_id: String) -> void:
-	if OnlineSession.has_unresolved_match_context():
+	if _online_session.has_unresolved_match_context():
 		_show_battle_mode_select()
 		if is_instance_valid(_current_screen):
 			_current_screen.call("set_status", "未解決の対戦があります。")
 		return
 
 	_ranked_character_id = character_id
-	var rating: Dictionary = await OnlineSession.get_current_rating()
+	var rating: Dictionary = await _online_session.get_current_rating()
 	if not bool(rating.get("ok", false)):
 		_show_battle_mode_select()
 		if is_instance_valid(_current_screen):
@@ -175,8 +178,8 @@ func _show_ranked_result_from_snapshot(snapshot: Dictionary) -> void:
 
 func _ranked_summary_from_snapshot(snapshot: Dictionary) -> Dictionary:
 	var local_user_id := ""
-	if OnlineSession.session != null:
-		local_user_id = str(OnlineSession.session.user_id)
+	if _online_session.session != null:
+		local_user_id = str(_online_session.session.user_id)
 	var character_map: Dictionary = snapshot.get("character_id_by_user", {})
 	var opponent_user_id := ""
 	for user_id in character_map.keys():
@@ -215,14 +218,14 @@ func _show_ranked_result(summary: Dictionary) -> void:
 	screen.connect("top_requested", Callable(self, "_show_top_menu"))
 
 	# Result画面への遷移が確定した後だけ未解決match contextを解除する。
-	OnlineSession.acknowledge_saved_match_destination()
+	_online_session.acknowledge_saved_match_destination()
 
 
 func _wait_for_ranked_rating_settlement(rating_before: Dictionary) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + 5000
 	var latest: Dictionary = {}
 	while Time.get_ticks_msec() < deadline:
-		var current: Dictionary = await OnlineSession.get_current_rating()
+		var current: Dictionary = await _online_session.get_current_rating()
 		if bool(current.get("ok", false)):
 			latest = current.duplicate(true)
 			if rating_before.is_empty() or _rating_record_changed(rating_before, current):

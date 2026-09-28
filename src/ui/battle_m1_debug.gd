@@ -10,6 +10,9 @@ signal exit_requested
 
 @onready var hud = $BattleHUD
 
+var _online_session = null
+var _nakama = null
+
 var _config
 var _p1_state
 var _p2_state
@@ -54,6 +57,8 @@ var _snapshot := {
 
 
 func _ready() -> void:
+	_online_session = get_node("/root/OnlineSession")
+	_nakama = get_node("/root/Nakama")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ci_smoke = OS.get_cmdline_user_args().has("--m1-ci-smoke")
 	_config = CombatConfigScript.new()
@@ -73,42 +78,42 @@ func _ready() -> void:
 
 
 func _connect_online_signals() -> void:
-	OnlineSession.ranked_match_joined.connect(_on_p1_ranked_match_joined)
-	OnlineSession.combat_state_changed.connect(_on_combat_state_changed)
-	OnlineSession.ahoge_state_changed.connect(_on_ahoge_state_changed)
-	OnlineSession.defense_resolved.connect(_on_defense_resolved)
-	OnlineSession.hit_confirmed.connect(_on_hit_confirmed)
-	OnlineSession.attack_clash.connect(_on_attack_clash)
-	OnlineSession.round_hit_count_changed.connect(_on_round_hit_count_changed)
-	OnlineSession.round_timer_changed.connect(_on_round_timer_changed)
-	OnlineSession.round_overtime_started.connect(_on_round_overtime_started)
-	OnlineSession.round_result.connect(_on_round_result)
-	OnlineSession.bo3_score_changed.connect(_on_bo3_score_changed)
-	OnlineSession.round_started.connect(_on_round_started)
-	OnlineSession.match_result.connect(_on_match_result)
-	OnlineSession.round_countdown_changed.connect(_on_round_countdown_changed)
-	OnlineSession.match_snapshot_received.connect(_on_match_snapshot_received)
-	OnlineSession.player_connection_changed.connect(_on_player_connection_changed)
-	OnlineSession.reconnect_started.connect(_on_reconnect_started)
-	OnlineSession.reconnect_succeeded.connect(_on_reconnect_succeeded)
-	OnlineSession.reconnect_failed.connect(_on_reconnect_failed)
+	_online_session.ranked_match_joined.connect(_on_p1_ranked_match_joined)
+	_online_session.combat_state_changed.connect(_on_combat_state_changed)
+	_online_session.ahoge_state_changed.connect(_on_ahoge_state_changed)
+	_online_session.defense_resolved.connect(_on_defense_resolved)
+	_online_session.hit_confirmed.connect(_on_hit_confirmed)
+	_online_session.attack_clash.connect(_on_attack_clash)
+	_online_session.round_hit_count_changed.connect(_on_round_hit_count_changed)
+	_online_session.round_timer_changed.connect(_on_round_timer_changed)
+	_online_session.round_overtime_started.connect(_on_round_overtime_started)
+	_online_session.round_result.connect(_on_round_result)
+	_online_session.bo3_score_changed.connect(_on_bo3_score_changed)
+	_online_session.round_started.connect(_on_round_started)
+	_online_session.match_result.connect(_on_match_result)
+	_online_session.round_countdown_changed.connect(_on_round_countdown_changed)
+	_online_session.match_snapshot_received.connect(_on_match_snapshot_received)
+	_online_session.player_connection_changed.connect(_on_player_connection_changed)
+	_online_session.reconnect_started.connect(_on_reconnect_started)
+	_online_session.reconnect_succeeded.connect(_on_reconnect_succeeded)
+	_online_session.reconnect_failed.connect(_on_reconnect_failed)
 
 
 func _start_authoritative_match() -> void:
-	OnlineSession.clear_session()
+	_online_session.clear_session()
 
-	var auth_result: Dictionary = await OnlineSession.authenticate_local_device()
+	var auth_result: Dictionary = await _online_session.authenticate_local_device()
 	if not bool(auth_result.get("ok", false)):
 		_fail("P1 Device認証に失敗しました。")
 		return
 	_p1_user_id = str(auth_result.get("user_id", ""))
 
-	var realtime_result: Dictionary = await OnlineSession.connect_realtime_socket()
+	var realtime_result: Dictionary = await _online_session.connect_realtime_socket()
 	if not bool(realtime_result.get("ok", false)):
 		_fail("P1 Realtime Socket接続に失敗しました。")
 		return
 
-	_p2_client = Nakama.create_client(
+	_p2_client = _nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
 		OnlineConfigScript.PORT,
@@ -123,7 +128,7 @@ func _start_authoritative_match() -> void:
 		return
 	_p2_user_id = str(second_session.user_id)
 
-	_p2_socket = Nakama.create_socket_from(_p2_client)
+	_p2_socket = _nakama.create_socket_from(_p2_client)
 	_p2_socket.received_matchmaker_matched.connect(_on_p2_matchmaker_matched)
 	var second_connect = await _p2_socket.connect_async(
 		second_session,
@@ -134,7 +139,7 @@ func _start_authoritative_match() -> void:
 		_fail("P2 Realtime Socket接続に失敗しました。")
 		return
 
-	var p1_start: Dictionary = await OnlineSession.start_ranked_matchmaking(
+	var p1_start: Dictionary = await _online_session.start_ranked_matchmaking(
 		1500,
 		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
 	)
@@ -142,7 +147,7 @@ func _start_authoritative_match() -> void:
 		_fail("P1 Matchmakerを開始できませんでした。")
 		return
 
-	var query: String = OnlineSession.build_ranked_matchmaker_query(1500)
+	var query: String = _online_session.build_ranked_matchmaker_query(1500)
 	var second_ticket_result = await _p2_socket.add_matchmaker_async(
 		query,
 		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
@@ -182,8 +187,8 @@ func _start_authoritative_match() -> void:
 
 
 func _process(_delta: float) -> void:
-	if OnlineSession.is_reconnecting():
-		var remaining := OnlineSession.reconnect_remaining_seconds()
+	if _online_session.is_reconnecting():
+		var remaining := _online_session.reconnect_remaining_seconds()
 		if remaining > 0:
 			hud.show_network_overlay("RECONNECTING...\n%d" % remaining)
 		else:
@@ -222,15 +227,15 @@ func _input(event: InputEvent) -> void:
 
 
 func _simulate_p1_unexpected_disconnect() -> void:
-	if OnlineSession.realtime_socket == null or not OnlineSession.is_realtime_connected():
+	if _online_session.realtime_socket == null or not _online_session.is_realtime_connected():
 		return
 	hud.flash_message("M1 HV: SIMULATE P1 DROP")
 	# M1 Human Verification専用。intentional disconnect APIを通さずclosed signalを発生させる。
-	OnlineSession.realtime_socket.close()
+	_online_session.realtime_socket.close()
 
 
 func _send_p1_action(action: String) -> void:
-	var result: Dictionary = await OnlineSession.send_combat_input(action)
+	var result: Dictionary = await _online_session.send_combat_input(action)
 	if not bool(result.get("ok", false)):
 		_fail("P1 %sを送信できませんでした。" % action)
 
@@ -430,7 +435,7 @@ func _on_reconnect_started(_grace_seconds: int) -> void:
 	_input_ready = false
 	hud.set_connection_status("M1 AUTHORITATIVE: RECONNECTING")
 	hud.show_network_overlay(
-		"RECONNECTING...\n%d" % OnlineSession.reconnect_remaining_seconds()
+		"RECONNECTING...\n%d" % _online_session.reconnect_remaining_seconds()
 	)
 
 
@@ -646,7 +651,7 @@ func _cleanup() -> void:
 	if _p2_socket != null:
 		_p2_socket.close()
 		_p2_socket = null
-	OnlineSession.clear_session()
+	_online_session.clear_session()
 
 
 func _exit_tree() -> void:

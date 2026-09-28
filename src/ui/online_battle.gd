@@ -9,6 +9,8 @@ signal ranked_match_completed(summary: Dictionary)
 
 @onready var hud = $BattleHUD
 
+var _online_session = null
+
 var _initial_snapshot: Dictionary = {}
 var _rating_before: Dictionary = {}
 var _config
@@ -43,12 +45,13 @@ func configure(initial_snapshot: Dictionary, rating_before: Dictionary) -> void:
 
 
 func _ready() -> void:
+	_online_session = get_node("/root/OnlineSession")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_config = CombatConfigScript.new()
 	_local_state = CombatantStateScript.new(_config)
 	_opponent_state = CombatantStateScript.new(_config)
-	if OnlineSession.session != null:
-		_local_user_id = str(OnlineSession.session.user_id)
+	if _online_session.session != null:
+		_local_user_id = str(_online_session.session.user_id)
 
 	_connect_online_signals()
 	hud.set_connection_status("RANKED: CONNECTED")
@@ -58,7 +61,7 @@ func _ready() -> void:
 
 	var snapshot := _initial_snapshot
 	if snapshot.is_empty():
-		snapshot = OnlineSession.latest_match_snapshot
+		snapshot = _online_session.latest_match_snapshot
 	if snapshot.is_empty():
 		hud.flash_message("SERVER SNAPSHOTを待機中")
 		return
@@ -66,29 +69,29 @@ func _ready() -> void:
 
 
 func _connect_online_signals() -> void:
-	OnlineSession.combat_state_changed.connect(_on_combat_state_changed)
-	OnlineSession.ahoge_state_changed.connect(_on_ahoge_state_changed)
-	OnlineSession.defense_resolved.connect(_on_defense_resolved)
-	OnlineSession.hit_confirmed.connect(_on_hit_confirmed)
-	OnlineSession.attack_clash.connect(_on_attack_clash)
-	OnlineSession.round_hit_count_changed.connect(_on_round_hit_count_changed)
-	OnlineSession.round_timer_changed.connect(_on_round_timer_changed)
-	OnlineSession.round_overtime_started.connect(_on_round_overtime_started)
-	OnlineSession.round_result.connect(_on_round_result)
-	OnlineSession.bo3_score_changed.connect(_on_bo3_score_changed)
-	OnlineSession.round_started.connect(_on_round_started)
-	OnlineSession.match_result.connect(_on_match_result)
-	OnlineSession.round_countdown_changed.connect(_on_round_countdown_changed)
-	OnlineSession.match_snapshot_received.connect(_on_match_snapshot_received)
-	OnlineSession.player_connection_changed.connect(_on_player_connection_changed)
-	OnlineSession.reconnect_started.connect(_on_reconnect_started)
-	OnlineSession.reconnect_succeeded.connect(_on_reconnect_succeeded)
-	OnlineSession.reconnect_failed.connect(_on_reconnect_failed)
+	_online_session.combat_state_changed.connect(_on_combat_state_changed)
+	_online_session.ahoge_state_changed.connect(_on_ahoge_state_changed)
+	_online_session.defense_resolved.connect(_on_defense_resolved)
+	_online_session.hit_confirmed.connect(_on_hit_confirmed)
+	_online_session.attack_clash.connect(_on_attack_clash)
+	_online_session.round_hit_count_changed.connect(_on_round_hit_count_changed)
+	_online_session.round_timer_changed.connect(_on_round_timer_changed)
+	_online_session.round_overtime_started.connect(_on_round_overtime_started)
+	_online_session.round_result.connect(_on_round_result)
+	_online_session.bo3_score_changed.connect(_on_bo3_score_changed)
+	_online_session.round_started.connect(_on_round_started)
+	_online_session.match_result.connect(_on_match_result)
+	_online_session.round_countdown_changed.connect(_on_round_countdown_changed)
+	_online_session.match_snapshot_received.connect(_on_match_snapshot_received)
+	_online_session.player_connection_changed.connect(_on_player_connection_changed)
+	_online_session.reconnect_started.connect(_on_reconnect_started)
+	_online_session.reconnect_succeeded.connect(_on_reconnect_succeeded)
+	_online_session.reconnect_failed.connect(_on_reconnect_failed)
 
 
 func _process(_delta: float) -> void:
-	if OnlineSession.is_reconnecting():
-		var remaining := OnlineSession.reconnect_remaining_seconds()
+	if _online_session.is_reconnecting():
+		var remaining := _online_session.reconnect_remaining_seconds()
 		if remaining > 0:
 			hud.show_network_overlay("RECONNECTING...\n%d" % remaining)
 		else:
@@ -115,7 +118,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _send_action(action: String) -> void:
-	var result: Dictionary = await OnlineSession.send_combat_input(action)
+	var result: Dictionary = await _online_session.send_combat_input(action)
 	if not bool(result.get("ok", false)):
 		hud.flash_message(str(result.get("message", "入力送信に失敗しました。")))
 
@@ -414,7 +417,7 @@ func _emit_ranked_match_completed(summary: Dictionary) -> void:
 func _on_reconnect_started(_grace_seconds: int) -> void:
 	_input_ready = false
 	hud.set_connection_status("RANKED: RECONNECTING")
-	hud.show_network_overlay("RECONNECTING...\n%d" % OnlineSession.reconnect_remaining_seconds())
+	hud.show_network_overlay("RECONNECTING...\n%d" % _online_session.reconnect_remaining_seconds())
 
 
 func _on_reconnect_succeeded(_match_id: String) -> void:

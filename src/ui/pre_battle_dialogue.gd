@@ -4,12 +4,15 @@ const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 
 signal completed(snapshot: Dictionary)
 
+var _online_session = null
+
 var _label: Label
 var _completed: bool = false
 var _snapshot: Dictionary = {}
 
 
 func _ready() -> void:
+	_online_session = get_node("/root/OnlineSession")
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
@@ -32,9 +35,9 @@ func _ready() -> void:
 	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(_label)
 
-	OnlineSession.match_snapshot_received.connect(_on_snapshot)
-	if not OnlineSession.latest_match_snapshot.is_empty():
-		call_deferred("_on_snapshot", OnlineSession.latest_match_snapshot.duplicate(true))
+	_online_session.match_snapshot_received.connect(_on_snapshot)
+	if not _online_session.latest_match_snapshot.is_empty():
+		call_deferred("_on_snapshot", _online_session.latest_match_snapshot.duplicate(true))
 
 
 func _on_snapshot(snapshot: Dictionary) -> void:
@@ -43,8 +46,8 @@ func _on_snapshot(snapshot: Dictionary) -> void:
 	_snapshot = snapshot.duplicate(true)
 	var character_map: Dictionary = snapshot.get("character_id_by_user", {})
 	var local_user_id := ""
-	if OnlineSession.session != null:
-		local_user_id = str(OnlineSession.session.user_id)
+	if _online_session.session != null:
+		local_user_id = str(_online_session.session.user_id)
 	var opponent_user_id := ""
 	for user_id in character_map.keys():
 		if str(user_id) != local_user_id:
