@@ -1584,7 +1584,8 @@ value:
 PLAYER Ranking / AHOGE LEGEND Ranking取得RPCはpayloadの `season_id` を任意指定できる。
 
 - 未指定: 現在Season
-- 指定: `YYYY-MM` 形式を検証し、そのSeasonを取得
+- 指定: JSON文字列の `YYYY-MM` 形式を検証し、そのSeasonを取得
+- `season_id` keyを明示した場合、空文字・null・boolean・numberなど `YYYY-MM` 文字列以外は拒否する
 - 現在より未来のseason_idは拒否
 - 過去Season指定時も現在Seasonのデータを変更しない
 
