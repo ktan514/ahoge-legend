@@ -1606,6 +1606,39 @@ PlayerSeasonRank
 
 キャラクター単位の月次ランキングとする。
 
+AHOGE LEGEND Rankingはcharacter / ahoge単位で集計し、順位決定値は `total_match_wins` のみとする。
+
+同じ `total_match_wins` は同じ表示順位とし、`total_ranked_matches` や使用率をsecondary tie-breakへ使用しない。
+
+server保存はseason単位のauthoritative Nakama leaderboardを使用する。
+
+```text
+leaderboard_id = ahoge_legend_<YYYY-MM>
+authoritative  = true
+sort           = desc
+operator       = set
+owner_id       = stable character owner UUID
+score          = total_match_wins
+subscore       = 0
+metadata:
+- character_id
+- total_ranked_matches
+```
+
+Nakama leaderboard record ownerはUUIDが必要なため、各正式characterへ安定したserver管理owner UUIDを割り当てる。character_idとowner UUIDの対応表はserver configで一元管理し、player IDと混同しない。
+
+集計単位はMatch Result確定時のauthoritative match settlementとする。
+
+- winner character: `total_match_wins + 1`
+- winner character: `total_ranked_matches + 1`
+- loser character: `total_ranked_matches + 1`
+- 同character同士の場合: そのcharacterの `total_ranked_matches + 2`
+- Round Resultでは加算しない
+- Friend Matchでは加算しない
+- `DISCONNECT_TIMEOUT` は通常Ranked勝敗として加算する
+- server障害 / 両者同時切断は加算しない
+- authoritative match ID単位のsettlementで二重集計しない
+
 順位決定値は、対象シーズン内の全プレイヤーによるランクマッチ総勝利数とする。
 
 ```text
