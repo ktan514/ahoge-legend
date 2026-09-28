@@ -23,6 +23,7 @@ let InitModule: nkruntime.InitModule = function (
   initializer: nkruntime.Initializer
 ): void {
   initializer.registerRpc("ahoge_health", healthRpc);
+  initializer.registerRpc("ahoge_current_rating", currentRatingRpc);
   initializer.registerMatch("ahoge_ranked", rankedMatchHandler);
   initializer.registerMatchmakerMatched(rankedMatchmakerMatched);
   logger.info("AHOGE LEGEND TypeScript runtime loaded.");
