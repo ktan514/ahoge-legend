@@ -2,6 +2,7 @@ extends Node
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
+const MatchResumeStoreScript := preload("res://src/online/match_resume_store.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
@@ -35,6 +36,8 @@ signal player_connection_changed(user_id: String, connected: bool, reconnect_dea
 signal reconnect_started(grace_seconds: int)
 signal reconnect_succeeded(match_id: String)
 signal reconnect_failed(message: String)
+signal saved_match_resume_resolved(destination: String, snapshot: Dictionary)
+signal saved_match_resume_failed(message: String)
 signal combat_input_failed(message: String)
 
 var client = null
@@ -44,8 +47,12 @@ var realtime_socket = null
 var matchmaker_ticket: String = ""
 var joined_match = null
 var current_match_id: String = ""
+var current_match_mode: String = ""
 var _next_input_sequence: int = 0
 var _identity_store = null
+var _resume_store = null
+var _saved_resume_waiting: bool = false
+var _saved_resume_snapshot: Dictionary = {}
 var _intentional_disconnect: bool = false
 var _reconnect_in_progress: bool = false
 var _reconnect_generation: int = 0
@@ -54,6 +61,7 @@ var _reconnect_deadline_msec: int = 0
 
 func _ready() -> void:
 	_identity_store = DeviceIdentityStoreScript.new(OnlineConfigScript.DEVICE_ID_PATH)
+	_resume_store = MatchResumeStoreScript.new()
 
 
 func create_local_client():
@@ -111,6 +119,92 @@ func authenticate_local_device() -> Dictionary:
 
 func is_authenticated() -> bool:
 	return session != null and session.valid and not session.expired
+
+
+func get_saved_match_for_current_user() -> Dictionary:
+	if not is_authenticated():
+		return {}
+	if _resume_store == null:
+		_resume_store = MatchResumeStoreScript.new()
+	return _resume_store.load_for_user(str(session.user_id))
+
+
+func clear_saved_match_context() -> bool:
+	if _resume_store == null:
+		_resume_store = MatchResumeStoreScript.new()
+	current_match_mode = ""
+	return _resume_store.clear()
+
+
+func acknowledge_saved_match_destination() -> bool:
+	return clear_saved_match_context()
+
+
+func resume_saved_match_after_login() -> Dictionary:
+	if not is_authenticated():
+		return _saved_resume_fail("再ログイン復帰には認証が必要です。")
+
+	var saved := get_saved_match_for_current_user()
+	if saved.is_empty():
+		return {
+			"ok": true,
+			"resumed": false,
+			"destination": "none",
+		}
+
+	var connect_result: Dictionary = await connect_realtime_socket()
+	if not bool(connect_result.get("ok", false)):
+		return _saved_resume_fail("保存済み対戦へのRealtime再接続に失敗しました。")
+
+	current_match_id = str(saved["match_id"])
+	current_match_mode = str(saved["match_mode"])
+	_saved_resume_waiting = true
+	_saved_resume_snapshot = {}
+
+	var join_result = await realtime_socket.join_match_async(current_match_id)
+	if join_result == null or join_result.is_exception():
+		_saved_resume_waiting = false
+		_saved_resume_snapshot = {}
+		joined_match = null
+		return _saved_resume_fail(
+			_result_error_message(join_result, "保存済みauthoritative matchへjoinできませんでした。")
+		)
+
+	if not bool(join_result.authoritative):
+		_saved_resume_waiting = false
+		_saved_resume_snapshot = {}
+		joined_match = null
+		return _saved_resume_fail("保存済みmatchがauthoritative matchではありません。")
+
+	joined_match = join_result
+	current_match_id = str(join_result.match_id)
+
+	var deadline := Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline and _saved_resume_snapshot.is_empty():
+		await get_tree().create_timer(0.02).timeout
+
+	if _saved_resume_snapshot.is_empty():
+		_saved_resume_waiting = false
+		return _saved_resume_fail("保存済みmatchのauthoritative snapshotを受信できませんでした。")
+
+	var snapshot := _saved_resume_snapshot.duplicate(true)
+	_saved_resume_waiting = false
+	_saved_resume_snapshot = {}
+
+	var destination := "battle"
+	if bool(snapshot.get("match_finished", false)):
+		if str(snapshot.get("match_mode", current_match_mode)) == MatchResumeStoreScript.MODE_FRIEND:
+			destination = "friend_character_select"
+		else:
+			destination = "ranked_result"
+
+	saved_match_resume_resolved.emit(destination, snapshot)
+	return {
+		"ok": true,
+		"resumed": true,
+		"destination": destination,
+		"snapshot": snapshot,
+	}
 
 
 func connect_realtime_socket() -> Dictionary:
@@ -280,7 +374,11 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 
 	joined_match = join_result
 	current_match_id = str(join_result.match_id)
+	current_match_mode = MatchResumeStoreScript.MODE_RANKED
 	_next_input_sequence = 0
+	if _resume_store == null:
+		_resume_store = MatchResumeStoreScript.new()
+	_resume_store.save(current_match_id, current_match_mode, str(session.user_id))
 	ranked_match_joined.emit(current_match_id)
 
 
@@ -502,6 +600,9 @@ func _on_match_state_received(match_state, candidate) -> void:
 		if snapshot.is_empty():
 			return
 		_next_input_sequence = int(snapshot["last_input_sequence"])
+		current_match_mode = str(snapshot.get("match_mode", current_match_mode))
+		if _saved_resume_waiting:
+			_saved_resume_snapshot = snapshot.duplicate(true)
 		match_snapshot_received.emit(snapshot)
 		if _reconnect_in_progress:
 			_reconnect_in_progress = false
@@ -544,6 +645,7 @@ func clear_session() -> void:
 	matchmaker_ticket = ""
 	joined_match = null
 	current_match_id = ""
+	current_match_mode = ""
 	_next_input_sequence = 0
 	session = null
 	account = null
@@ -664,6 +766,15 @@ func _result_error_message(result, fallback: String) -> String:
 		if exception != null and not str(exception.message).is_empty():
 			return str(exception.message)
 	return fallback
+
+
+func _saved_resume_fail(message: String) -> Dictionary:
+	printerr("Nakama saved match resume failed: %s" % message)
+	saved_match_resume_failed.emit(message)
+	return {
+		"ok": false,
+		"message": message,
+	}
 
 
 func _realtime_fail(message: String) -> Dictionary:
