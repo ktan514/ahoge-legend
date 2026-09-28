@@ -91,7 +91,7 @@ func _connect_online_signals() -> void:
 
 func _process(_delta: float) -> void:
 	if _online_session.is_reconnecting():
-		var remaining := _online_session.reconnect_remaining_seconds()
+		var remaining: int = int(_online_session.reconnect_remaining_seconds())
 		if remaining > 0:
 			hud.show_network_overlay("RECONNECTING...\n%d" % remaining)
 		else:
