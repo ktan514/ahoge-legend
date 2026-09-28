@@ -63,6 +63,8 @@ var _reconnect_deadline_msec: int = 0
 func _ready() -> void:
 	_identity_store = DeviceIdentityStoreScript.new(OnlineConfigScript.DEVICE_ID_PATH)
 	_resume_store = MatchResumeStoreScript.new()
+	if OS.get_environment("AHOGE_TEST_RESET_MATCH_CONTEXT") == "1":
+		_resume_store.clear()
 
 
 func create_local_client():
