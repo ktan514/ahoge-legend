@@ -323,6 +323,16 @@ func _run() -> void:
 			or str(snapshot.get("match_mode", "")) != "friend":
 		_fail("終了済みFriend snapshotが不正です。")
 		return
+
+	var blocked_rematch: Dictionary = await online_session.set_friend_room_ready(
+		room_code,
+		true
+	)
+	if bool(blocked_rematch.get("ok", false)) \
+			or str(blocked_rematch.get("step", "")) != "unresolved_match":
+		_fail("終了済みFriendの遷移確定前に再戦Readyできました。")
+		return
+
 	if not online_session.acknowledge_saved_match_destination():
 		_fail("終了済みFriendの未解決match lockを遷移確定後に解除できませんでした。")
 		return
