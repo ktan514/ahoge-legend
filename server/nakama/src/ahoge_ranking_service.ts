@@ -232,9 +232,7 @@ const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
       if (parsed && typeof parsed.limit === "number") {
         requestedLimit = Math.floor(parsed.limit);
       }
-      if (parsed && parsed.season_id !== undefined) {
-        requestedSeasonId = String(parsed.season_id || "");
-      }
+      requestedSeasonId = parseOptionalSeasonId(parsed);
     } catch (_error) {
       throw new Error("invalid payload");
     }
