@@ -278,9 +278,9 @@ func resume_saved_match_after_login() -> Dictionary:
 		_saved_resume_waiting = false
 		_saved_resume_snapshot = {}
 		joined_match = null
-		if _is_match_not_found_result(join_result):
+		if _is_match_not_found_result(join_result) or _is_invalid_match_id_result(join_result):
 			clear_saved_match_context()
-			return _saved_resume_fail("元の対戦はserver上に存在せず、復帰できませんでした。")
+			return _saved_resume_fail("元の対戦情報が無効またはserver上に存在せず、復帰できませんでした。")
 		return _saved_resume_fail(
 			_result_error_message(join_result, "保存済みauthoritative matchへjoinできませんでした。")
 		)
@@ -889,6 +889,15 @@ func _is_match_not_found_result(result) -> bool:
 	if exception == null:
 		return false
 	return int(exception.grpc_status_code) == 5 or int(exception.status_code) == 404
+
+
+func _is_invalid_match_id_result(result) -> bool:
+	if result == null or not result.has_method("get_exception"):
+		return false
+	var exception = result.get_exception()
+	if exception == null:
+		return false
+	return str(exception.message).to_lower().contains("invalid match id")
 
 
 func _result_error_message(result, fallback: String) -> String:
