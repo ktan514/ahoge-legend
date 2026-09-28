@@ -338,6 +338,7 @@ static func parse_match_snapshot_payload(payload: String) -> Dictionary:
 		return {}
 	for key in [
 		"server_tick",
+		"match_mode",
 		"round_number",
 		"round_wins_by_user",
 		"round_hit_count_by_user",
@@ -351,6 +352,8 @@ static func parse_match_snapshot_payload(payload: String) -> Dictionary:
 		"round_countdown_value",
 		"match_finished",
 		"match_winner_user_id",
+		"match_finish_cause",
+		"character_id_by_user",
 		"last_input_sequence",
 		"combat_state_by_user",
 	]:
@@ -358,6 +361,9 @@ static func parse_match_snapshot_payload(payload: String) -> Dictionary:
 			return {}
 
 	if int(parsed["server_tick"]) < 0:
+		return {}
+	var match_mode := str(parsed["match_mode"])
+	if match_mode not in ["ranked", "friend"]:
 		return {}
 	var round_number := int(parsed["round_number"])
 	if round_number < 1 or round_number > 3:
@@ -380,6 +386,18 @@ static func parse_match_snapshot_payload(payload: String) -> Dictionary:
 		return {}
 	if int(parsed["last_input_sequence"]) < 0:
 		return {}
+	if not parsed["character_id_by_user"] is Dictionary:
+		return {}
+	for user_id in parsed["character_id_by_user"].keys():
+		if str(user_id).is_empty() or str(parsed["character_id_by_user"][user_id]).is_empty():
+			return {}
+	var match_finish_cause := str(parsed["match_finish_cause"])
+	if bool(parsed["match_finished"]):
+		if match_finish_cause not in ["BO3", "DISCONNECT_TIMEOUT"]:
+			return {}
+	else:
+		if match_finish_cause != "NONE":
+			return {}
 	if not parsed["combat_state_by_user"] is Dictionary:
 		return {}
 	for user_id in parsed["combat_state_by_user"].keys():
