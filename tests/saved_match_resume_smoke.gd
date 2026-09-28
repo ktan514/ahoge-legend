@@ -28,6 +28,23 @@ func _run() -> void:
 		return
 	var p1_user_id := str(auth_result.get("user_id", ""))
 
+	var ahoge_before := await _read_ahoge_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ahoge_before.is_empty():
+		_fail("保存済みmatch復帰試験前のAHOGE Rankingを取得できませんでした。")
+		return
+	var long_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	var short_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+	)
+
 	var realtime_result: Dictionary = await online_session.connect_realtime_socket()
 	if not bool(realtime_result.get("ok", false)):
 		_fail("P1 Realtime Socket接続に失敗しました。")
@@ -195,6 +212,18 @@ func _run() -> void:
 		_fail("終了済みRankedのfinish causeがDISCONNECT_TIMEOUTではありません。")
 		return
 
+	# 次のsmokeがbaselineを読む前に、今回のAHOGE projection完了まで待つ。
+	var settlement := await _wait_ahoge_settlement(
+		online_session.client,
+		online_session.session,
+		long_before,
+		short_before,
+		5000
+	)
+	if settlement.is_empty():
+		_fail("保存済みmatch復帰試験のAHOGE settlementが完了しませんでした。")
+		return
+
 	# Result遷移確定前のlockを保持したまま再起動相当にし、
 	# serverの終了済みsnapshotからranked_resultへ復帰する。
 	online_session.clear_runtime_session_preserving_match()
@@ -224,6 +253,63 @@ func _run() -> void:
 	online_session.clear_session()
 	print("AHOGE LEGEND saved match resume smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _read_ahoge_ranking(client, session, limit: int) -> Dictionary:
+	var rpc_result = await client.rpc_async(
+		session,
+		"ahoge_legend_ranking",
+		JSON.stringify({"limit": limit})
+	)
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
+	var records = ranking.get("records", [])
+	if not records is Array:
+		return {"wins": 0, "matches": 0}
+	for record in records:
+		if record is Dictionary and str(record.get("character_id", "")) == character_id:
+			return {
+				"wins": int(record.get("total_match_wins", 0)),
+				"matches": int(record.get("total_ranked_matches", 0)),
+			}
+	return {"wins": 0, "matches": 0}
+
+
+func _wait_ahoge_settlement(
+	client,
+	session,
+	long_before: Dictionary,
+	short_before: Dictionary,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var ranking := await _read_ahoge_ranking(client, session, 100)
+		if not ranking.is_empty():
+			var long_after := _ahoge_counts(
+				ranking,
+				OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+			)
+			var short_after := _ahoge_counts(
+				ranking,
+				OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+			)
+			if (
+				int(long_after.get("wins", -1)) == int(long_before.get("wins", 0)) + 1
+				and int(long_after.get("matches", -1)) == int(long_before.get("matches", 0)) + 1
+				and int(short_after.get("wins", -1)) == int(short_before.get("wins", 0))
+				and int(short_after.get("matches", -1)) == int(short_before.get("matches", 0)) + 1
+			):
+				return ranking
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _on_second_matchmaker_matched(matched) -> void:

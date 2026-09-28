@@ -62,6 +62,7 @@ var _ranked_matchmaking_started_msec: int = 0
 var joined_match = null
 var current_match_id: String = ""
 var current_match_mode: String = ""
+var _pending_join_match_id: String = ""
 var latest_match_snapshot: Dictionary = {}
 var _next_input_sequence: int = 0
 var _identity_store = null
@@ -220,6 +221,7 @@ func clear_saved_match_context() -> bool:
 		_resume_store = MatchResumeStoreScript.new()
 	current_match_id = ""
 	current_match_mode = ""
+	_pending_join_match_id = ""
 	latest_match_snapshot = {}
 	joined_match = null
 	_next_input_sequence = 0
@@ -727,8 +729,10 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 	# join直後にserverから届いた新snapshotをawait完了後に消してはならない。
 	latest_match_snapshot = {}
 	_next_input_sequence = 0
+	_pending_join_match_id = match_id
 	var join_result = await candidate.join_match_async(match_id)
 	if join_result == null or join_result.is_exception():
+		_pending_join_match_id = ""
 		_matchmaking_fail(
 			"join_match",
 			_result_error_message(join_result, "authoritative matchへjoinできませんでした。")
@@ -736,6 +740,7 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 		return
 
 	if not bool(join_result.authoritative):
+		_pending_join_match_id = ""
 		_matchmaking_fail("join_match", "join先がauthoritative matchではありません。")
 		return
 
@@ -744,8 +749,10 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 		str(join_result.match_id),
 		MatchResumeStoreScript.MODE_RANKED
 	):
+		_pending_join_match_id = ""
 		_matchmaking_fail("persist_match", "対戦復帰情報を保存できませんでした。")
 		return
+	_pending_join_match_id = ""
 	ranked_match_joined.emit(current_match_id)
 
 
@@ -870,23 +877,29 @@ func join_friend_match_from_room(room: Dictionary) -> Dictionary:
 	if str(room.get("state", "")) != "IN_MATCH":
 		return _friend_room_fail("join_match", "Friend roomが対戦開始状態ではありません。")
 
+	latest_match_snapshot = {}
+	_next_input_sequence = 0
+	_pending_join_match_id = match_id
 	var join_result = await realtime_socket.join_match_async(match_id)
 	if join_result == null or join_result.is_exception():
+		_pending_join_match_id = ""
 		return _friend_room_fail(
 			"join_match",
 			_result_error_message(join_result, "Friend authoritative matchへjoinできませんでした。")
 		)
 	if not bool(join_result.authoritative):
+		_pending_join_match_id = ""
 		return _friend_room_fail("join_match", "join先がauthoritative matchではありません。")
 
 	joined_match = join_result
-	_next_input_sequence = 0
 	if not register_joined_online_match(
 		str(join_result.match_id),
 		MatchResumeStoreScript.MODE_FRIEND
 	):
+		_pending_join_match_id = ""
 		return _friend_room_fail("persist_match", "Friend対戦復帰情報を保存できませんでした。")
 
+	_pending_join_match_id = ""
 	friend_match_joined.emit(current_match_id)
 	return {
 		"ok": true,
@@ -924,7 +937,10 @@ func send_combat_input(action: String) -> Dictionary:
 func _on_match_state_received(match_state, candidate) -> void:
 	if realtime_socket != candidate:
 		return
-	if current_match_id.is_empty() or str(match_state.match_id) != current_match_id:
+	var expected_match_id := current_match_id
+	if expected_match_id.is_empty():
+		expected_match_id = _pending_join_match_id
+	if expected_match_id.is_empty() or str(match_state.match_id) != expected_match_id:
 		return
 
 	var op_code := int(match_state.op_code)
