@@ -145,7 +145,7 @@ func register_joined_online_match(match_id: String, match_mode: String) -> bool:
 	if not current_match_id.is_empty() and current_match_id != match_id:
 		return false
 
-	var saved := _resume_store.load_for_user(str(session.user_id))
+	var saved: Dictionary = _resume_store.load_for_user(str(session.user_id))
 	if not saved.is_empty() and str(saved.get("match_id", "")) != match_id:
 		return false
 
@@ -180,7 +180,7 @@ func resume_saved_match_after_login() -> Dictionary:
 	if not is_authenticated():
 		return _saved_resume_fail("再ログイン復帰には認証が必要です。")
 
-	var saved := get_saved_match_for_current_user()
+	var saved: Dictionary = get_saved_match_for_current_user()
 	if saved.is_empty():
 		return {
 			"ok": true,
