@@ -63,6 +63,20 @@ func _run() -> void:
 		return
 	var p2_user_id := str(second_session.user_id)
 
+	var initial_p1_rating := await _read_current_rating(
+		online_session.client,
+		online_session.session
+	)
+	var initial_p2_rating := await _read_current_rating(second_client, second_session)
+	if initial_p1_rating.is_empty() or initial_p2_rating.is_empty():
+		_fail("切断試験開始前Ratingを取得できませんでした。")
+		return
+	var expected_after_disconnect := _expected_elo_pair(
+		initial_p1_rating,
+		initial_p2_rating,
+		false
+	)
+
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
 	_second_socket.received_match_state.connect(_on_second_match_state)
@@ -154,12 +168,12 @@ func _run() -> void:
 		online_session.session,
 		second_client,
 		second_session,
-		1484,
-		1516,
+		expected_after_disconnect["p1"],
+		expected_after_disconnect["p2"],
 		5000
 	)
 	if ratings.is_empty():
-		_fail("DISCONNECT_TIMEOUT後のRatingが敗者1484 / 勝者1516へ更新されませんでした。")
+		_fail("DISCONNECT_TIMEOUT後のRatingがElo期待値へ更新されませんでした。")
 		return
 
 	var forbidden: Dictionary = await online_session.start_ranked_matchmaking(
@@ -213,13 +227,38 @@ func _read_current_rating(client, session) -> Dictionary:
 	return parsed
 
 
+func _expected_elo_pair(
+	p1_before: Dictionary,
+	p2_before: Dictionary,
+	p1_wins: bool
+) -> Dictionary:
+	var p1_rating := int(p1_before.get("rating", 1500))
+	var p2_rating := int(p2_before.get("rating", 1500))
+	var p1_expected := 1.0 / (1.0 + pow(10.0, float(p2_rating - p1_rating) / 400.0))
+	var p2_expected := 1.0 / (1.0 + pow(10.0, float(p1_rating - p2_rating) / 400.0))
+	var p1_score := 1.0 if p1_wins else 0.0
+	var p2_score := 0.0 if p1_wins else 1.0
+	return {
+		"p1": {
+			"rating": int(round(p1_rating + 32.0 * (p1_score - p1_expected))),
+			"wins": int(p1_before.get("wins", 0)) + (1 if p1_wins else 0),
+			"losses": int(p1_before.get("losses", 0)) + (0 if p1_wins else 1),
+		},
+		"p2": {
+			"rating": int(round(p2_rating + 32.0 * (p2_score - p2_expected))),
+			"wins": int(p2_before.get("wins", 0)) + (0 if p1_wins else 1),
+			"losses": int(p2_before.get("losses", 0)) + (1 if p1_wins else 0),
+		},
+	}
+
+
 func _wait_rating_pair(
 	p1_client,
 	p1_session,
 	p2_client,
 	p2_session,
-	expected_p1_rating: int,
-	expected_p2_rating: int,
+	expected_p1: Dictionary,
+	expected_p2: Dictionary,
 	timeout_ms: int
 ) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + timeout_ms
@@ -227,7 +266,7 @@ func _wait_rating_pair(
 		var p1_rating := await _read_current_rating(p1_client, p1_session)
 		var p2_rating := await _read_current_rating(p2_client, p2_session)
 		if not p1_rating.is_empty() and not p2_rating.is_empty():
-			if int(p1_rating.get("rating", -1)) == expected_p1_rating 					and int(p2_rating.get("rating", -1)) == expected_p2_rating 					and int(p1_rating.get("wins", -1)) == 0 					and int(p1_rating.get("losses", -1)) == 1 					and int(p2_rating.get("wins", -1)) == 1 					and int(p2_rating.get("losses", -1)) == 0:
+			if int(p1_rating.get("rating", -1)) == int(expected_p1.get("rating", -2)) 					and int(p2_rating.get("rating", -1)) == int(expected_p2.get("rating", -2)) 					and int(p1_rating.get("wins", -1)) == int(expected_p1.get("wins", -2)) 					and int(p1_rating.get("losses", -1)) == int(expected_p1.get("losses", -2)) 					and int(p2_rating.get("wins", -1)) == int(expected_p2.get("wins", -2)) 					and int(p2_rating.get("losses", -1)) == int(expected_p2.get("losses", -2)):
 				return {
 					"p1": p1_rating,
 					"p2": p2_rating,
