@@ -2012,7 +2012,51 @@ post-Round / Result hold
 15秒猶予はRound phaseの停止とは独立して実時間相当server tickで進行する。
 
 
-#### 21.5.4 再接続期限超過
+#### 21.5.4 再ログイン時のMatch復帰
+
+Socketの一時切断だけでなく、ゲーム終了・client crash・再起動後に同じアカウントでログインした場合も、直前のオンライン対戦へ復帰できるようにする。
+
+clientはauthoritative matchへjoinした時点で、少なくとも次を端末永続領域へ保存する。
+
+```text
+match_id
+match_mode       # ranked / friend
+saved_user_id
+```
+
+認証成功後、保存済みmatchが存在し、`saved_user_id` が現在ログインuser IDと一致する場合は通常メニュー表示より先に復帰判定を行う。
+
+```text
+Login
+→ saved match有無を確認
+→ Realtime接続
+→ saved match IDへjoin
+→ MATCH_SNAPSHOT受信
+   ├─ match_finished=false
+   │    → Battleへ復帰
+   └─ match_finished=true
+        ├─ ranked → UI-11 Match Resultだけ表示
+        └─ friend → Character Selectへ遷移
+```
+
+進行中matchへの復帰では、同一プロセス内Reconnectと同じauthoritative snapshotを正本とする。
+
+終了済みmatchについてもexpected userの再joinを許可し、serverは終了済みsnapshotを返す。終了済みsnapshotには少なくとも次を含める。
+
+- `match_finished=true`
+- `match_winner_user_id`
+- `match_finish_cause`
+- `round_wins_by_user`
+- `round_number`
+- `match_mode`
+
+RankedではこのsnapshotからUI-11表示用summaryを構築し、Battleへ一瞬戻してからResultへ遷移する実装にはしない。
+
+Friendでは終了済みmatchのResult再表示を行わず、Friend room文脈のCharacter Select（選択メニュー）へ戻す。Friend Match自体は工程3後段で実装するため、#69ではmodeを保持できる復帰契約まで先行実装し、実Friend導線接続はFriend Match実装時に検証する。
+
+saved match情報は、復帰先が確定して不要になった時点で消去する。認証user IDが異なる場合は他userのsaved matchへjoinしない。
+
+#### 21.5.5 再接続期限超過
 
 片側だけが切断した状態で、そのplayerのreconnect deadlineへ到達した場合はserver authoritativeにmatchを終了する。
 
