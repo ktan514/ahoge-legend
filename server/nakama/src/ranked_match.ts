@@ -300,9 +300,8 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     if (wasReconnect) {
       broadcastPlayerConnectionChanged(dispatcher, userId, true, -1, tick);
     }
-    if (wasReconnect || state.matchFinished) {
-      broadcastMatchSnapshot(dispatcher, state, presence, tick);
-    }
+    // 通常join時も初期snapshotを送り、GameFlow/UIがserver stateを正本にできるようにする。
+    broadcastMatchSnapshot(dispatcher, state, presence, tick);
   });
 
   logger.info("ahoge_ranked player joined. size=%d", Object.keys(state.presences).length);
