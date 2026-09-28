@@ -61,6 +61,7 @@ var _ranked_matchmaking_started_msec: int = 0
 var joined_match = null
 var current_match_id: String = ""
 var current_match_mode: String = ""
+var latest_match_snapshot: Dictionary = {}
 var _next_input_sequence: int = 0
 var _identity_store = null
 var _resume_store = null
@@ -136,6 +137,32 @@ func is_authenticated() -> bool:
 	return session != null and session.valid and not session.expired
 
 
+func get_current_rating() -> Dictionary:
+	if not is_authenticated():
+		return {
+			"ok": false,
+			"message": "Rating取得には認証が必要です。",
+		}
+
+	var result = await client.rpc_async(session, "ahoge_current_rating")
+	if result == null or result.is_exception():
+		return {
+			"ok": false,
+			"message": _result_error_message(result, "現在Ratingを取得できませんでした。"),
+		}
+
+	var parsed = JSON.parse_string(str(result.payload))
+	if not parsed is Dictionary:
+		return {
+			"ok": false,
+			"message": "現在Ratingのserver応答を解析できませんでした。",
+		}
+
+	var response: Dictionary = parsed
+	response["ok"] = true
+	return response
+
+
 func has_unresolved_match_context() -> bool:
 	if not current_match_id.is_empty():
 		return true
@@ -181,6 +208,7 @@ func clear_saved_match_context() -> bool:
 		_resume_store = MatchResumeStoreScript.new()
 	current_match_id = ""
 	current_match_mode = ""
+	latest_match_snapshot = {}
 	joined_match = null
 	_next_input_sequence = 0
 	return _resume_store.clear()
@@ -642,6 +670,7 @@ func _on_matchmaker_matched(matched, candidate) -> void:
 		return
 
 	joined_match = join_result
+	latest_match_snapshot = {}
 	_next_input_sequence = 0
 	if not register_joined_online_match(
 		str(join_result.match_id),
@@ -1016,6 +1045,7 @@ func _on_match_state_received(match_state, candidate) -> void:
 			return
 		_next_input_sequence = int(snapshot["last_input_sequence"])
 		current_match_mode = str(snapshot.get("match_mode", current_match_mode))
+		latest_match_snapshot = snapshot.duplicate(true)
 		if _saved_resume_waiting:
 			_saved_resume_snapshot = snapshot.duplicate(true)
 		match_snapshot_received.emit(snapshot)
@@ -1062,6 +1092,7 @@ func clear_runtime_session_preserving_match() -> void:
 	joined_match = null
 	current_match_id = ""
 	current_match_mode = ""
+	latest_match_snapshot = {}
 	_next_input_sequence = 0
 	session = null
 	account = null
