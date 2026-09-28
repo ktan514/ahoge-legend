@@ -732,6 +732,11 @@ func set_friend_room_character(room_code: String, character_id: String) -> Dicti
 
 
 func set_friend_room_ready(room_code: String, ready: bool) -> Dictionary:
+	if ready and has_unresolved_match_context():
+		return _friend_room_fail(
+			"unresolved_match",
+			"未解決の対戦があります。元の対戦を復帰または終了処理してからFriend matchを開始してください。"
+		)
 	return await _friend_room_rpc(
 		OnlineConfigScript.FRIEND_ROOM_RPC_READY,
 		{
