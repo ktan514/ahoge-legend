@@ -281,6 +281,38 @@ func _run() -> void:
 		_fail("通常BO3後のRatingがElo期待値へ更新されませんでした。")
 		return
 
+	var ranking := await _read_player_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ranking.is_empty():
+		_fail("PLAYER Rankingを取得できませんでした。")
+		return
+	if not _assert_player_ranking(
+		ranking,
+		p1_user_id,
+		expected_after_match["p1"],
+		p2_user_id,
+		expected_after_match["p2"]
+	):
+		return
+
+	var season_id := str(ranking.get("season_id", ""))
+	if season_id.is_empty():
+		_fail("PLAYER Rankingにseason_idがありません。")
+		return
+	var direct_write = await online_session.client.write_leaderboard_record_async(
+		online_session.session,
+		"player_rating_%s" % season_id,
+		999999,
+		0,
+		"{}"
+	)
+	if direct_write == null or not direct_write.is_exception():
+		_fail("authoritative PLAYER Rankingへclientから直接writeできました。")
+		return
+
 	var state_count_p1 := _p1_states.size()
 	var state_count_p2 := _p2_states.size()
 	var hit_count := _p1_hits.size()
@@ -342,6 +374,97 @@ func _run() -> void:
 
 	print("AHOGE LEGEND match result smoke: PASS match_id=%s" % p1_joined[0])
 	quit(0)
+
+
+func _read_player_ranking(client, session, limit: int) -> Dictionary:
+	var rpc_result = await client.rpc_async(
+		session,
+		"ahoge_player_ranking",
+		JSON.stringify({"limit": limit})
+	)
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _rank_tier_for_rating(rating: int) -> String:
+	if rating >= 2000:
+		return "MASTER"
+	if rating >= 1800:
+		return "DIAMOND"
+	if rating >= 1600:
+		return "PLATINUM"
+	if rating >= 1400:
+		return "GOLD"
+	if rating >= 1200:
+		return "SILVER"
+	return "BRONZE"
+
+
+func _find_player_ranking_record(records: Array, player_id: String) -> Dictionary:
+	for record in records:
+		if record is Dictionary and str(record.get("player_id", "")) == player_id:
+			return record
+	return {}
+
+
+func _assert_player_ranking(
+	ranking: Dictionary,
+	p1_user_id: String,
+	expected_p1: Dictionary,
+	p2_user_id: String,
+	expected_p2: Dictionary
+) -> bool:
+	var records_value = ranking.get("records", [])
+	if not records_value is Array:
+		_fail("PLAYER Ranking recordsが配列ではありません。")
+		return false
+	var records: Array = records_value
+
+	var previous_rating := 2147483647
+	var previous_display_rank := 0
+	for index in range(records.size()):
+		var record = records[index]
+		if not record is Dictionary:
+			_fail("PLAYER Ranking recordがDictionaryではありません。")
+			return false
+		var rating := int(record.get("rating", -1))
+		var display_rank := int(record.get("display_rank", -1))
+		if rating > previous_rating:
+			_fail("PLAYER RankingがRating降順ではありません。")
+			return false
+		if index > 0 and rating == previous_rating:
+			if display_rank != previous_display_rank:
+				_fail("同RatingのPLAYER Rankingが同順位ではありません。")
+				return false
+		else:
+			if display_rank != index + 1:
+				_fail("PLAYER Rankingのdisplay_rankがcompetition rankingではありません。")
+				return false
+		previous_rating = rating
+		previous_display_rank = display_rank
+
+	var p1_record := _find_player_ranking_record(records, p1_user_id)
+	var p2_record := _find_player_ranking_record(records, p2_user_id)
+	if p1_record.is_empty() or p2_record.is_empty():
+		_fail("対戦playerがPLAYER Rankingに存在しません。")
+		return false
+
+	for pair in [
+		{"record": p1_record, "expected": expected_p1},
+		{"record": p2_record, "expected": expected_p2},
+	]:
+		var record: Dictionary = pair["record"]
+		var expected: Dictionary = pair["expected"]
+		var rating := int(expected.get("rating", -1))
+		if int(record.get("rating", -2)) != rating 				or int(record.get("wins", -2)) != int(expected.get("wins", -1)) 				or int(record.get("losses", -2)) != int(expected.get("losses", -1)) 				or str(record.get("rank_tier", "")) != _rank_tier_for_rating(rating):
+			_fail("PLAYER Ranking recordがRating Storageと一致しません。")
+			return false
+
+	return true
 
 
 func _read_current_rating(client, session) -> Dictionary:
