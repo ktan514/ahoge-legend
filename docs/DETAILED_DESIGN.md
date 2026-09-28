@@ -1928,6 +1928,9 @@ Round進行中に片側だけが切断した場合、match全体は停止しな�
 - 切断前にserverが受理済みのWINDUP / STRIKE / COOLDOWN / Defense / Stagger / SHORT Regrow等はserver tick基準で通常どおり進行する
 - 切断を理由に受理済みactionを巻き戻さない
 - 接続中プレイヤーから切断プレイヤーへの有効Hit判定もserver authoritativeに継続する
+- 切断中playerは無防備扱いとし、DefenseResultは常に `NONE` とする
+- 切断前にPARRY / DODGEがactiveだった場合でも、切断後に到達したContactでは防御成立させない
+- 切断前にserverが受理済みの攻撃actionは従来どおり進行し得るが、防御能力だけはpresence喪失時点で無効化する
 
 ただし、Round境界では両者が揃うまで進行を待つ。
 
@@ -2040,6 +2043,19 @@ clientは元matchの解決を最優先する。元matchの解決とは次のい�
 2. `match_finished=true / ranked` のsnapshotを受信し、UI-11 Resultへ遷移
 3. `match_finished=true / friend` のsnapshotを受信し、Character Selectへ遷移
 4. server側から元matchが存在しないことを確定的に返され、復帰不能処理が完了
+
+lock永久残留対策として、clientは「対戦状態を修復」操作を持てるようにする。
+
+修復操作はlockを無条件削除しない。
+
+1. 保存済みmatch IDを読み出す
+2. serverへRealtime接続する
+3. 同じmatch IDへのjoinを試みる
+4. join成功ならsnapshotを受信し、通常の復帰先へ進む
+5. serverが確定的に `Match Not Found` を返した場合のみ古いlockを解除する
+6. timeout / network error / server errorではlockを解除しない
+
+これにより、client側バグや異常終了でlockが残っても復旧可能にしつつ、active matchを手動解除して別対戦へ逃げることはできない。
 
 Nakamaの `NOT_FOUND`（gRPC code 5 / HTTP 404）を、保存済みmatchがserver上に存在しないことを示す確定的な復帰不能として扱う。この場合だけ古い未解決match lockを解除し、復帰不能エラー画面を経て新しい対戦を開始可能にする。通信失敗・timeout・UNAVAILABLE等ではlockを解除しない。
 
