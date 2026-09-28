@@ -217,6 +217,16 @@ func _input(event: InputEvent) -> void:
 				call_deferred("_send_p2_action", CombatInputProtocolScript.ACTION_ATTACK_RELEASE)
 		elif event.keycode == KEY_E and event.pressed:
 			call_deferred("_send_p2_action", CombatInputProtocolScript.ACTION_DEFEND)
+		elif event.keycode == KEY_F8 and event.pressed:
+			_simulate_p1_unexpected_disconnect()
+
+
+func _simulate_p1_unexpected_disconnect() -> void:
+	if OnlineSession.realtime_socket == null or not OnlineSession.is_realtime_connected():
+		return
+	hud.flash_message("M1 HV: SIMULATE P1 DROP")
+	# M1 Human Verification専用。intentional disconnect APIを通さずclosed signalを発生させる。
+	OnlineSession.realtime_socket.close()
 
 
 func _send_p1_action(action: String) -> void:
