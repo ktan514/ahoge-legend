@@ -2139,6 +2139,30 @@ K = 32
 - 最大検索幅: ±500
 - 60秒経過後も成立しない場合は検索を継続しつつUIへ待機延長を表示する
 
+検索幅拡大はclientのMatchmaker ticket lifecycleで実現する。
+
+```text
+0秒    ±100 ticket
+10秒   old ticket取消 → ±200 ticket
+20秒   old ticket取消 → ±300 ticket
+30秒   old ticket取消 → ±400 ticket
+40秒   old ticket取消 → ±500 ticket
+50秒+  ±500 ticketを維持
+60秒+  検索継続 + prolonged waiting通知
+```
+
+要件:
+
+- 同時に有効なRanked ticketを2枚以上保持しない
+- 幅拡大時は現在ticketの取消成功後に次ticketを作成する
+- matched通知を受信した時点で拡大generationを停止する
+- matched済みticketを後続timerが取消しない
+- user cancelで拡大generationを停止する
+- Realtime切断でticket stateを破棄し、拡大generationを停止する
+- 未解決match lock中は新規Matchmakerを開始しない
+- 最大±500到達後は10秒ごとの再作成を行わず、そのticketで検索を継続する
+- 60秒到達は検索条件変更ではなくUI通知用stateとする
+
 ### 21.8 フレンドルーム
 
 - コード長: 6文字
