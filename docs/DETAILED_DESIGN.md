@@ -1627,6 +1627,16 @@ metadata:
 
 Nakama leaderboard record ownerはUUIDが必要なため、各正式characterへ安定したserver管理owner UUIDを割り当てる。character_idとowner UUIDの対応表はserver configで一元管理し、player IDと混同しない。
 
+AHOGE集計のStorage object自体はcharacter owner UUIDをuser_idへ流用せず、system ownerを使用する。
+
+```text
+collection = ahoge_season_rank
+user_id    = system
+key        = <season_id>:<character_id>
+```
+
+leaderboard owner UUIDはランキングrecordの安定owner識別だけに使用する。
+
 集計単位はMatch Result確定時のauthoritative match settlementとする。
 
 - winner character: `total_match_wins + 1`
