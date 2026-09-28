@@ -24,6 +24,15 @@ const RANKED_MAX_RATING_RANGE: int = 500
 const RANKED_RANGE_EXPAND_INTERVAL_SECONDS: int = 10
 const RANKED_PROLONGED_WAIT_SECONDS: int = 60
 
+const FRIEND_ROOM_CODE_LENGTH: int = 6
+const FRIEND_ROOM_CODE_CHARSET: String = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+const FRIEND_ROOM_RPC_CREATE: String = "ahoge_friend_room_create"
+const FRIEND_ROOM_RPC_JOIN: String = "ahoge_friend_room_join"
+const FRIEND_ROOM_RPC_STATUS: String = "ahoge_friend_room_status"
+const FRIEND_ROOM_RPC_CHARACTER: String = "ahoge_friend_room_character"
+const FRIEND_ROOM_RPC_READY: String = "ahoge_friend_room_ready"
+const FRIEND_ROOM_RPC_LEAVE: String = "ahoge_friend_room_leave"
+
 const RANKED_CHARACTER_LONG_TEST: String = "LONG_TEST"
 const RANKED_CHARACTER_SHORT_TEST: String = "SHORT_TEST"
 const RANKED_SUPPORTED_CHARACTER_IDS := {
@@ -32,5 +41,9 @@ const RANKED_SUPPORTED_CHARACTER_IDS := {
 }
 
 
-static func is_supported_ranked_character_id(character_id: String) -> bool:
+static func is_supported_online_character_id(character_id: String) -> bool:
 	return bool(RANKED_SUPPORTED_CHARACTER_IDS.get(character_id, false))
+
+
+static func is_supported_ranked_character_id(character_id: String) -> bool:
+	return is_supported_online_character_id(character_id)
