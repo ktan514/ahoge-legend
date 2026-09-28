@@ -161,12 +161,67 @@ func _run() -> void:
 		_fail("Battle復帰後に未解決match lockが解除されています。")
 		return
 
-	await online_session.realtime_socket.leave_match_async(original_match_id)
+	# P2を切断してserver authoritativeにMatch Resultを確定させる。
+	var finished_result := [{}]
+	online_session.match_result.connect(
+		func(
+			winner_user_id: String,
+			loser_user_id: String,
+			_round_wins: Dictionary,
+			_final_round: int,
+			finish_cause: String,
+			_server_tick: int
+		) -> void:
+			finished_result[0] = {
+				"winner_user_id": winner_user_id,
+				"loser_user_id": loser_user_id,
+				"finish_cause": finish_cause,
+			}
+	)
 	if _second_socket != null:
-		await _second_socket.leave_match_async(_second_match_id)
 		_second_socket.close()
-	online_session.clear_session()
+		_second_socket = null
 
+	var finish_deadline := Time.get_ticks_msec() + 18000
+	while Time.get_ticks_msec() < finish_deadline and (finished_result[0] as Dictionary).is_empty():
+		await create_timer(0.05).timeout
+	if (finished_result[0] as Dictionary).is_empty():
+		_fail("P2切断後に終了済みRanked Resultを受信できませんでした。")
+		return
+	if str((finished_result[0] as Dictionary).get("winner_user_id", "")) != p1_user_id:
+		_fail("終了済みRankedのserver確定winnerがP1ではありません。")
+		return
+	if str((finished_result[0] as Dictionary).get("finish_cause", "")) != "DISCONNECT_TIMEOUT":
+		_fail("終了済みRankedのfinish causeがDISCONNECT_TIMEOUTではありません。")
+		return
+
+	# Result遷移確定前のlockを保持したまま再起動相当にし、
+	# serverの終了済みsnapshotからranked_resultへ復帰する。
+	online_session.clear_runtime_session_preserving_match()
+	var finished_resume: Dictionary = await online_session.restore_unresolved_match_with_retry()
+	if not bool(finished_resume.get("ok", false)) \
+			or not bool(finished_resume.get("repaired", false)):
+		_fail("終了済みRankedへ再接続できませんでした。")
+		return
+	if str(finished_resume.get("destination", "")) != "ranked_result":
+		_fail("終了済みRankedの復帰先がranked_resultではありません。")
+		return
+	var finished_snapshot: Dictionary = finished_resume.get("snapshot", {})
+	if not bool(finished_snapshot.get("match_finished", false)):
+		_fail("終了済みRankedのserver snapshotがmatch_finishedではありません。")
+		return
+	if str(finished_snapshot.get("match_winner_user_id", "")) != p1_user_id:
+		_fail("終了済みRanked snapshotのwinnerがserver結果と一致しません。")
+		return
+
+	if not online_session.acknowledge_saved_match_destination():
+		_fail("Ranked Result遷移確定後に未解決match lockを解除できませんでした。")
+		return
+	if not online_session.can_start_new_online_match():
+		_fail("Ranked Result遷移確定後も新規対戦lockが残っています。")
+		return
+
+	online_session.clear_session()
 	print("AHOGE LEGEND saved match resume smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
 

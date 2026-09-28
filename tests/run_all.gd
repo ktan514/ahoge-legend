@@ -37,6 +37,7 @@ func _init() -> void:
 	_test_match_resume_store_lock_context()
 	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
+	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
@@ -358,6 +359,19 @@ func _test_ranked_matchmaker_query() -> void:
 	_expect_true(
 		RankedMatchmakerQueryScript.is_prolonged_wait(60),
 		"60秒から待機延長扱いにする"
+	)
+
+
+func _test_ranked_recovery_policy() -> void:
+	_expect_equal(
+		OnlineConfigScript.MATCH_RECOVERY_TIMEOUT_SECONDS,
+		10,
+		"未解決match復帰の1回timeoutは10秒"
+	)
+	_expect_equal(
+		OnlineConfigScript.MATCH_RECOVERY_RETRY_LIMIT,
+		2,
+		"未解決match復帰のretry上限は2回"
 	)
 
 
