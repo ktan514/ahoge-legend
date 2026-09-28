@@ -78,6 +78,7 @@ interface AuthoritativeCombatState {
 }
 
 interface AhogeRankedMatchState {
+  matchMode: string;
   expectedUserIds: {[key: string]: boolean};
   presences: {[key: string]: nkruntime.Presence};
   lastInputSequenceByUser: {[key: string]: number};
@@ -139,6 +140,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
 
   return {
     state: {
+      matchMode: String(params.matchMode || "ranked"),
       expectedUserIds: expectedUserIds,
       presences: {},
       lastInputSequenceByUser: {},
@@ -194,12 +196,12 @@ const rankedMatchJoinAttempt: nkruntime.MatchJoinAttemptFunction<AhogeRankedMatc
     };
   }
 
-  if (state.matchFinished) {
-    return {state: state, accept: false, rejectMessage: "match is finished"};
-  }
-
   const reconnectDeadline = state.reconnectDeadlineTickByUser[presence.userId];
-  if (reconnectDeadline !== undefined && tick >= reconnectDeadline) {
+  if (
+    !state.matchFinished &&
+    reconnectDeadline !== undefined &&
+    tick >= reconnectDeadline
+  ) {
     return {state: state, accept: false, rejectMessage: "reconnect grace expired"};
   }
 
@@ -260,17 +262,19 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     }
   });
 
-  if (allExpectedPlayersConnected(state)) {
+  if (!state.matchFinished && allExpectedPlayersConnected(state)) {
     resumeRoundBoundaryAfterReconnect(state, tick);
   }
 
-  reconnectedUserIds.forEach(function (userId): void {
-    const presence = state.presences[userId];
-    if (!presence) {
-      return;
+  presences.forEach(function (presence): void {
+    const userId = presence.userId;
+    const wasReconnect = reconnectedUserIds.indexOf(userId) >= 0;
+    if (wasReconnect) {
+      broadcastPlayerConnectionChanged(dispatcher, userId, true, -1, tick);
     }
-    broadcastPlayerConnectionChanged(dispatcher, userId, true, -1, tick);
-    broadcastMatchSnapshot(dispatcher, state, presence, tick);
+    if (wasReconnect || state.matchFinished) {
+      broadcastMatchSnapshot(dispatcher, state, presence, tick);
+    }
   });
 
   logger.info("ahoge_ranked player joined. size=%d", Object.keys(state.presences).length);
@@ -400,6 +404,7 @@ function broadcastMatchSnapshot(
     MATCH_SNAPSHOT_OPCODE,
     JSON.stringify({
       server_tick: tick,
+      match_mode: state.matchMode,
       round_number: state.roundNumber,
       round_wins_by_user: roundWinsSnapshot(state),
       round_hit_count_by_user: state.roundHitCountByUser,
@@ -413,6 +418,8 @@ function broadcastMatchSnapshot(
       round_countdown_value: state.roundCountdownValue,
       match_finished: state.matchFinished,
       match_winner_user_id: state.matchWinnerUserId,
+      match_finish_cause: state.matchFinishCause,
+      character_id_by_user: state.characterIdByUser,
       last_input_sequence: state.lastInputSequenceByUser[presence.userId] || 0,
       combat_state_by_user: combatStateSnapshot(state)
     }),
@@ -1668,6 +1675,7 @@ const rankedMatchmakerMatched: nkruntime.MatchmakerMatchedFunction = function (
   }
 
   const matchId = nk.matchCreate("ahoge_ranked", {
+    matchMode: "ranked",
     expectedUserIds: expectedUserIds,
     characterIds: characterIds
   });
