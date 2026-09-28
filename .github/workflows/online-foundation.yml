@@ -10,6 +10,7 @@ on:
       - "scripts/client-online-smoke.sh"
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-season-smoke.sh"
+      - "scripts/client-friend-match-smoke.sh"
       - "scripts/client-reconnect-smoke.sh"
       - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
@@ -46,6 +47,7 @@ on:
       - "tests/online_smoke.gd"
       - "tests/realtime_smoke.gd"
       - "tests/season_smoke.gd"
+      - "tests/friend_match_smoke.gd"
       - "tests/reconnect_smoke.gd"
       - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
@@ -79,6 +81,7 @@ on:
       - "scripts/client-online-smoke.sh"
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-season-smoke.sh"
+      - "scripts/client-friend-match-smoke.sh"
       - "scripts/client-reconnect-smoke.sh"
       - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
@@ -115,6 +118,7 @@ on:
       - "tests/online_smoke.gd"
       - "tests/realtime_smoke.gd"
       - "tests/season_smoke.gd"
+      - "tests/friend_match_smoke.gd"
       - "tests/reconnect_smoke.gd"
       - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
@@ -204,6 +208,10 @@ jobs:
       - name: Godot monthly season smoke
         if: matrix.group == 'foundation'
         run: bash ./scripts/client-season-smoke.sh
+
+      - name: Godot Friend Match 2-client smoke
+        if: matrix.group == 'foundation'
+        run: bash ./scripts/client-friend-match-smoke.sh
 
       - name: Godot ranked matchmaker smoke
         if: matrix.group == 'foundation'
