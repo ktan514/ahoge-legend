@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+for arg in "$@"; do
+  if [[ "$arg" == res://tests/* ]]; then
+    export AHOGE_TEST_RESET_MATCH_CONTEXT=1
+    break
+  fi
+done
+
 LOG_FILE="$(mktemp)"
 trap 'rm -f "$LOG_FILE"' EXIT
 

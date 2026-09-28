@@ -1917,6 +1917,197 @@ SHORT_TEST
 - 15秒以内に復帰しなければ切断側のマッチ敗北とする
 - サーバー障害や両者同時切断は別途エラー終了として扱い、Rating更新を行わない方向で実装する
 
+#### 21.5.1 片側切断時の進行
+
+Round進行中に片側だけが切断した場合、match全体は停止しない。
+
+- 接続中プレイヤーのcombat inputは通常どおり受理する
+- 85秒timerは停止しない
+- Overtimeへ到達した場合も通常どおり進行する
+- 切断プレイヤーは新規inputを送信できない
+- 切断前にserverが受理済みのWINDUP / STRIKE / COOLDOWN / Defense / Stagger / SHORT Regrow等はserver tick基準で通常どおり進行する
+- 切断を理由に受理済みactionを巻き戻さない
+- 接続中プレイヤーから切断プレイヤーへの有効Hit判定もserver authoritativeに継続する
+- 切断中playerは無防備扱いとし、DefenseResultは常に `NONE` とする
+- 切断前にPARRY / DODGEがactiveだった場合でも、切断後に到達したContactでは防御成立させない
+- 切断前にserverが受理済みの攻撃actionは従来どおり進行し得るが、防御能力だけはpresence喪失時点で無効化する
+
+ただし、Round境界では両者が揃うまで進行を待つ。
+
+- Round 1開始前に片側が不在ならCountdownを開始しない
+- Round Countdown中に片側が切断した場合はCountdownを停止し、復帰後に残りCountdownから再開する
+- Round終了後に片側が不在ならRound Result / BO3 scoreは確定するが、次Round Countdownへ進まない
+- Round進行中の切断後、そのまま5 Hit / TIMEOUT / OVERTIME_HITでRoundが終了した場合も、Round終了地点で再接続待ちへ入る
+- Round Result表示hold中に切断した場合、holdの残り時間を停止し、復帰後に残り時間から再開する
+- Match自体が通常勝敗で終了した場合は次Round待機へ移らずMatch Resultを確定する
+
+#### 21.5.2 再接続成功時の同期
+
+serverは切断でplayer stateを破棄しない。presenceだけを切断状態へ変更し、少なくとも次を15秒間保持する。
+
+- user ID / character ID
+- last accepted input sequence
+- combat state / charge ratio
+- ahoge availability / regrow tick
+- Hit数
+- Round番号
+- Round取得数
+- Round timer
+- Overtime state
+- Round Result / Match Result state
+- Round Countdown state
+- reconnect deadline
+
+同じNakama user IDが同一matchへ再joinした場合、serverは再接続playerへ最新authoritative snapshotを送信する。
+
+snapshotには少なくとも次を含める。
+
+```text
+server_tick
+round_number
+round_wins_by_user
+round_hit_count_by_user
+remaining_seconds
+round_finished
+round_winner_user_id
+round_finish_cause
+round_overtime
+round_countdown_active
+round_countdown_value
+match_finished
+match_winner_user_id
+last_input_sequence
+combat_state_by_user
+```
+
+clientはsnapshotを正本として現在表示・入力sequenceを更新する。切断中に受信できなかったeventをclient側で再計算・再生して追いつこうとしない。
+
+
+表示同期も同じsnapshot / server eventの時刻情報を正本とする。頭部・アホ毛の描画座標を毎frame network同期するのではなく、次の論理情報からclientが現在の描画位相を算出する。
+
+- action state
+- action開始 / 終了server tick
+- Contact予定tick
+- Defense active / Just終了tick
+- Stagger終了tick
+- SHORT regrow終了tick
+- charge ratio
+- 現在server tick
+
+基準位置と各actionのmotion範囲はclient定義を使用する。呼吸やアホ毛の細かな二次動作はclientローカルでよいが、Hit / Clash / Defense / Round結果は見た目座標へ依存させない。
+
+#### 21.5.3 再接続待機中のフェーズ管理
+
+serverは「active Round」と「Round境界」を区別する。
+
+```text
+active Round
+  → 片側切断でも進行継続
+
+pre-Round / Countdown
+  → 両者が揃うまで開始・Countdown進行を待機
+
+post-Round / Result hold
+  → Resultは確定
+  → 両者が揃うまで次Roundへ進まない
+```
+
+15秒猶予はRound phaseの停止とは独立して実時間相当server tickで進行する。
+
+
+#### 21.5.4 再ログイン時のMatch復帰
+
+Socketの一時切断だけでなく、ゲーム終了・client crash・再起動後に同じアカウントでログインした場合も、直前のオンライン対戦へ復帰できるようにする。
+
+clientはauthoritative matchへjoinした時点で、少なくとも次を端末永続領域へ保存する。
+
+```text
+match_id
+match_mode       # ranked / friend
+saved_user_id
+```
+
+認証成功後、保存済みmatchが存在し、`saved_user_id` が現在ログインuser IDと一致する場合は通常メニュー表示より先に復帰判定を行う。
+
+この保存済みmatchは「未解決の対戦lock」として扱う。同一プロセス内の切断でもアプリ再起動後でも契約を分けない。
+
+未解決matchが存在する間は次を禁止する。
+
+- 新しいRanked Matchmaker ticket作成
+- 新しいFriend room対戦開始
+- 未解決matchを無視して別matchへjoinすること
+
+clientは元matchの解決を最優先する。元matchの解決とは次のいずれかを指す。
+
+1. `match_finished=false` のsnapshotを受信し、Battleへ復帰
+2. `match_finished=true / ranked` のsnapshotを受信し、UI-11 Resultへ遷移
+3. `match_finished=true / friend` のsnapshotを受信し、Character Selectへ遷移
+4. server側から元matchが存在しないことを確定的に返され、復帰不能処理が完了
+
+lock永久残留対策として、clientは「対戦状態を修復」操作を持てるようにする。
+
+修復操作はlockを無条件削除しない。
+
+1. 保存済みmatch IDを読み出す
+2. serverへRealtime接続する
+3. 同じmatch IDへのjoinを試みる
+4. join成功ならsnapshotを受信し、通常の復帰先へ進む
+5. serverが確定的に `Match Not Found` を返した場合は古いlockを解除する
+6. 保存match IDが構文上不正でserverが `Invalid match ID` を返した場合も、実在matchを指し得ないローカル破損としてlockを解除する
+7. timeout / network error / server errorではlockを解除しない
+
+これにより、client側バグや異常終了でlockが残っても復旧可能にしつつ、active matchを手動解除して別対戦へ逃げることはできない。
+
+Nakamaの `NOT_FOUND`（gRPC code 5 / HTTP 404）を、保存済みmatchがserver上に存在しないことを示す確定的な復帰不能として扱う。この場合だけ古い未解決match lockを解除し、復帰不能エラー画面を経て新しい対戦を開始可能にする。通信失敗・timeout・UNAVAILABLE等ではlockを解除しない。
+
+1〜3では遷移先が確定するまでlockを解除しない。
+
+```text
+Login
+→ saved match有無を確認
+→ Realtime接続
+→ saved match IDへjoin
+→ MATCH_SNAPSHOT受信
+   ├─ match_finished=false
+   │    → Battleへ復帰
+   └─ match_finished=true
+        ├─ ranked → UI-11 Match Resultだけ表示
+        └─ friend → Character Selectへ遷移
+```
+
+進行中matchへの復帰では、同一プロセス内Reconnectと同じauthoritative snapshotを正本とする。
+
+終了済みmatchについてもexpected userの再joinを許可し、serverは終了済みsnapshotを返す。終了済みsnapshotには少なくとも次を含める。
+
+- `match_finished=true`
+- `match_winner_user_id`
+- `match_finish_cause`
+- `round_wins_by_user`
+- `round_number`
+- `match_mode`
+
+RankedではこのsnapshotからUI-11表示用summaryを構築し、Battleへ一瞬戻してからResultへ遷移する実装にはしない。
+
+Friendでは終了済みmatchのResult再表示を行わず、Friend room文脈のCharacter Select（選択メニュー）へ戻す。Friend Match自体は工程3後段で実装するため、#69ではmodeを保持できる復帰契約まで先行実装し、実Friend導線接続はFriend Match実装時に検証する。
+
+saved match情報は、復帰先が確定して不要になった時点で消去する。認証user IDが異なる場合は他userのsaved matchへjoinしない。
+
+#### 21.5.5 再接続期限超過
+
+片側だけが切断した状態で、そのplayerのreconnect deadlineへ到達した場合はserver authoritativeにmatchを終了する。
+
+- match finish cause: `DISCONNECT_TIMEOUT`
+- 接続中playerをwinner、期限超過playerをloserとする
+- BO3 Round取得数を人工的に2へ変更しない
+- `MATCH_RESULT` は通常BO3と同じeventを使い、`finish_cause` で区別する
+- 通常2本先取は `finish_cause=BO3`
+- disconnect敗北では現在Round番号・現在Round取得数をそのままResultへ含める
+- clientはdisconnect timeoutを独自判定せず、serverのMatch Resultを正本とする
+- 15秒はserverがactive matchを切断敗北へ確定する期限であり、clientの再接続retry終了期限ではない
+- clientは回線が戻るまで元matchへの接続試行を継続してよい
+- 15秒超過後に接続が戻った場合は、終了済みmatchへjoinして `DISCONNECT_TIMEOUT` のsnapshot / Resultを取得し、別matchを開始しない
+
+
 ### 21.6 プレイヤーランキング初期値
 
 Eloの暫定式を使用する。
@@ -1965,7 +2156,7 @@ K = 32
 - 正式キャラクターごとの攻撃タイプ
 - 暫定戦闘値の最終調整
 - 遅延補正方式の最終調整
-- 切断・再接続ルールの最終調整
+- 両者同時切断・意図的退出を含む切断例外時ルールの最終調整
 - Rating方式・ランク帯の最終調整
 - AWS内の具体的なリソース構成
 - macOSリリース

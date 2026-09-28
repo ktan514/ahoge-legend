@@ -669,6 +669,13 @@ M1で最低限表示するもの:
 
 M1専用表示やデバッグ操作は、工程4の正式UI導線・最終キー設定・最終レイアウトを確定するものではない。
 
+Reconnect #69のHuman Verification用に、M1 direct modeでは `F8` を「P1 Realtime Socketの予期しない切断を模擬する」デバッグ操作として使用する。
+
+- F8はM1 / Human Verification専用であり、本番キー仕様には含めない
+- F8では通常の退出APIを使わずSocketを閉じ、clientの自動Reconnect経路を実際に通す
+- 切断後は `RECONNECTING...` → snapshot同期 → Battle復帰を目視確認する
+
+
 ### 15.10 Round取得・次Round開始表示
 
 M1でRoundを1本取得した場合、次Roundへ無表示で切り替えない。
@@ -835,7 +842,7 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 ### 18.2 再接続中
 
-対戦中に切断された場合:
+自分の接続が切れた場合:
 
 ```text
 RECONNECTING...
@@ -845,7 +852,28 @@ RECONNECTING...
 ...
 ```
 
-15秒以内に復帰した場合は対戦へ戻る。
+15秒以内に復帰した場合は、server authoritative snapshotを受信して現在の対戦状態へ同期する。
+
+相手だけが切断した場合:
+
+- Round進行中はBattleを継続する。相手側は新規操作を行えない
+- Round開始前またはRound終了後は `WAITING FOR OPPONENT...` を表示し、次Roundへの進行を待つ
+- Countdown中に相手が切断した場合はCountdown表示を停止する
+- 相手が復帰したらserver stateに同期して待機表示を解除する
+
+再接続待機Overlayは最終デザインではなく、工程4の全画面UI見直し対象とする。
+
+再ログイン時の復帰表示:
+
+- 保存済みmatchが進行中: `RECONNECTING...` を表示し、snapshot受信後にBattleへ直接復帰
+- 保存済みRanked matchが終了済み: Battleを表示せずUI-11へ直接遷移
+- 保存済みFriend matchが終了済み: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
+- 未解決matchがある間は新しいRanked / Friend開始操作を無効化し、元matchの復帰または終了処理を優先する
+- 15秒を超えても回線が未復旧の場合、clientは元matchを破棄せず接続復旧を待つ。復旧後に終了済み結果を取得する
+- serverが元matchに対して確定的に `NOT_FOUND` を返した場合のみ「元の対戦は復旧できませんでした」と通信エラー表示し、古い対戦lockを解除する
+- 通信エラー画面には「対戦状態を再確認」操作を用意できる。この操作はserver確認を行い、元matchが存在しないと確定した場合だけlockを解除する
+- 「lockを強制解除して新しい対戦を開始」のような無条件解除操作は提供しない
+
 
 ### 18.3 退出確認
 

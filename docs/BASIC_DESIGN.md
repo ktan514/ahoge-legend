@@ -581,6 +581,18 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - ショート投擲のアホ毛再生時間: 0.60秒
 - 初期ネットワーク方針: rollbackなし、Nakamaサーバー権威、入力にsequence番号を付与
 - 切断時再接続猶予: 15秒
+- Round進行中の片側切断: 試合全体は停止せず、接続中の側・85秒timer・戦闘・Overtimeは継続する
+- 切断側: 新しい入力は停止するが、serverが切断前に受理済みのaction stateはauthoritative tickで進行する
+- Round開始前 / Round終了後の片側切断: 両者が揃うまで次のRound進行へ移らない
+- 再接続成功時: server authoritative snapshotを受信し、復帰時点の状態へ同期する
+- 対戦中のゲーム終了 / client再起動後も、再ログイン時に保存済みmatch IDへ復帰を試みる
+- 対戦join後は「未解決の対戦」としてlockし、Battle復帰または終了後遷移が確定するまで新しいRanked / Friend対戦を開始できない
+- 同一プロセス内のSocket切断と再ログイン後の復帰は同じ未解決match復帰契約を使用する
+- 15秒はactive Battleへ戻れるserver側猶予であり、clientが元matchの解決を諦める期限にはしない
+- 15秒を超えてserver側で切断敗北が確定した後も、回線復旧時は同じmatchへ接続して終了済みsnapshotを取得する
+- 再ログイン時にmatchが進行中ならBattleへ復帰する
+- 再ログイン時にRanked matchが終了済みならBattleを再表示せず、authoritative結果をUI-11へ表示する
+- 再ログイン時にFriend matchが終了済みなら結果画面を再表示せず、Character Select（選択メニュー）へ戻す
 - フレンドルームコード: 6文字
 - プレイヤーRating初期値: 1500
 - Elo K値: 32
@@ -597,7 +609,7 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - 各正式キャラクターの攻撃タイプ
 - 各正式キャラクターの最終パラメータ
 - 暫定戦闘パラメータの最終調整値
-- 切断・再接続時の最終ルール
+- 両者同時切断・意図的退出を含む切断例外時の最終ルール
 - macOS同時リリースの可否
 - 5:4画面比率の最終確定
 - holo Indie申請・公開時の最新要件

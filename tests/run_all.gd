@@ -7,6 +7,8 @@ const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
+const MatchResumeStoreScript := preload("res://src/online/match_resume_store.gd")
+const MatchResumeRouterScript := preload("res://src/online/match_resume_router.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
@@ -32,6 +34,8 @@ func _init() -> void:
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
+	_test_match_resume_store_lock_context()
+	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
 	_test_ranked_character_contract()
 	_test_combat_input_protocol()
@@ -48,6 +52,8 @@ func _init() -> void:
 	_test_authoritative_bo3_protocol()
 	_test_authoritative_match_result_protocol()
 	_test_authoritative_round_countdown_protocol()
+	_test_authoritative_match_snapshot_protocol()
+	_test_authoritative_player_connection_protocol()
 
 	if _failures.is_empty():
 		print("AHOGE LEGEND tests: PASS (%d checks)" % _checks)
@@ -255,6 +261,62 @@ func _test_device_identity_persists() -> void:
 	if FileAccess.file_exists(test_path):
 		DirAccess.remove_absolute(absolute_path)
 
+
+
+func _test_match_resume_store_lock_context() -> void:
+	var test_path := "user://active_match_test_%d.json" % Time.get_ticks_usec()
+	var store = MatchResumeStoreScript.new(test_path)
+
+	_expect_true(
+		store.save("match-1", MatchResumeStoreScript.MODE_RANKED, "user-a"),
+		"Ranked match復帰情報を保存できる"
+	)
+	var saved := store.load_for_user("user-a")
+	_expect_equal(str(saved.get("match_id", "")), "match-1", "同一userは保存matchを取得できる")
+	_expect_equal(str(saved.get("match_mode", "")), "ranked", "match modeを保持する")
+	_expect_true(store.load_for_user("user-b").is_empty(), "別userは保存matchを取得できない")
+
+	_expect_true(
+		store.save("match-2", MatchResumeStoreScript.MODE_FRIEND, "user-a"),
+		"Friend match復帰情報を保存できる"
+	)
+	var friend_saved := store.load_for_user("user-a")
+	_expect_equal(str(friend_saved.get("match_mode", "")), "friend", "Friend modeを保持する")
+
+	_expect_true(store.clear(), "保存match情報を解決後に消去できる")
+	_expect_true(store.load_for_user("user-a").is_empty(), "消去後は未解決matchを返さない")
+
+
+func _test_match_resume_router() -> void:
+	_expect_equal(
+		MatchResumeRouterScript.resolve({
+			"match_mode": "ranked",
+			"match_finished": false,
+		}),
+		MatchResumeRouterScript.DESTINATION_BATTLE,
+		"進行中RankedはBattleへ復帰する"
+	)
+	_expect_equal(
+		MatchResumeRouterScript.resolve({
+			"match_mode": "ranked",
+			"match_finished": true,
+		}),
+		MatchResumeRouterScript.DESTINATION_RANKED_RESULT,
+		"終了済みRankedはResultだけ表示する"
+	)
+	_expect_equal(
+		MatchResumeRouterScript.resolve({
+			"match_mode": "friend",
+			"match_finished": true,
+		}),
+		MatchResumeRouterScript.DESTINATION_FRIEND_CHARACTER_SELECT,
+		"終了済みFriendはCharacter Selectへ戻す"
+	)
+	_expect_equal(
+		MatchResumeRouterScript.resolve({}),
+		MatchResumeRouterScript.DESTINATION_NONE,
+		"空snapshotには復帰先を与えない"
+	)
 
 func _test_ranked_matchmaker_query() -> void:
 	var query: String = RankedMatchmakerQueryScript.build(1500)
@@ -586,12 +648,26 @@ func _test_authoritative_match_result_protocol() -> void:
 		"loser_user_id": "player-2",
 		"round_wins_by_user": {"player-1": 2, "player-2": 1},
 		"final_round_number": 3,
+		"finish_cause": "BO3",
 		"server_tick": 1300,
 	})
 	var event := CombatInputProtocolScript.parse_match_result_payload(payload)
 	_expect_equal(event["winner_user_id"], "player-1", "Match Result winnerをdecodeできる")
 	_expect_equal(int(event["round_wins_by_user"]["player-1"]), 2, "Match Result winner scoreをdecodeできる")
 	_expect_equal(int(event["final_round_number"]), 3, "Match Result final roundをdecodeできる")
+	_expect_equal(str(event["finish_cause"]), "BO3", "Match Result finish causeをdecodeできる")
+
+	var disconnect_payload := JSON.stringify({
+		"winner_user_id": "player-1",
+		"loser_user_id": "player-2",
+		"round_wins_by_user": {"player-1": 0, "player-2": 0},
+		"final_round_number": 1,
+		"finish_cause": "DISCONNECT_TIMEOUT",
+		"server_tick": 700,
+	})
+	var disconnect_event := CombatInputProtocolScript.parse_match_result_payload(disconnect_payload)
+	_expect_equal(str(disconnect_event["finish_cause"]), "DISCONNECT_TIMEOUT", "切断敗北Match Resultをdecodeできる")
+	_expect_equal(int(disconnect_event["round_wins_by_user"]["player-1"]), 0, "切断敗北でRound scoreを改ざんしない")
 
 	var invalid := CombatInputProtocolScript.parse_match_result_payload(
 		JSON.stringify({
@@ -599,6 +675,7 @@ func _test_authoritative_match_result_protocol() -> void:
 			"loser_user_id": "player-2",
 			"round_wins_by_user": {"player-1": 1, "player-2": 1},
 			"final_round_number": 1,
+			"finish_cause": "BO3",
 			"server_tick": -1,
 		})
 	)
@@ -633,6 +710,94 @@ func _test_authoritative_round_countdown_protocol() -> void:
 		})
 	)
 	_expect_true(invalid.is_empty(), "不正なRound Countdownを拒否する")
+
+
+func _test_authoritative_match_snapshot_protocol() -> void:
+	var payload := JSON.stringify({
+		"server_tick": 1500,
+		"match_mode": "ranked",
+		"round_number": 2,
+		"round_wins_by_user": {"player-1": 1, "player-2": 0},
+		"round_hit_count_by_user": {"player-1": 3, "player-2": 1},
+		"remaining_seconds": 47,
+		"round_finished": false,
+		"round_winner_user_id": "",
+		"round_finish_cause": "NONE",
+		"round_awaiting_overtime": false,
+		"round_overtime": false,
+		"round_countdown_active": false,
+		"round_countdown_value": 0,
+		"match_finished": false,
+		"match_winner_user_id": "",
+		"match_finish_cause": "NONE",
+		"character_id_by_user": {"player-1": "LONG_TEST", "player-2": "SHORT_TEST"},
+		"last_input_sequence": 12,
+		"combat_state_by_user": {
+			"player-1": {
+				"state": "IDLE",
+				"charge_ratio": 0.0,
+				"ahoge_available": true,
+			},
+			"player-2": {
+				"state": "STAGGER",
+				"charge_ratio": 0.0,
+				"ahoge_available": false,
+			},
+		},
+	})
+	var event := CombatInputProtocolScript.parse_match_snapshot_payload(payload)
+	_expect_equal(int(event["server_tick"]), 1500, "Match Snapshot server tickをdecodeできる")
+	_expect_equal(str(event["match_mode"]), "ranked", "Match Snapshot modeをdecodeできる")
+	_expect_equal(int(event["round_number"]), 2, "Match Snapshot Roundをdecodeできる")
+	_expect_equal(int(event["remaining_seconds"]), 47, "Match Snapshot timerをdecodeできる")
+	_expect_equal(int(event["last_input_sequence"]), 12, "Match Snapshot input sequenceをdecodeできる")
+	_expect_equal(
+		str(event["combat_state_by_user"]["player-2"]["state"]),
+		"STAGGER",
+		"Match Snapshot combat stateをdecodeできる"
+	)
+
+	var invalid := CombatInputProtocolScript.parse_match_snapshot_payload(
+		JSON.stringify({
+			"server_tick": -1,
+			"round_number": 4,
+		})
+	)
+	_expect_true(invalid.is_empty(), "不正なMatch Snapshotを拒否する")
+
+
+func _test_authoritative_player_connection_protocol() -> void:
+	var disconnected := CombatInputProtocolScript.parse_player_connection_changed_payload(
+		JSON.stringify({
+			"user_id": "player-2",
+			"connected": false,
+			"reconnect_deadline_tick": 1950,
+			"server_tick": 1500,
+		})
+	)
+	_expect_equal(str(disconnected["user_id"]), "player-2", "切断user IDをdecodeできる")
+	_expect_false(bool(disconnected["connected"]), "切断状態をdecodeできる")
+	_expect_equal(int(disconnected["reconnect_deadline_tick"]), 1950, "再接続deadlineをdecodeできる")
+
+	var connected := CombatInputProtocolScript.parse_player_connection_changed_payload(
+		JSON.stringify({
+			"user_id": "player-2",
+			"connected": true,
+			"reconnect_deadline_tick": -1,
+			"server_tick": 1600,
+		})
+	)
+	_expect_true(bool(connected["connected"]), "再接続状態をdecodeできる")
+
+	var invalid := CombatInputProtocolScript.parse_player_connection_changed_payload(
+		JSON.stringify({
+			"user_id": "",
+			"connected": false,
+			"reconnect_deadline_tick": 1,
+			"server_tick": 2,
+		})
+	)
+	_expect_true(invalid.is_empty(), "不正な接続状態eventを拒否する")
 
 
 func _combat_fixture(player_one_id: String, player_two_id: String) -> Dictionary:
