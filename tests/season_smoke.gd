@@ -125,6 +125,24 @@ func _run() -> void:
 		_fail("過去Season AHOGE LEGEND Ranking取得が不正です。")
 		return
 
+	var season_rpcs := [
+		"ahoge_season_metadata",
+		"ahoge_current_rating",
+		"ahoge_player_ranking",
+		"ahoge_legend_ranking",
+	]
+	var invalid_season_values := ["", null, false, 0]
+	for rpc_id in season_rpcs:
+		for invalid_value in invalid_season_values:
+			var invalid_result = await client.rpc_async(
+				session,
+				str(rpc_id),
+				JSON.stringify({"season_id": invalid_value})
+			)
+			if invalid_result == null or not invalid_result.is_exception():
+				_fail("明示された不正season_idが拒否されませんでした。 rpc=%s" % str(rpc_id))
+				return
+
 	var future_id := _next_season_id(current_id)
 	var future_result = await client.rpc_async(
 		session,
