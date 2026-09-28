@@ -19,7 +19,9 @@ var _p1_results: Array[Dictionary] = []
 var _p1_scores: Array[Dictionary] = []
 var _p1_countdowns: Array[Dictionary] = []
 var _p1_connections: Array[Dictionary] = []
+var _p1_defense: Array[Dictionary] = []
 var _round_started_numbers: Array[int] = []
+var _last_p1_release_sequence: int = 0
 var _rejoined_snapshot: Dictionary = {}
 
 
@@ -113,6 +115,16 @@ func _run() -> void:
 				"server_tick": server_tick,
 			})
 	)
+	online_session.defense_resolved.connect(
+		func(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, result: String) -> void:
+			_p1_defense.append({
+				"attacker_id": attacker_id,
+				"defender_id": defender_id,
+				"server_tick": server_tick,
+				"input_sequence": input_sequence,
+				"result": result,
+			})
+	)
 
 	_second_client = nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
@@ -199,6 +211,16 @@ func _run() -> void:
 	for hit_index in range(1, 6):
 		if not await _p1_attack_once(online_session, hit_index):
 			return
+		if hit_index == 1:
+			var defense := await _wait_defense_result(
+				_p1_user_id,
+				_p2_user_id,
+				_last_p1_release_sequence,
+				4000
+			)
+			if defense.is_empty() or str(defense.get("result", "")) != "NONE":
+				_fail("切断中P2が無防備扱いになっていません。")
+				return
 
 	var result := await _wait_round_result(1, 5000)
 	if result.is_empty():
@@ -323,6 +345,7 @@ func _p1_attack_once(online_session, expected_hit_count: int) -> bool:
 		_fail("P1 ATTACK_RELEASEを送信できませんでした。")
 		return false
 	var sequence := int(release.get("input_sequence", 0))
+	_last_p1_release_sequence = sequence
 
 	if not await _wait_count(_p1_user_id, expected_hit_count, sequence, 4000):
 		_fail("P1 Hit count=%dを確認できませんでした。" % expected_hit_count)
@@ -344,6 +367,21 @@ func _wait_state(user_id: String, state_name: String, start_index: int, timeout_
 				return true
 		await create_timer(0.02).timeout
 	return false
+
+
+func _wait_defense_result(
+	attacker_id: String,
+	defender_id: String,
+	input_sequence: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for event in _p1_defense:
+			if str(event.get("attacker_id", "")) == attacker_id 					and str(event.get("defender_id", "")) == defender_id 					and int(event.get("input_sequence", -1)) == input_sequence:
+				return event
+		await create_timer(0.02).timeout
+	return {}
 
 
 func _wait_count(user_id: String, hit_count: int, sequence: int, timeout_ms: int) -> bool:
