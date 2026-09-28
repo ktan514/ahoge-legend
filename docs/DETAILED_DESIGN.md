@@ -2026,6 +2026,23 @@ saved_user_id
 
 認証成功後、保存済みmatchが存在し、`saved_user_id` が現在ログインuser IDと一致する場合は通常メニュー表示より先に復帰判定を行う。
 
+この保存済みmatchは「未解決の対戦lock」として扱う。同一プロセス内の切断でもアプリ再起動後でも契約を分けない。
+
+未解決matchが存在する間は次を禁止する。
+
+- 新しいRanked Matchmaker ticket作成
+- 新しいFriend room対戦開始
+- 未解決matchを無視して別matchへjoinすること
+
+clientは元matchの解決を最優先する。元matchの解決とは次のいずれかを指す。
+
+1. `match_finished=false` のsnapshotを受信し、Battleへ復帰
+2. `match_finished=true / ranked` のsnapshotを受信し、UI-11 Resultへ遷移
+3. `match_finished=true / friend` のsnapshotを受信し、Character Selectへ遷移
+4. server側から元matchが存在しないことを確定的に返され、復帰不能処理が完了
+
+1〜3では遷移先が確定するまでlockを解除しない。
+
 ```text
 Login
 → saved match有無を確認
@@ -2067,6 +2084,9 @@ saved match情報は、復帰先が確定して不要になった時点で消去
 - 通常2本先取は `finish_cause=BO3`
 - disconnect敗北では現在Round番号・現在Round取得数をそのままResultへ含める
 - clientはdisconnect timeoutを独自判定せず、serverのMatch Resultを正本とする
+- 15秒はserverがactive matchを切断敗北へ確定する期限であり、clientの再接続retry終了期限ではない
+- clientは回線が戻るまで元matchへの接続試行を継続してよい
+- 15秒超過後に接続が戻った場合は、終了済みmatchへjoinして `DISCONNECT_TIMEOUT` のsnapshot / Resultを取得し、別matchを開始しない
 
 
 ### 21.6 プレイヤーランキング初期値
