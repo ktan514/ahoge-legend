@@ -149,6 +149,19 @@ func _run() -> void:
 		_fail("P1再ログインに失敗しました。")
 		return
 
+	var ratings := await _wait_rating_pair(
+		online_session.client,
+		online_session.session,
+		second_client,
+		second_session,
+		1484,
+		1516,
+		5000
+	)
+	if ratings.is_empty():
+		_fail("DISCONNECT_TIMEOUT後のRatingが敗者1484 / 勝者1516へ更新されませんでした。")
+		return
+
 	var forbidden: Dictionary = await online_session.start_ranked_matchmaking(
 		1500,
 		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
@@ -188,6 +201,39 @@ func _run() -> void:
 
 	print("AHOGE LEGEND reconnect timeout smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _read_current_rating(client, session) -> Dictionary:
+	var rpc_result = await client.rpc_async(session, "ahoge_current_rating")
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _wait_rating_pair(
+	p1_client,
+	p1_session,
+	p2_client,
+	p2_session,
+	expected_p1_rating: int,
+	expected_p2_rating: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var p1_rating := await _read_current_rating(p1_client, p1_session)
+		var p2_rating := await _read_current_rating(p2_client, p2_session)
+		if not p1_rating.is_empty() and not p2_rating.is_empty():
+			if int(p1_rating.get("rating", -1)) == expected_p1_rating 					and int(p2_rating.get("rating", -1)) == expected_p2_rating 					and int(p1_rating.get("wins", -1)) == 0 					and int(p1_rating.get("losses", -1)) == 1 					and int(p2_rating.get("wins", -1)) == 1 					and int(p2_rating.get("losses", -1)) == 0:
+				return {
+					"p1": p1_rating,
+					"p2": p2_rating,
+				}
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _on_second_matchmaker_matched(matched) -> void:
