@@ -669,6 +669,13 @@ M1で最低限表示するもの:
 
 M1専用表示やデバッグ操作は、工程4の正式UI導線・最終キー設定・最終レイアウトを確定するものではない。
 
+Reconnect #69のHuman Verification用に、M1 direct modeでは `F8` を「P1 Realtime Socketの予期しない切断を模擬する」デバッグ操作として使用する。
+
+- F8はM1 / Human Verification専用であり、本番キー仕様には含めない
+- F8では通常の退出APIを使わずSocketを閉じ、clientの自動Reconnect経路を実際に通す
+- 切断後は `RECONNECTING...` → snapshot同期 → Battle復帰を目視確認する
+
+
 ### 15.10 Round取得・次Round開始表示
 
 M1でRoundを1本取得した場合、次Roundへ無表示で切り替えない。
