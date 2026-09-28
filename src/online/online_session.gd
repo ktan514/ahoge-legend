@@ -141,6 +141,13 @@ func register_joined_online_match(match_id: String, match_mode: String) -> bool:
 	if _resume_store == null:
 		_resume_store = MatchResumeStoreScript.new()
 
+	if not current_match_id.is_empty() and current_match_id != match_id:
+		return false
+
+	var saved := _resume_store.load_for_user(str(session.user_id))
+	if not saved.is_empty() and str(saved.get("match_id", "")) != match_id:
+		return false
+
 	current_match_id = match_id
 	current_match_mode = match_mode
 	return _resume_store.save(current_match_id, current_match_mode, str(session.user_id))
@@ -673,7 +680,7 @@ func disconnect_realtime_socket() -> bool:
 	return true
 
 
-func clear_session() -> void:
+func clear_runtime_session_preserving_match() -> void:
 	_intentional_disconnect = true
 	_cancel_reconnect()
 	disconnect_realtime_socket()
@@ -684,6 +691,13 @@ func clear_session() -> void:
 	_next_input_sequence = 0
 	session = null
 	account = null
+
+
+func clear_session() -> void:
+	clear_runtime_session_preserving_match()
+	if _resume_store == null:
+		_resume_store = MatchResumeStoreScript.new()
+	_resume_store.clear()
 
 
 func is_reconnecting() -> bool:
