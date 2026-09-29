@@ -168,6 +168,9 @@ func _run() -> void:
 		_fail("P1 1本先取後にRound 2が開始しませんでした。")
 		return
 
+	_second_round_result = {}
+	_second_hit_count = 0
+
 	var original_match_id: String = str(p1_joined[0])
 	var active_before: Dictionary = await online_session.refresh_active_online_match()
 	if not bool(active_before.get("ok", false)) or not bool(active_before.get("active", false)) or str(active_before.get("match_id", "")) != original_match_id or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:

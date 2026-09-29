@@ -71,7 +71,6 @@ var _saved_resume_snapshot: Dictionary = {}
 var _intentional_disconnect: bool = false
 var _reconnect_in_progress: bool = false
 var _reconnect_generation: int = 0
-var _reconnect_deadline_msec: int = 0
 
 
 func _ready() -> void:
@@ -1400,7 +1399,6 @@ func _begin_reconnect() -> void:
 	_reconnect_in_progress = true
 	_reconnect_generation += 1
 	var generation := _reconnect_generation
-	_reconnect_deadline_msec = 0
 	reconnect_started.emit(0)
 	call_deferred("_run_reconnect_loop", generation)
 
@@ -1408,7 +1406,6 @@ func _begin_reconnect() -> void:
 func _cancel_reconnect() -> void:
 	_reconnect_generation += 1
 	_reconnect_in_progress = false
-	_reconnect_deadline_msec = 0
 
 
 func _run_reconnect_loop(generation: int) -> void:
