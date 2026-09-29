@@ -60,6 +60,20 @@ func _run() -> void:
 	if second_session == null or second_session.is_exception():
 		_fail("P2 Device認証に失敗しました。", app)
 		return
+	var p2_user_id := str(second_session.user_id)
+	var p2_disconnected := [false]
+	var p1_hit_count := [0]
+	var p1_user_id := str(online_session.session.user_id)
+	online_session.player_connection_changed.connect(
+		func(user_id: String, connected: bool, _deadline_tick: int, _server_tick: int) -> void:
+			if user_id == p2_user_id and not connected:
+				p2_disconnected[0] = true
+	)
+	online_session.round_hit_count_changed.connect(
+		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
+			if user_id == p1_user_id:
+				p1_hit_count[0] = hit_count
+	)
 
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
@@ -171,7 +185,13 @@ func _run() -> void:
 	# 15秒のRound境界復帰待機を開始し、timeoutでserver authoritativeに勝敗確定する。
 	_second_socket.close()
 	_second_socket = null
-	if not await _p1_finish_round(online_session, app):
+	var disconnect_deadline := Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < disconnect_deadline and not bool(p2_disconnected[0]):
+		await create_timer(0.02).timeout
+	if not bool(p2_disconnected[0]):
+		_fail("P2切断をserverが認識しませんでした。", app)
+		return
+	if not await _p1_finish_round(online_session, app, p1_hit_count):
 		return
 
 	if not await _wait_screen(app, "MatchResult", 25000):
@@ -231,8 +251,8 @@ func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
 	return false
 
 
-func _p1_finish_round(online_session, app) -> bool:
-	for _hit_index in range(5):
+func _p1_finish_round(online_session, app, p1_hit_count: Array) -> bool:
+	for hit_index in range(1, 6):
 		var press: Dictionary = await online_session.send_combat_input(
 			CombatInputProtocolScript.ACTION_ATTACK_PRESS
 		)
@@ -246,7 +266,13 @@ func _p1_finish_round(online_session, app) -> bool:
 		if not bool(release.get("ok", false)):
 			_fail("P1 ATTACK_RELEASEを送信できませんでした。", app)
 			return false
-		await create_timer(0.95).timeout
+		var hit_deadline := Time.get_ticks_msec() + 4000
+		while Time.get_ticks_msec() < hit_deadline and int(p1_hit_count[0]) < hit_index:
+			await create_timer(0.02).timeout
+		if int(p1_hit_count[0]) < hit_index:
+			_fail("P1 authoritative Hit count=%dを確認できませんでした。" % hit_index, app)
+			return false
+		await create_timer(0.75).timeout
 	return true
 
 
