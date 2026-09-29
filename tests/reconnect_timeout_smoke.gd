@@ -229,11 +229,13 @@ func _run() -> void:
 		_fail("Result遷移確定前に未解決match lockが解除されています。")
 		return
 
-	if not online_session.acknowledge_saved_match_destination():
-		_fail("Result遷移確定後に未解決match情報を消去できませんでした。")
+	var ack_result: Dictionary = await online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		_fail("Result遷移確定後にserver-side active matchを解除できませんでした。")
 		return
-	if not online_session.can_start_new_online_match():
-		_fail("Result遷移確定後も新規対戦lockが残っています。")
+	var active_after_ack: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_after_ack.get("ok", false)) or bool(active_after_ack.get("active", false)):
+		_fail("Result遷移確定後もserver-side active matchが残っています。")
 		return
 
 	if _second_socket != null:
