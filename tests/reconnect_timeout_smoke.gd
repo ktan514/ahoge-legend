@@ -11,6 +11,7 @@ var _second_match_result: Dictionary = {}
 var _second_round_result: Dictionary = {}
 var _second_connection_events: Array[Dictionary] = []
 var _second_input_sequence: int = 0
+var _second_hit_count: int = 0
 
 
 func _init() -> void:
@@ -455,11 +456,117 @@ func _on_second_matchmaker_matched(matched) -> void:
 func _on_second_match_state(match_state) -> void:
 	if _second_match_id.is_empty() or str(match_state.match_id) != _second_match_id:
 		return
-	if int(match_state.op_code) != CombatInputProtocolScript.OPCODE_MATCH_RESULT:
+
+	var op_code := int(match_state.op_code)
+	if op_code == CombatInputProtocolScript.OPCODE_PLAYER_CONNECTION_CHANGED:
+		var connection := CombatInputProtocolScript.parse_player_connection_changed_payload(
+			str(match_state.data)
+		)
+		if not connection.is_empty():
+			_second_connection_events.append(connection)
 		return
-	var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
-	if not event.is_empty():
-		_second_match_result = event
+
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_HIT_COUNT_CHANGED:
+		var hit_count := CombatInputProtocolScript.parse_round_hit_count_changed_payload(
+			str(match_state.data)
+		)
+		if not hit_count.is_empty() 				and str(hit_count.get("user_id", "")) == str(_second_session.user_id):
+			_second_hit_count = int(hit_count.get("hit_count", 0))
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_ROUND_RESULT:
+		var round_event := CombatInputProtocolScript.parse_round_result_payload(
+			str(match_state.data)
+		)
+		if not round_event.is_empty():
+			_second_round_result = round_event
+		return
+
+	if op_code == CombatInputProtocolScript.OPCODE_MATCH_RESULT:
+		var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
+		if not event.is_empty():
+			_second_match_result = event
+
+
+func _second_attack_once(expected_hit_count: int) -> bool:
+	if _second_socket == null or _second_match_id.is_empty():
+		_fail("P2 attack用socket / match IDがありません。")
+		return false
+
+	_second_input_sequence += 1
+	var press_result = await _second_socket.send_match_state_async(
+		_second_match_id,
+		CombatInputProtocolScript.OPCODE_COMBAT_INPUT,
+		CombatInputProtocolScript.build_input_payload(
+			_second_input_sequence,
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+	)
+	if press_result != null and press_result.has_method("is_exception") and press_result.is_exception():
+		_fail("P2 ATTACK_PRESSを送信できませんでした。")
+		return false
+
+	await create_timer(0.05).timeout
+	_second_input_sequence += 1
+	var release_result = await _second_socket.send_match_state_async(
+		_second_match_id,
+		CombatInputProtocolScript.OPCODE_COMBAT_INPUT,
+		CombatInputProtocolScript.build_input_payload(
+			_second_input_sequence,
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+	)
+	if release_result != null and release_result.has_method("is_exception") and release_result.is_exception():
+		_fail("P2 ATTACK_RELEASEを送信できませんでした。")
+		return false
+
+	var deadline := Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline:
+		if _second_hit_count >= expected_hit_count:
+			await create_timer(0.75).timeout
+			return true
+		await create_timer(0.02).timeout
+
+	_fail("P2 Hit count=%dを確認できませんでした。" % expected_hit_count)
+	return false
+
+
+func _wait_second_connection_event(
+	user_id: String,
+	connected: bool,
+	start_index: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for index in range(start_index, _second_connection_events.size()):
+			var event := _second_connection_events[index]
+			if str(event.get("user_id", "")) == user_id 					and bool(event.get("connected", false)) == connected:
+				return event
+		await create_timer(0.02).timeout
+	return {}
+
+
+func _wait_second_boundary_deadline(
+	user_id: String,
+	start_index: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for index in range(start_index, _second_connection_events.size()):
+			var event := _second_connection_events[index]
+			if str(event.get("user_id", "")) == user_id 					and not bool(event.get("connected", true)) 					and int(event.get("reconnect_deadline_tick", -1)) >= 0:
+				return event
+		await create_timer(0.02).timeout
+	return {}
+
+
+func _same_rating_record(before: Dictionary, after: Dictionary) -> bool:
+	for key in ["rating", "wins", "losses", "season_id"]:
+		if str(before.get(key, "")) != str(after.get(key, "")):
+			return false
+	return true
 
 
 func _fail(message: String) -> void:
