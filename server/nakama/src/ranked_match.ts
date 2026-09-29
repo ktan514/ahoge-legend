@@ -1838,6 +1838,13 @@ const rankedMatchmakerMatched: nkruntime.MatchmakerMatchedFunction = function (
   }
 
   const expectedUserIds = [matches[0].presence.userId, matches[1].presence.userId];
+  for (let index = 0; index < expectedUserIds.length; index += 1) {
+    if (resolveActiveOnlineMatchForUser(nk, expectedUserIds[index])) {
+      logger.warn("ahoge ranked matchmaker rejected unresolved online match.");
+      return;
+    }
+  }
+
   const characterIds: {[key: string]: string} = {};
   for (let index = 0; index < matches.length; index += 1) {
     const userId = matches[index].presence.userId;

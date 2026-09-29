@@ -96,7 +96,7 @@ function resolveActiveOnlineMatchForUser(
   }
 
   if (record.value.state === ACTIVE_ONLINE_MATCH_STATE_ACTIVE) {
-    let runningMatch: nkruntime.Match | null = null;
+    let runningMatch: any = null;
     try {
       runningMatch = nk.matchGet(record.value.match_id);
     } catch (_error) {
