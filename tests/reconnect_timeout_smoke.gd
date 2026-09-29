@@ -150,9 +150,9 @@ func _run() -> void:
 		return
 
 	var original_match_id: String = str(p1_joined[0])
-	var saved: Dictionary = online_session.get_saved_match_for_current_user()
-	if str(saved.get("match_id", "")) != original_match_id:
-		_fail("P1の未解決match情報が保存されていません。")
+	var active_before: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_before.get("ok", false)) or not bool(active_before.get("active", false)) or str(active_before.get("match_id", "")) != original_match_id or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("P1のserver-side active matchが保存されていません。")
 		return
 
 	# P1のアプリ終了相当。server側ではP1が切断状態になるが保存matchは残す。
@@ -212,7 +212,7 @@ func _run() -> void:
 		_fail("切断敗北後の結果未解決中に新しいRankedを開始できました。")
 		return
 
-	var resumed: Dictionary = await online_session.resume_saved_match_after_login()
+	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
 		_fail("15秒超過後の終了済みmatchへ再接続できませんでした。")
 		return
