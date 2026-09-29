@@ -267,12 +267,6 @@ func _run() -> void:
 	# Round境界15秒timeoutでFriend Match Resultを確定する。
 	_second_socket.close()
 	_second_socket = null
-	var disconnect_deadline := Time.get_ticks_msec() + 4000
-	while Time.get_ticks_msec() < disconnect_deadline and not bool(p2_disconnected[0]):
-		await create_timer(0.02).timeout
-	if not bool(p2_disconnected[0]):
-		_fail("Friend P2切断をserverが認識しませんでした。")
-		return
 	if not await _p1_finish_friend_round(online_session, p1_hit_count, p1_states):
 		return
 

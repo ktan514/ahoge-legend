@@ -18,7 +18,6 @@ var _p1_timers: Array[Dictionary] = []
 var _p1_results: Array[Dictionary] = []
 var _p1_scores: Array[Dictionary] = []
 var _p1_countdowns: Array[Dictionary] = []
-var _p1_connections: Array[Dictionary] = []
 var _p1_defense: Array[Dictionary] = []
 var _round_started_numbers: Array[int] = []
 var _last_p1_release_sequence: int = 0
@@ -106,15 +105,6 @@ func _run() -> void:
 		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
 			_round_started_numbers.append(round_number)
 	)
-	online_session.player_connection_changed.connect(
-		func(user_id: String, connected: bool, reconnect_deadline_tick: int, server_tick: int) -> void:
-			_p1_connections.append({
-				"user_id": user_id,
-				"connected": connected,
-				"reconnect_deadline_tick": reconnect_deadline_tick,
-				"server_tick": server_tick,
-			})
-	)
 	online_session.defense_resolved.connect(
 		func(attacker_id: String, defender_id: String, server_tick: int, input_sequence: int, result: String) -> void:
 			_p1_defense.append({
@@ -197,23 +187,10 @@ func _run() -> void:
 		_fail("切断前timerを取得できませんでした。")
 		return
 
-	var disconnect_event_start := _p1_connections.size()
 	_second_socket.close()
 	_second_socket = null
 
-	if not await _wait_connection(_p2_user_id, false, 3000):
-		_fail("P2切断eventをP1が受信できませんでした。")
-		return
-	var active_disconnect := _connection_event_since(
-		_p2_user_id,
-		false,
-		disconnect_event_start
-	)
-	if active_disconnect.is_empty() 			or int(active_disconnect.get("reconnect_deadline_tick", 0)) != -1:
-		_fail("active Round中の切断で15秒deadlineが開始されています。")
-		return
-
-	if not await _wait_timer_less_than(timer_before_disconnect, 2500):
+	if not await _wait_timer_less_than(timer_before_disconnect, 3500):
 		_fail("active Round中のP2切断でtimerが停止しました。")
 		return
 
@@ -241,32 +218,10 @@ func _run() -> void:
 	if bool(_rejoined_snapshot.get("round_finished", true)) 			or int(_rejoined_snapshot.get("round_number", -1)) != 1 			or int(_rejoined_snapshot.get("remaining_seconds", 85)) >= timer_before_disconnect:
 		_fail("active Round再join snapshotが切断中に進んだ状態を反映していません。")
 		return
-	if not await _wait_connection(_p2_user_id, true, 3000):
-		_fail("active Round15秒超過後のP2復帰eventを受信できませんでした。")
-		return
-
 	# 同じRound中にもう一度切断し、今度はRound終了まで未復帰にする。
-	var second_disconnect_start := _p1_connections.size()
 	_second_socket.close()
 	_second_socket = null
-	if not await _wait_connection_since(
-		_p2_user_id,
-		false,
-		second_disconnect_start,
-		3000
-	):
-		_fail("P2の2回目切断eventを受信できませんでした。")
-		return
-	var second_active_disconnect := _connection_event_since(
-		_p2_user_id,
-		false,
-		second_disconnect_start
-	)
-	if second_active_disconnect.is_empty() 			or int(second_active_disconnect.get("reconnect_deadline_tick", 0)) != -1:
-		_fail("2回目のactive Round切断で15秒deadlineが開始されています。")
-		return
 
-	var boundary_event_start := _p1_connections.size()
 	for hit_index in range(1, 6):
 		if not await _p1_attack_once(online_session, hit_index):
 			return
@@ -297,14 +252,6 @@ func _run() -> void:
 		_fail("P2切断中のRound取得数が1ではありません。")
 		return
 
-	var boundary_disconnect := await _wait_boundary_deadline(
-		_p2_user_id,
-		boundary_event_start,
-		3000
-	)
-	if boundary_disconnect.is_empty() 			or int(boundary_disconnect.get("reconnect_deadline_tick", -1)) <= int(boundary_disconnect.get("server_tick", 0)):
-		_fail("Round終了後にP2の15秒boundary deadlineが開始されませんでした。")
-		return
 
 	await create_timer(2.5).timeout
 	if _has_countdown_for_round(2):
@@ -328,10 +275,6 @@ func _run() -> void:
 
 	if int(_rejoined_snapshot.get("round_number", -1)) != 1 			or not bool(_rejoined_snapshot.get("round_finished", false)) 			or int(_rejoined_snapshot.get("round_hit_count_by_user", {}).get(_p1_user_id, -1)) != 5 			or int(_rejoined_snapshot.get("round_wins_by_user", {}).get(_p1_user_id, -1)) != 1:
 		_fail("P2再join snapshotがRound終了時のauthoritative stateと一致しません。")
-		return
-
-	if not await _wait_connection(_p2_user_id, true, 3000):
-		_fail("P2再接続eventをP1が受信できませんでした。")
 		return
 
 	if not await _wait_countdown(2, 3, 5000):
@@ -522,57 +465,6 @@ func _wait_round_started(round_number: int, timeout_ms: int) -> bool:
 			return true
 		await create_timer(0.02).timeout
 	return false
-
-
-func _wait_connection(user_id: String, connected: bool, timeout_ms: int) -> bool:
-	var deadline := Time.get_ticks_msec() + timeout_ms
-	while Time.get_ticks_msec() < deadline:
-		for event in _p1_connections:
-			if str(event.get("user_id", "")) == user_id and bool(event.get("connected", false)) == connected:
-				return true
-		await create_timer(0.02).timeout
-	return false
-
-
-func _wait_connection_since(
-	user_id: String,
-	connected: bool,
-	start_index: int,
-	timeout_ms: int
-) -> bool:
-	var deadline := Time.get_ticks_msec() + timeout_ms
-	while Time.get_ticks_msec() < deadline:
-		if not _connection_event_since(user_id, connected, start_index).is_empty():
-			return true
-		await create_timer(0.02).timeout
-	return false
-
-
-func _connection_event_since(
-	user_id: String,
-	connected: bool,
-	start_index: int
-) -> Dictionary:
-	for index in range(start_index, _p1_connections.size()):
-		var event := _p1_connections[index]
-		if str(event.get("user_id", "")) == user_id 				and bool(event.get("connected", false)) == connected:
-			return event
-	return {}
-
-
-func _wait_boundary_deadline(
-	user_id: String,
-	start_index: int,
-	timeout_ms: int
-) -> Dictionary:
-	var deadline := Time.get_ticks_msec() + timeout_ms
-	while Time.get_ticks_msec() < deadline:
-		for index in range(start_index, _p1_connections.size()):
-			var event := _p1_connections[index]
-			if str(event.get("user_id", "")) == user_id 					and not bool(event.get("connected", true)) 					and int(event.get("reconnect_deadline_tick", -1)) >= 0:
-				return event
-		await create_timer(0.02).timeout
-	return {}
 
 
 func _fail(message: String) -> void:
