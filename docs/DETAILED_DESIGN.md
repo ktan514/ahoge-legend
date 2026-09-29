@@ -55,6 +55,12 @@ Visual
 
 この3つを混同しない。
 
+`LONG / NORMAL / SHORT` はキャラクターそのものではなく、アホ毛の戦闘特性を分類するタイプである。正式ロスターでは各タイプに複数キャラクターを実装し、タイプごとの人数はおおむね均等になるよう構成する。
+
+ランキング・戦績・選択状態の識別単位はタイプではなく個別の `character_id` とする。AHOGE LEGENDにLONG別・NORMAL別・SHORT別のタイプランキングは設けない。
+
+現在の `LONG_TEST / SHORT_TEST` はオンライン戦闘基盤を検証するためのテストキャラクターIDであり、製品の正式ロスター数やタイプ数を示すものではない。
+
 ### 2.4 プロトタイプ値を本番定数にしない
 
 HTMLプロトタイプで使用した以下のような値は操作感確認用であり、そのまま本番へ固定しない。
@@ -201,19 +207,117 @@ Nakama側のカスタムサーバーロジックはTypeScriptを使用する。
 
 - ランクマッチ結果の登録
 - プレイヤーRating更新
-- プレイヤーランキング取得
-- AHOGE LEGENDランキング用のキャラクター総勝利数更新
-- AHOGE LEGENDランキング取得
+- PLAYER Ranking取得
+- キャラクター単位のAhoge Rating更新
+- 単一のAHOGE LEGEND Ranking取得
+- 参考統計としての勝数・対戦数・勝率保持
 - 月次シーズン切替
 - 過去シーズン結果の保持
 
-ランクマッチ終了時は、サーバーで確定した勝者に対してプレイヤーランキングを更新し、同時に勝者が使用していたキャラクターの当月総勝利数へ1を加算する。
+#### 3.10.1 ランキングの単位
 
-AHOGE LEGEND集計では、`ahoge_season_rank` storageをキャラクター別の `total_match_wins / total_ranked_matches` の正本とする。Nakama leaderboardは勝数による順位付けの投影として使用し、RPCで返す `total_ranked_matches` はleaderboard metadataを正本にせずstorageから取得する。これにより、敗者のように勝数が変わらない対戦でも試合数更新を失わない。
+AHOGE LEGEND Rankingは **個別キャラクター（個別アホ毛）単位の1ランキングのみ** とする。
 
-フレンドマッチはプレイヤーランキング・AHOGE LEGENDランキングのどちらにも反映しない。
+- 集計キーは `character_id`
+- `LONG / NORMAL / SHORT` はランキング単位にしない
+- タイプ別ランキング、タイプ別レート、タイプ別タブは作らない
+- 正式ロスターでは各タイプに複数キャラクターが存在する
+- 同一タイプでも別 `character_id` なら別アホ毛としてRatingを持つ
 
-Rating方式は未決。
+#### 3.10.2 AHOGE LEGENDの順位値
+
+従来の「当月総勝利数」を順位値として使う方式は廃止し、キャラクターごとの **Ahoge Rating** をAHOGE LEGENDの唯一の順位値とする。
+
+各シーズンのAhoge Rating初期値は共通基準 `1500` とする。
+
+順位はAhoge Rating降順で決定する。同Ratingは同順位とする。総勝利数・対戦数・勝率・使用率は参考統計として保持できるが、順位決定やtie-breakには使用しない。
+
+このRatingが表すものは「そのキャラクターを使用したプレイヤーの実力差を考慮したうえで、そのアホ毛自体が対戦結果へどれだけ寄与したと評価できるか」である。
+
+#### 3.10.3 プレイヤー実力を補正した期待勝率
+
+Ahoge Rating更新では、試合開始前のPlayer RatingとAhoge Ratingの両方を使用して期待勝率を求める。
+
+概念式:
+
+```text
+effective_A = player_rating_A
+            + ahoge_weight * (ahoge_rating_A - AHOGE_BASE_RATING)
+
+effective_B = player_rating_B
+            + ahoge_weight * (ahoge_rating_B - AHOGE_BASE_RATING)
+
+expected_A
+= 1 / (1 + 10 ^ ((effective_B - effective_A) / 400))
+
+actual_A = 1  # A勝利
+actual_A = 0  # A敗北
+
+delta
+= ahoge_k * (actual_A - expected_A)
+
+ahoge_rating_A_after = ahoge_rating_A_before + delta
+ahoge_rating_B_after = ahoge_rating_B_before - delta
+```
+
+`AHOGE_BASE_RATING = 1500` とする。
+
+`ahoge_weight` と `ahoge_k` の最終値は固定せず、対戦シミュレーションと実データを使って調整する。Rating全体のインフレ／デフレを避けるため、異なるアホ毛同士の1試合では原則として同じ絶対量を一方へ加算し、他方から減算する。
+
+`ahoge_k` はデータ量が少ない時期ほどRatingが動きやすく、十分な対戦数が蓄積した後は安定するよう、両キャラクターのシーズン対戦数を考慮して段階的または連続的に縮小できる構造とする。具体的な閾値・係数はbalance検証で確定する。
+
+#### 3.10.4 更新量の意図
+
+同じ勝敗でも、事前期待によってAhoge Rating変動量を変える。
+
+- 高Ahoge Ratingが低Ahoge Ratingへ順当に勝つ → 変動は小さい
+- 低Ahoge Ratingが高Ahoge Ratingへ勝つ → 変動は大きい
+- 高Player Ratingが高Ahoge Ratingを使って順当に勝つ → 変動はさらに小さい
+- 低Player Ratingが不利なAhoge Ratingで格上側へ勝つ → 大きく上昇する
+- Player Rating差が大きい場合、そのプレイヤー実力差をAhoge Ratingへそのまま転嫁しない
+
+Player Ratingは「その人が強かったから勝った部分」を補正するための入力であり、AHOGE LEGEND Rankingそのものの順位値にはしない。
+
+Player Ratingの更新は既存PLAYER Ranking用Eloとして独立して行い、Ahoge Ratingの計算には **試合開始前のPlayer Rating** を使用する。
+
+#### 3.10.5 同一アホ毛対戦
+
+同じ `character_id` 同士の対戦では、どちらが勝っても「そのアホ毛が別のアホ毛より強い」という情報を得られない。
+
+そのため同一アホ毛対戦では:
+
+- Ahoge Ratingを変動させない
+- Player Ratingは通常どおり更新する
+- 勝敗・対戦数等の参考統計は記録できる
+- タイプが同じでも `character_id` が異なる場合は通常のAhoge Rating更新対象とする
+
+#### 3.10.6 server authoritative
+
+Ahoge Rating更新はNakama serverだけが行う。
+
+serverは少なくとも次を確定情報として使用する。
+
+```text
+season_id
+match_id
+winner_user_id
+loser_user_id
+winner_character_id
+loser_character_id
+player_rating_before_by_user
+ahoge_rating_before_by_character
+ahoge_rating_after_by_character
+rating_delta_by_character
+total_match_wins
+total_ranked_matches
+```
+
+clientは期待勝率・Ahoge Rating・変動量を再計算しない。UIはserver settlement後の値を取得して表示する。
+
+`ahoge_season_rank` storageをキャラクター別シーズン集計の正本とし、少なくともAhoge Rating・総勝利数・総対戦数を保持する。Nakama leaderboardはAhoge Rating順の投影として扱う。
+
+フレンドマッチはPlayer Rating・Ahoge Rating・PLAYER Ranking・AHOGE LEGEND Rankingのいずれにも影響しない。
+
 
 ## 4. 画面状態遷移
 
