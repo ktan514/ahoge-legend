@@ -2499,7 +2499,7 @@ active Round中の復帰では、切断中も進行したtimer / Hit / action st
 
 #### 21.5.5 再接続待機中のフェーズ管理
 
-serverは「active Round」と「Round境界」を区別する。
+serverは「active Round」「前Round Result hold」「次Round開始側」を区別する。
 
 ```text
 active Round
@@ -2507,12 +2507,19 @@ active Round
   → reconnect deadlineなし
   → 同Round終了まで復帰可能
 
-pre-Round / Countdown / post-Round
-  → 次Round進行を停止
-  → 未接続playerに15秒deadline開始
-  → 復帰: 次Round進行再開
-  → timeout: 接続中playerのmatch勝利
+前Round Result hold
+  → Result表示を完了
+  → reconnect deadlineなし
+
+次Round開始側
+  → 未接続playerがいる場合だけ15秒deadline開始
+  → deadline内復帰: 同一userを元matchへ再joinし、対象RoundのCountdownから通常開始
+  → timeout: 対象RoundをDISCONNECT_FORFEITとして確定
 ```
+
+Human Verificationでは、同一P2 userで「切断」と「15秒待機中の復帰」を再現できる必要がある。HV専用opponentは初回起動時のDevice IDを一時検証用ファイルへ保持し、`reconnect` モードでは同じDevice IDで再認証したうえでserver-side `active_online_match/current` から元match IDを取得して再joinする。
+
+この一時ファイルはHuman Verification toolだけが使用する検証credentialであり、製品clientのgameplay/account状態の正本には使用しない。
 
 #### 21.5.6 再ログイン時のMatch復帰
 
