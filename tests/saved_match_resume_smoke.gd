@@ -1,6 +1,7 @@
 extends SceneTree
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _second_socket = null
 var _second_ticket: String = ""
@@ -27,6 +28,23 @@ func _run() -> void:
 		_fail("P1 Device認証に失敗しました。")
 		return
 	var p1_user_id := str(auth_result.get("user_id", ""))
+
+	var ahoge_before := await _read_ahoge_ranking(
+		online_session.client,
+		online_session.session,
+		100
+	)
+	if ahoge_before.is_empty():
+		_fail("保存済みmatch復帰試験前のAHOGE Rankingを取得できませんでした。")
+		return
+	var long_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	var short_before := _ahoge_counts(
+		ahoge_before,
+		OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+	)
 
 	var realtime_result: Dictionary = await online_session.connect_realtime_socket()
 	if not bool(realtime_result.get("ok", false)):
@@ -60,6 +78,19 @@ func _run() -> void:
 	if second_session == null or second_session.is_exception():
 		_fail("P2 Device認証に失敗しました。")
 		return
+	var p2_user_id := str(second_session.user_id)
+	var p1_hit_count := [0]
+	var p1_states: Array[Dictionary] = []
+	online_session.round_hit_count_changed.connect(
+		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
+			if user_id == p1_user_id:
+				p1_hit_count[0] = hit_count
+	)
+	online_session.combat_state_changed.connect(
+		func(user_id: String, state_name: String, _server_tick: int, _charge_ratio: float) -> void:
+			if user_id == p1_user_id:
+				p1_states.append({"state": state_name})
+	)
 
 	_second_socket = nakama.create_socket_from(second_client)
 	_second_socket.received_matchmaker_matched.connect(_on_second_matchmaker_matched)
@@ -116,9 +147,9 @@ func _run() -> void:
 		return
 
 	var original_match_id: String = str(p1_joined[0])
-	var saved_before: Dictionary = online_session.get_saved_match_for_current_user()
-	if str(saved_before.get("match_id", "")) != original_match_id:
-		_fail("対戦join時に未解決match情報が保存されていません。")
+	var active_before: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_before.get("ok", false)) 			or not bool(active_before.get("active", false)) 			or str(active_before.get("match_id", "")) != original_match_id 			or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("対戦join時にserver-side active matchが保存されていません。")
 		return
 
 	# アプリ再起動相当: runtime sessionだけ失い、未解決match情報は保持する。
@@ -144,7 +175,7 @@ func _run() -> void:
 		_fail("新規Ranked拒否理由がunresolved_matchではありません。")
 		return
 
-	var resumed: Dictionary = await online_session.resume_saved_match_after_login()
+	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
 		_fail("保存済みmatchへ再ログイン復帰できませんでした。")
 		return
@@ -161,14 +192,221 @@ func _run() -> void:
 		_fail("Battle復帰後に未解決match lockが解除されています。")
 		return
 
-	await online_session.realtime_socket.leave_match_async(original_match_id)
+	# P2を切断してserver authoritativeにMatch Resultを確定させる。
+	var finished_result := [{}]
+	online_session.match_result.connect(
+		func(
+			winner_user_id: String,
+			loser_user_id: String,
+			_round_wins: Dictionary,
+			_final_round: int,
+			finish_cause: String,
+			_server_tick: int
+		) -> void:
+			finished_result[0] = {
+				"winner_user_id": winner_user_id,
+				"loser_user_id": loser_user_id,
+				"finish_cause": finish_cause,
+			}
+	)
 	if _second_socket != null:
-		await _second_socket.leave_match_async(_second_match_id)
 		_second_socket.close()
-	online_session.clear_session()
+		_second_socket = null
 
+	# active Round中の切断だけでは敗北にしない。serverがP2切断を認識した後、
+	# P1が5HitでRound 1を終え、Round境界15秒timeoutでRound 2不戦勝となり2-0のBO3 Resultを確定させる。
+	if not await _p1_finish_round(online_session, p1_hit_count, p1_states):
+		return
+
+	var finish_deadline := Time.get_ticks_msec() + 22000
+	while Time.get_ticks_msec() < finish_deadline and (finished_result[0] as Dictionary).is_empty():
+		await create_timer(0.05).timeout
+	if (finished_result[0] as Dictionary).is_empty():
+		_fail("P2切断後に終了済みRanked Resultを受信できませんでした。")
+		return
+	if str((finished_result[0] as Dictionary).get("winner_user_id", "")) != p1_user_id:
+		_fail("終了済みRankedのserver確定winnerがP1ではありません。")
+		return
+	if str((finished_result[0] as Dictionary).get("finish_cause", "")) != "BO3":
+		_fail("Round不戦勝後の終了済みRanked finish causeがBO3ではありません。")
+		return
+
+	# 次のsmokeがbaselineを読む前に、今回のAHOGE projection完了まで待つ。
+	var settlement := await _wait_ahoge_settlement(
+		online_session.client,
+		online_session.session,
+		long_before,
+		short_before,
+		5000
+	)
+	if settlement.is_empty():
+		_fail("保存済みmatch復帰試験のAHOGE settlementが完了しませんでした。")
+		return
+
+	var pending_context := await _wait_active_match_state(
+		online_session,
+		OnlineConfigScript.ACTIVE_MATCH_STATE_RESULT_PENDING,
+		5000
+	)
+	if pending_context.is_empty():
+		_fail("終了済みRankedがserver-side RESULT_PENDINGへ遷移しませんでした。")
+		return
+
+	# Result遷移確定前のlockを保持したまま再起動相当にし、
+	# serverの終了済みsnapshotからranked_resultへ復帰する。
+	online_session.clear_runtime_session_preserving_match()
+	var finished_resume: Dictionary = await online_session.restore_unresolved_match_with_retry()
+	if not bool(finished_resume.get("ok", false)) \
+			or not bool(finished_resume.get("repaired", false)):
+		_fail("終了済みRankedへ再接続できませんでした。")
+		return
+	if str(finished_resume.get("destination", "")) != "ranked_result":
+		_fail("終了済みRankedの復帰先がranked_resultではありません。")
+		return
+	var finished_snapshot: Dictionary = finished_resume.get("snapshot", {})
+	if not bool(finished_snapshot.get("match_finished", false)):
+		_fail("終了済みRankedのserver snapshotがmatch_finishedではありません。")
+		return
+	if str(finished_snapshot.get("match_winner_user_id", "")) != p1_user_id:
+		_fail("終了済みRanked snapshotのwinnerがserver結果と一致しません。")
+		return
+
+	var ack_result: Dictionary = await online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		_fail("Ranked Result遷移確定後にserver-side active matchを解除できませんでした。")
+		return
+	var active_after_ack: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_after_ack.get("ok", false)) or bool(active_after_ack.get("active", false)):
+		_fail("Ranked Result遷移確定後もserver-side active matchが残っています。")
+		return
+
+	online_session.clear_session()
 	print("AHOGE LEGEND saved match resume smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _p1_finish_round(online_session, p1_hit_count: Array, p1_states: Array[Dictionary]) -> bool:
+	for hit_index in range(1, 6):
+		var state_start := p1_states.size()
+		var press: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+		if not bool(press.get("ok", false)):
+			_fail("P1 ATTACK_PRESSを送信できませんでした。")
+			return false
+
+		var charging_deadline := Time.get_ticks_msec() + 3000
+		var charging_seen := false
+		while Time.get_ticks_msec() < charging_deadline:
+			for index in range(state_start, p1_states.size()):
+				if str(p1_states[index].get("state", "")) == "CHARGING":
+					charging_seen = true
+					break
+			if charging_seen:
+				break
+			await create_timer(0.02).timeout
+		if not charging_seen:
+			_fail("P1 CHARGINGを確認できませんでした。")
+			return false
+
+		var release: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+		if not bool(release.get("ok", false)):
+			_fail("P1 ATTACK_RELEASEを送信できませんでした。")
+			return false
+
+		var hit_deadline := Time.get_ticks_msec() + 4000
+		while Time.get_ticks_msec() < hit_deadline and int(p1_hit_count[0]) < hit_index:
+			await create_timer(0.02).timeout
+		if int(p1_hit_count[0]) < hit_index:
+			_fail("P1 authoritative Hit count=%dを確認できませんでした。" % hit_index)
+			return false
+
+		if hit_index < 5:
+			var idle_deadline := Time.get_ticks_msec() + 4000
+			var idle_seen := false
+			while Time.get_ticks_msec() < idle_deadline:
+				for index in range(state_start, p1_states.size()):
+					if str(p1_states[index].get("state", "")) == "IDLE":
+						idle_seen = true
+				if idle_seen:
+					break
+				await create_timer(0.02).timeout
+			if not idle_seen:
+				_fail("P1が次の攻撃前にIDLEへ復帰しませんでした。")
+				return false
+	return true
+
+func _wait_active_match_state(
+	online_session,
+	state_name: String,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var active: Dictionary = await online_session.refresh_active_online_match()
+		if bool(active.get("ok", false)) 				and bool(active.get("active", false)) 				and str(active.get("state", "")) == state_name:
+			return active
+		await create_timer(0.05).timeout
+	return {}
+
+
+func _read_ahoge_ranking(client, session, limit: int) -> Dictionary:
+	var rpc_result = await client.rpc_async(
+		session,
+		"ahoge_legend_ranking",
+		JSON.stringify({"limit": limit})
+	)
+	if rpc_result == null or rpc_result.is_exception():
+		return {}
+	var parsed = JSON.parse_string(str(rpc_result.payload))
+	if not parsed is Dictionary:
+		return {}
+	return parsed
+
+
+func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
+	var records = ranking.get("records", [])
+	if not records is Array:
+		return {"wins": 0, "matches": 0}
+	for record in records:
+		if record is Dictionary and str(record.get("character_id", "")) == character_id:
+			return {
+				"wins": int(record.get("total_match_wins", 0)),
+				"matches": int(record.get("total_ranked_matches", 0)),
+			}
+	return {"wins": 0, "matches": 0}
+
+
+func _wait_ahoge_settlement(
+	client,
+	session,
+	long_before: Dictionary,
+	short_before: Dictionary,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var ranking := await _read_ahoge_ranking(client, session, 100)
+		if not ranking.is_empty():
+			var long_after := _ahoge_counts(
+				ranking,
+				OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+			)
+			var short_after := _ahoge_counts(
+				ranking,
+				OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST
+			)
+			if (
+				int(long_after.get("wins", -1)) == int(long_before.get("wins", 0)) + 1
+				and int(long_after.get("matches", -1)) == int(long_before.get("matches", 0)) + 1
+				and int(short_after.get("wins", -1)) == int(short_before.get("wins", 0))
+				and int(short_after.get("matches", -1)) == int(short_before.get("matches", 0)) + 1
+			):
+				return ranking
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _on_second_matchmaker_matched(matched) -> void:

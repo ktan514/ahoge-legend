@@ -275,11 +275,14 @@ const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
       }
     }
 
+    const characterId = String(metadata.character_id || "");
+    const canonical = readAhogeSeasonRank(nk, characterId, seasonId);
+
     return {
       display_rank: displayRank,
-      character_id: String(metadata.character_id || ""),
+      character_id: characterId,
       total_match_wins: wins,
-      total_ranked_matches: Number(metadata.total_ranked_matches || 0),
+      total_ranked_matches: canonical.value.total_ranked_matches,
       legendary: displayRank === 1
     };
   });

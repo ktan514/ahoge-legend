@@ -14,38 +14,30 @@
 
 ## 2. 現在地
 
-2026-09-28時点のmainでは次まで完了している。
+2026-09-29時点では工程3まで完了し、**工程4: GameFlow・主要12画面 #25** を進行中である。
 
-- 初期設計文書
+完了済みの主要基盤:
+
 - Godot 4.7.2ローカル1対1縦切り
-- 実攻撃 / Charge / Parry / Dodge / Just / Clash / Stagger / SHORT投擲・Regrowのローカル版
-- 85秒 / 5 Hit / Overtime / BO3のローカル版
-- Nakama 3.41.0 + PostgreSQL 16.8-alpineローカル基盤
-- Godot Device Authentication
-- Realtime Socket
-- 2人Ranked Matchmaker
-- authoritative match生成と2-client join
-- input_sequence / server tick検証
-- authoritative攻撃状態
-- server tickからcharge ratio算出
-- ContactEvent生成と両client通知
-- authoritative Defense / Just / Hit / AttackClash
-- authoritative Stagger
-- SHORT detach / Regrow
-- 工程1の2-client戦闘統合検証
-- authoritative現在ラウンドHit数
-- authoritative 85秒timer
-- 5 Hit到達によるauthoritativeラウンド終了
-- timeout時のauthoritative Hit数比較
-- authoritative Overtime
-- authoritative Round Result
-- authoritative 2本先取BO3
-- authoritative Match Result
+- authoritative戦闘コア
+- authoritative 85秒 / Hit / Overtime / Round / BO3 / Match Result
+- Nakama 3.41.0 + PostgreSQL 16.8-alpine
+- Device Authentication / Realtime Socket
+- Ranked Matchmaker
+- active Round中の無期限復帰 / Round境界15秒待機 / server-side active match復帰
+- Player Elo Rating / PLAYER Ranking
+- AHOGE LEGEND Ranking初期実装
+- 月次Season / 過去Season保持
+- Friend room code / Friend Match
 - M1 Battle Core #53 Human Verification PASS
-- UI-10 M1 authoritative Battle接続
-- Round取得表示 → 3 / 2 / 1 / GO → 次Round開始
+- 工程3 #24 completed
 
-工程2とM1 Battle Core #53は完了済みである。現在は **工程3: オンラインサービス #24** へ進行可能な状態である。M1で使用した仮UI・5:4候補・表示デザインは最終確定ではなく、工程4以降で他画面と合わせて見直す。
+現在は工程4前半のRanked主要導線 #86 / PR #87 を進めている。#54 Human Verificationでローカルmatch保存に起因するuser取り違えを検出したため、**#89 ユーザー永続データserver正本化** をblocking修正として先に完了し、その後 #54 M2 Ranked主要導線 Human Verificationを再実施する。
+
+Human Verification中に未解決match復帰仕様を見直し、元matchへの強制復帰、10秒timeout、retry上限2回、失敗後TopMenuへ戻して再選択時に再試行する契約を確定した。
+
+またAHOGE LEGEND Rankingは、従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ再設計した。工程3で作成した総勝利数ベースの初期実装はそのまま完成形とせず、M2 PASS後・UI-12接続前に #88 で新方式へ移行する。
+
 
 ## 3. 製造工程
 
@@ -54,8 +46,8 @@
 | 0 | 設計・ローカル縦切り・オンライン基礎 | #1〜#19 | 完了 |
 | 1 | オンライン戦闘コア | #22 | 完了 |
 | 2 | authoritativeラウンド・BO3 | #23 | 完了 |
-| 3 | オンラインサービス | #24 | 進行可能 |
-| 4 | GameFlow・主要12画面 | #25 | 未着手 |
+| 3 | オンラインサービス | #24 | 完了 |
+| 4 | GameFlow・主要12画面 | #25 | 進行中 |
 | 5 | 正式キャラクター・演出・素材 | #26 | 未着手 |
 | 6 | AWS・Steam・Windows・WAN QA | #27 | 未着手 |
 | 7 | Release Candidate | #28 | 未着手 |
@@ -135,24 +127,29 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 
 ## 6. 工程3: オンラインサービス
 
+ステータス: **完了（#24）**
+
 実装順:
 
 1. Matchmaker検索幅を10秒ごとに±100拡大
 2. 最大±500
 3. 60秒以降の待機継続
-4. 15秒切断・再接続
-5. Elo Rating
+4. active Round継続・Round境界15秒切断復帰
+5. Elo Player Rating
 6. PLAYER Ranking
-7. AHOGE LEGEND Ranking
+7. AHOGE LEGEND Ranking初期実装
 8. 毎月1日0:00 JSTのSeason切替
 9. 過去Season保持
 10. Friend room code / Friend Match
 
-完了条件:
+工程3でAHOGE LEGENDの総勝利数ベース初期実装まで完成したが、その後の設計見直しで順位値をAhoge Ratingへ変更した。工程3自体は再オープンせず、移行作業は工程4後半 #88 として行う。
+
+完了済み条件:
 
 - Ranked / Friendが両方成立する
-- FriendはRating非対象
-- PLAYER / AHOGE LEGEND両ランキングが月次Seasonで動作する
+- FriendはPlayer Rating非対象
+- PLAYER / AHOGE LEGENDの月次Season基盤が動作する
+- user_id単位のserver-side active match復帰・切断決着・過去Season保持が成立する
 
 ## 7. 工程4: GameFlow・主要12画面
 
@@ -162,12 +159,17 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 
 工程4内の順序:
 
-1. UI-01 / UI-03 / UI-04 / UI-05 / UI-09 / UI-10 / UI-11 を実機能へ接続
+1. #86でUI-01 / UI-03 / UI-04 / UI-05 / UI-09 / UI-10 / UI-11 のRanked主要導線を実機能へ接続
 2. #54 M2 Ranked主要導線を実画面で確認
-3. UI-02 / UI-06 / UI-07 / UI-08 / UI-12 とFriend導線を接続
-4. Loading / Error / Back / Decide / Cancel等の共通挙動を統合
-5. #55 M3 主要12画面・全導線を実画面で確認
-6. M3 PASS後に工程5へ進む
+3. **M2 PASS後、#88でAHOGE LEGENDを個別キャラクターAhoge Rating方式へ移行**
+4. #88でUI-11へserver確定Ahoge Rating before / after / deltaを接続可能にする
+5. UI-02 / UI-06 / UI-07 / UI-08 / UI-12 とFriend導線を接続
+6. UI-12 AHOGE LEGENDをAhoge Rating降順の1ランキングとして接続
+7. Loading / Error / Back / Decide / Cancel等の共通挙動を統合
+8. #55 M3 主要12画面・全導線を実画面で確認
+9. M3 PASS後に工程5へ進む
+
+#88は現在のM2確認へ割り込ませない。M2でRanked主要導線を確定した後、UI-12を量産する前に実施する。
 
 主な通し導線:
 
@@ -187,13 +189,26 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 
 ただし仮UIだから目視確認を省略してよいという意味ではない。M2 / M3では仮UIの段階で、画面構造・視線誘導・操作導線・情報量・5:4戦闘領域案を確認する。
 
+工程4完了時のランキング条件:
+
+- AHOGE LEGENDの順位値は総勝利数ではなくAhoge Rating
+- ランキング単位は個別 `character_id`
+- LONG / NORMAL / SHORTのタイプ別ランキングは存在しない
+- 同一character対戦ではAhoge Ratingを変動させない
+- 異なるcharacter対戦では試合前Player RatingとAhoge Ratingから期待勝率を計算する
+- 順当勝ちの変動は小さく、番狂わせの変動は大きくする
+- clientはRatingを計算せずserver settlement結果だけを表示する
+- 勝数 / 対戦数 / 勝率は参考統計として保持できるが順位には使わない
+
 ## 8. 工程5: 正式キャラクター・演出・素材
 
 実装・制作対象:
 
-- 正式初期キャラクター
-- LONG / NORMAL / SHORTと攻撃タイプ
-- CharacterDefinition
+- 正式初期キャラクター複数名
+- LONG / NORMAL / SHORTのアホ毛タイプと攻撃タイプ
+- 各タイプに複数キャラクター
+- タイプごとの人数をおおむね均等にしたロスター
+- character_id単位のCharacterDefinition / Ahoge Rating識別
 - 頭頂部・アホ毛の新規描き起こし
 - MotionProfile
 - BGM / SE / VFX
@@ -201,12 +216,14 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - 勝利台詞
 - 権利状態管理
 
+LONG / NORMAL / SHORTはキャラクター名ではなく戦闘特性の分類である。AHOGE LEGEND Rankingはタイプではなく個別キャラクター単位で扱う。
+
 工程5は、全正式キャラクターをまとめて量産しない。
 
 1. 代表となる最初の正式キャラクターをCharacter Select / Battleへ組み込む
-2. 可能ならLONG系とSHORT系を各1体まで先行して、頭部・アホ毛・Motion・VFX・SEを確認可能にする
+2. LONG / NORMAL / SHORTを各1キャラクター以上確認できる最小ロスターを先行して、タイプ差・頭部・アホ毛・Motion・VFX・SEを確認可能にする
 3. #56 M4 正式キャラクター初回品質を実画面で確認
-4. M4 PASS後に残りキャラクター・演出・素材を量産する
+4. M4 PASS後に各タイプへ複数キャラクターを追加し、タイプ人数がおおむね均等になるよう残りロスター・演出・素材を量産する
 
 未決事項は人間の判断を得てから設計へ反映する。
 `PENDING`素材は公開ビルドへ含めない。
@@ -260,18 +277,26 @@ RC1
 
 現在からの優先順は次とする。
 
-1. Disconnect / Reconnect
-2. Matchmaker検索幅拡大
-3. Ranking / Rating / Season
-4. Friend Match
-5. 全画面GameFlow
-6. 正式キャラクター
-7. 演出・音・台詞
-8. Steam認証
-9. AWS本番
-10. Windows実機・WAN試験
-11. balance / performance調整
-12. Release Candidate
+1. #89で未解決matchをNakama user_id単位のserver-side Storage正本へ移行
+2. #86 Ranked主要GameFlowのCI / fresh review / #54 Human Verification完了
+3. #54 M2 PASS
+4. #88 Ahoge Rating計算・storage・settlement・ranking backend移行
+5. UI-11 Ahoge Rating表示接続
+6. UI-12 AHOGE LEGEND Rating Ranking接続
+7. Friend残画面 / UI-02 / UI-06 / UI-07 / UI-08
+8. 共通Loading / Error / Back / Decide / Cancel
+9. #55 M3主要12画面Human Verification
+10. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
+11. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
+12. 演出・音・台詞
+13. Steam認証
+14. AWS本番
+15. Windows実機・WAN試験
+16. balance / performance調整
+17. Release Candidate
+
+Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件は、#88でシミュレーション可能な構造を用意したうえでbalance検証により確定する。実装担当判断だけで固定しない。
+
 
 ## 12. 計画変更ルール
 
@@ -283,3 +308,21 @@ RC1
 - 指定された実画面マイルストーンはblocking gateとし、PASSするまで次の対象工程へ進まない
 - マイルストーンでは必ず実ウィンドウまたは実配布ビルドを起動し、headless試験だけで代替しない
 - マイルストーンで想定との大きな乖離を発見した場合は、後工程へ進む前に設計・実装を修正する
+
+
+## #90 切断復帰のRound境界15秒方式
+
+#54 Human Verificationで切断決着の見え方を確認し、15秒deadlineの開始位置を変更した。
+
+- active Round中はdeadlineを開始しない
+- 同Round中は15秒を超えても復帰可能
+- Round終了後は前Round Result表示を完了してから次Round開始側へ切り替える
+- Result表示中は15秒を消費せず、次Round開始側で未接続playerがいる場合に15秒待機を開始する
+- 待機UIは `WAITING FOR OPPONENT...` と `15 → ... → 0` を表示する
+- 15秒以内のserver再接続受理で不戦敗を発生させず次Round継続
+- 15秒timeoutはその対象Roundの不戦敗とし、接続中playerへ1Round加算する
+- 不戦勝で2本先取なら通常BO3としてMatch終了し、未決着なら次Roundについて改めて15秒待機する
+- active Roundの通常結果で切断playerが2本先取した場合はその勝利を有効とする
+- RatingはRoundではなくMatch確定時に1回だけ更新
+
+#90完了後に#54 Human Verificationを再実施する。

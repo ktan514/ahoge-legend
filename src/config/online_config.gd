@@ -12,8 +12,17 @@ const CLIENT_LOG_LEVEL: int = 1
 
 const SOCKET_CONNECT_TIMEOUT_SECONDS: int = 3
 const SOCKET_APPEAR_ONLINE: bool = false
-const RECONNECT_GRACE_SECONDS: int = 15
+const ROUND_BOUNDARY_RECONNECT_WAIT_SECONDS: int = 15
 const RECONNECT_RETRY_SECONDS: float = 0.5
+const MATCH_RECOVERY_TIMEOUT_SECONDS: int = 10
+const MATCH_RECOVERY_RETRY_LIMIT: int = 2
+
+const ACTIVE_MATCH_RPC_GET: String = "ahoge_active_match_get"
+const ACTIVE_MATCH_RPC_ACK: String = "ahoge_active_match_ack"
+const MATCH_MODE_RANKED: String = "ranked"
+const MATCH_MODE_FRIEND: String = "friend"
+const ACTIVE_MATCH_STATE_ACTIVE: String = "ACTIVE"
+const ACTIVE_MATCH_STATE_RESULT_PENDING: String = "RESULT_PENDING"
 
 const RANKED_MATCHMAKER_MODE: String = "ranked"
 const RANKED_MATCHMAKER_MIN_COUNT: int = 2

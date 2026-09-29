@@ -739,11 +739,16 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 追加表示:
 
-- Rating変動
-- 新Rating
+- Player Rating変動
+- 新Player Rating
 - ランク帯
-- 勝者の場合、使用アホ毛の当月総勝利数への `+1` 演出
-- 現在のAHOGE LEGEND順位を表示してよい
+- 使用キャラクターのAhoge Rating変動
+- settlement後のAHOGE LEGEND順位を表示してよい
+- 総対戦数・勝率等は補助情報として表示してよい
+
+Ahoge Ratingはserver settlement後の確定値だけを表示し、clientで変動量を再計算しない。
+
+同じ `character_id` 同士の対戦ではAhoge Ratingは変動しないため、必要に応じて `±0` と表示できる。
 
 再戦ボタンは表示しない。
 
@@ -755,9 +760,9 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 │                                                              │
 │                    [ WINNER AHOGE ]                          │
 │                                                              │
-│ Rating       1532 → 1548   (+16)                            │
-│ AHOGE WINS   18,432 → 18,433   (+1)                         │
-│ AHOGE RANK   #3                                              │
+│ PLAYER RATING 1532 → 1548   (+16)                           │
+│ AHOGE RATING  1678 → 1691   (+13)                           │
+│ AHOGE RANK    #3 → #2                                       │
 │                                                              │
 │ [NEXT MATCH]   [CHANGE CHARACTER]   [EXIT]                  │
 └──────────────────────────────────────────────────────────────┘
@@ -775,7 +780,9 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 ### 17.1 目的
 
-プレイヤー個人の強さと、全プレイヤーで競う伝説のアホ毛を別々に表示する。
+プレイヤー個人の強さと、個別キャラクター（個別アホ毛）の対戦性能を明確に分けて表示する。
+
+AHOGE LEGEND側は複数指標のランキングを並立させず、**Ahoge Ratingによる1ランキングだけ**を提供する。
 
 ### 17.2 タブ
 
@@ -783,34 +790,47 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 [ PLAYER ] [ AHOGE LEGEND ]
 ```
 
+PLAYER RankingとAHOGE LEGEND Rankingは別タブとするが、AHOGE LEGEND内部に「勝利数」「勝率」「LONG / NORMAL / SHORT」等の別ランキングタブは作らない。
+
 ### 17.3 PLAYER
 
-PLAYERタブはRating降順で表示する。同Ratingは同順位とし、wins / lossesは順位決定には使用しない。
+PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし、wins / lossesは順位決定には使用しない。
 
 表示候補:
 
 - 順位
 - プレイヤー名
-- Rating
+- Player Rating
 - ランク帯
 - 勝数
 - 敗数
 
 ### 17.4 AHOGE LEGEND
 
-当月総マッチ勝利数の降順で表示する。同勝利数は同順位とし、使用回数・勝率はtie-breakに使用しない。
+各シーズンの個別 `character_id` が持つAhoge Rating降順で表示する。
+
+- ランキング単位はキャラクター／アホ毛
+- `LONG / NORMAL / SHORT` は戦闘タイプでありランキング単位ではない
+- タイプ別ランキングは表示しない
+- 同じタイプでも別キャラクターなら別Ratingとして順位付けする
+- 同Ahoge Ratingは同順位とする
+- 勝数・対戦数・勝率・使用率は順位決定やtie-breakに使用しない
 
 表示必須:
 
 - 順位
 - キャラクター／アホ毛
-- 当月総マッチ勝利数
+- Ahoge Rating
 - 対象シーズン
 - 1位の強調表示
 
-1位は「LEGENDARY AHOGE」等の特別表示を使用できる。
+補助表示候補:
 
-順位決定に勝率や使用率は使用しない。
+- シーズン総対戦数
+- シーズン総勝利数
+- 勝率
+
+1位は「LEGENDARY AHOGE」等の特別表示を使用できる。
 
 ### 17.5 ワイヤーフレーム
 
@@ -820,11 +840,12 @@ PLAYERタブはRating降順で表示する。同Ratingは同順位とし、wins 
 │                                                              │
 │              [ PLAYER ] [ AHOGE LEGEND ]                    │
 │                                                              │
-│  👑 1   Character A                 128,421 WINS             │
-│     2   Character B                 116,882 WINS             │
-│     3   Character C                  98,114 WINS             │
-│     4   Character D                  91,306 WINS             │
+│  👑 1   Character A          AHOGE RATING 1842              │
+│     2   Character F          AHOGE RATING 1798              │
+│     3   Character C          AHOGE RATING 1761              │
+│     4   Character H          AHOGE RATING 1715              │
 │                                                              │
+│       Matches / Wins / Win Rate は補助情報として表示可       │
 │              Reset: Next month 1st 00:00 JST                │
 │                                                              │
 │ [BACK]                                                       │
@@ -832,6 +853,7 @@ PLAYERタブはRating降順で表示する。同Ratingは同順位とし、wins 
 ```
 
 過去月ランキングはデータとして保持するが、過去月閲覧UIは初期実装の必須対象としない。
+
 
 ## 18. 状態Overlay
 
@@ -846,34 +868,37 @@ PLAYERタブはRating降順で表示する。同Ratingは同順位とし、wins 
 
 ### 18.2 再接続中
 
-自分の接続が切れた場合:
+自分の接続が切れた場合、active Round中は敗北までの15秒カウントダウンを表示しない。
 
 ```text
 RECONNECTING...
-15
-14
-13
-...
 ```
 
-15秒以内に復帰した場合は、server authoritative snapshotを受信して現在の対戦状態へ同期する。
+active Round中に復帰した場合は、server authoritative snapshotを受信し、切断中も進行したtimer / Hit / action stateを含む現在状態へ同期して同じRoundへ戻る。
 
 相手だけが切断した場合:
 
 - Round進行中はBattleを継続する。相手側は新規操作を行えない
-- Round開始前またはRound終了後は `WAITING FOR OPPONENT...` を表示し、次Roundへの進行を待つ
-- Countdown中に相手が切断した場合はCountdown表示を停止する
-- 相手が復帰したらserver stateに同期して待機表示を解除する
+- active Round中は15秒timeoutを開始しない
+- Round終了時はまず前Round Resultを表示し、Result表示中は15秒を消費しない
+- Result表示完了後に次Round開始側へ切り替える
+- 次Round開始側で相手が未接続なら `WAITING FOR OPPONENT...` と残り秒数を表示する
+- 待機表示は `15 → 14 → ... → 1 → 0` と減少する
+- 15秒以内に相手が復帰したらserver stateへ同期し、待機表示を終了して対象RoundのCountdownから通常開始する
+- 0表示だけでは勝敗を確定せず、serverの `DISCONNECT_FORFEIT` Round Resultを受信して初めて不戦勝 / 不戦敗を表示する
+- Round境界15秒を超えて相手が未復帰なら、その対象Roundを接続中playerの不戦勝・切断playerの不戦敗としてserverが確定する
+- 不戦勝で2本先取ならMatch Resultへ進む。未決着なら前Round Result表示後、次Round開始側で改めて `WAITING FOR OPPONENT...` と新しい15秒待機を開始する
+- Countdown中に相手が切断した場合はCountdown表示を停止し、その対象Roundの開始側で15秒待機へ切り替える
 
 再接続待機Overlayは最終デザインではなく、工程4の全画面UI見直し対象とする。
 
 再ログイン時の復帰表示:
 
-- 保存済みmatchが進行中: `RECONNECTING...` を表示し、snapshot受信後にBattleへ直接復帰
-- 保存済みRanked matchが終了済み: Battleを表示せずUI-11へ直接遷移
-- 保存済みFriend matchが終了済み: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
+- server-side active matchが`ACTIVE`: `RECONNECTING...` を表示し、snapshot受信後にBattleへ直接復帰
+- server-side active matchが`RESULT_PENDING / ranked`: Battleを表示せずUI-11へ直接遷移
+- server-side active matchが`RESULT_PENDING / friend`: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
 - 未解決matchがある間は新しいRanked / Friend開始操作を無効化し、元matchの復帰または終了処理を優先する
-- 15秒を超えても回線が未復旧の場合、clientは元matchを破棄せず接続復旧を待つ。復旧後に終了済み結果を取得する
+- Round境界timeout後に切断playerが戻った場合、Match未決着なら最新server snapshotへ同期して待機中の次Roundへ復帰する。Match終了済みならserver確定Resultを表示する
 - serverが元matchに対して確定的に `NOT_FOUND` を返した場合のみ「元の対戦は復旧できませんでした」と通信エラー表示し、古い対戦lockを解除する
 - 通信エラー画面には「対戦状態を再確認」操作を用意できる。この操作はserver確認を行い、元matchが存在しないと確定した場合だけlockを解除する
 - 「lockを強制解除して新しい対戦を開始」のような無条件解除操作は提供しない
@@ -987,8 +1012,10 @@ Issue #3では全画面を一度に実装しない。
 - 85秒タイマーが瞬時に認識できるか
 - ヒット数とラウンド取得数を混同しないか
 - ランク／フレンドの違いが理解できるか
-- AHOGE LEGENDランキングが「全プレイヤーの総勝利数」であることが伝わるか
-- ランクマッチ結果で自分の勝利がアホ毛ランキングへ加算されたことが伝わるか
+- AHOGE LEGENDランキングが個別キャラクター単位のAhoge Rating順位であることが伝わるか
+- LONG / NORMAL / SHORTのタイプ別ランキングと誤解されないか
+- ランクマッチ結果でPlayer RatingとAhoge Ratingの変動を混同しないか
+- 順当勝ちではAhoge Rating変動が小さく、番狂わせでは大きくなる意図が表示上理解できるか
 
 ## 22. 未決事項
 

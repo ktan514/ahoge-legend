@@ -7,7 +7,6 @@ const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
-const MatchResumeStoreScript := preload("res://src/online/match_resume_store.gd")
 const MatchResumeRouterScript := preload("res://src/online/match_resume_router.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
@@ -34,9 +33,9 @@ func _init() -> void:
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
-	_test_match_resume_store_lock_context()
 	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
+	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
@@ -263,30 +262,6 @@ func _test_device_identity_persists() -> void:
 
 
 
-func _test_match_resume_store_lock_context() -> void:
-	var test_path := "user://active_match_test_%d.json" % Time.get_ticks_usec()
-	var store = MatchResumeStoreScript.new(test_path)
-
-	_expect_true(
-		store.save("match-1", MatchResumeStoreScript.MODE_RANKED, "user-a"),
-		"Ranked match復帰情報を保存できる"
-	)
-	var saved := store.load_for_user("user-a")
-	_expect_equal(str(saved.get("match_id", "")), "match-1", "同一userは保存matchを取得できる")
-	_expect_equal(str(saved.get("match_mode", "")), "ranked", "match modeを保持する")
-	_expect_true(store.load_for_user("user-b").is_empty(), "別userは保存matchを取得できない")
-
-	_expect_true(
-		store.save("match-2", MatchResumeStoreScript.MODE_FRIEND, "user-a"),
-		"Friend match復帰情報を保存できる"
-	)
-	var friend_saved := store.load_for_user("user-a")
-	_expect_equal(str(friend_saved.get("match_mode", "")), "friend", "Friend modeを保持する")
-
-	_expect_true(store.clear(), "保存match情報を解決後に消去できる")
-	_expect_true(store.load_for_user("user-a").is_empty(), "消去後は未解決matchを返さない")
-
-
 func _test_match_resume_router() -> void:
 	_expect_equal(
 		MatchResumeRouterScript.resolve({
@@ -358,6 +333,24 @@ func _test_ranked_matchmaker_query() -> void:
 	_expect_true(
 		RankedMatchmakerQueryScript.is_prolonged_wait(60),
 		"60秒から待機延長扱いにする"
+	)
+
+
+func _test_ranked_recovery_policy() -> void:
+	_expect_equal(
+		OnlineConfigScript.MATCH_RECOVERY_TIMEOUT_SECONDS,
+		10,
+		"未解決match復帰の1回timeoutは10秒"
+	)
+	_expect_equal(
+		OnlineConfigScript.MATCH_RECOVERY_RETRY_LIMIT,
+		2,
+		"未解決match復帰のretry上限は2回"
+	)
+	_expect_equal(
+		OnlineConfigScript.ROUND_BOUNDARY_RECONNECT_WAIT_SECONDS,
+		15,
+		"Round境界の切断復帰待機は15秒"
 	)
 
 
@@ -630,6 +623,23 @@ func _test_authoritative_round_result_protocol() -> void:
 	_expect_equal(event["finish_cause"], "HIT_LIMIT", "Round Result finish causeをdecodeできる")
 	_expect_equal(int(event["winner_hits"]), 5, "Round Result winner hitsをdecodeできる")
 
+	var forfeit_event := CombatInputProtocolScript.parse_round_result_payload(
+		JSON.stringify({
+			"round_number": 2,
+			"winner_user_id": "player-1",
+			"loser_user_id": "player-2",
+			"finish_cause": "DISCONNECT_FORFEIT",
+			"winner_hits": 0,
+			"loser_hits": 0,
+			"server_tick": 2000,
+		})
+	)
+	_expect_equal(
+		str(forfeit_event.get("finish_cause", "")),
+		"DISCONNECT_FORFEIT",
+		"Round境界timeoutの不戦敗Resultをdecodeできる"
+	)
+
 	var invalid := CombatInputProtocolScript.parse_round_result_payload(
 		JSON.stringify({
 			"round_number": 0,
@@ -691,7 +701,7 @@ func _test_authoritative_match_result_protocol() -> void:
 	_expect_equal(int(event["final_round_number"]), 3, "Match Result final roundをdecodeできる")
 	_expect_equal(str(event["finish_cause"]), "BO3", "Match Result finish causeをdecodeできる")
 
-	var disconnect_payload := JSON.stringify({
+	var legacy_disconnect_payload := JSON.stringify({
 		"winner_user_id": "player-1",
 		"loser_user_id": "player-2",
 		"round_wins_by_user": {"player-1": 0, "player-2": 0},
@@ -699,9 +709,13 @@ func _test_authoritative_match_result_protocol() -> void:
 		"finish_cause": "DISCONNECT_TIMEOUT",
 		"server_tick": 700,
 	})
-	var disconnect_event := CombatInputProtocolScript.parse_match_result_payload(disconnect_payload)
-	_expect_equal(str(disconnect_event["finish_cause"]), "DISCONNECT_TIMEOUT", "切断敗北Match Resultをdecodeできる")
-	_expect_equal(int(disconnect_event["round_wins_by_user"]["player-1"]), 0, "切断敗北でRound scoreを改ざんしない")
+	var legacy_disconnect_event := CombatInputProtocolScript.parse_match_result_payload(
+		legacy_disconnect_payload
+	)
+	_expect_true(
+		legacy_disconnect_event.is_empty(),
+		"旧Match強制敗北DISCONNECT_TIMEOUTを拒否する"
+	)
 
 	var invalid := CombatInputProtocolScript.parse_match_result_payload(
 		JSON.stringify({
@@ -812,6 +826,24 @@ func _test_authoritative_player_connection_protocol() -> void:
 	_expect_equal(str(disconnected["user_id"]), "player-2", "切断user IDをdecodeできる")
 	_expect_false(bool(disconnected["connected"]), "切断状態をdecodeできる")
 	_expect_equal(int(disconnected["reconnect_deadline_tick"]), 1950, "再接続deadlineをdecodeできる")
+
+	var active_round_disconnected := CombatInputProtocolScript.parse_player_connection_changed_payload(
+		JSON.stringify({
+			"user_id": "player-2",
+			"connected": false,
+			"reconnect_deadline_tick": -1,
+			"server_tick": 1550,
+		})
+	)
+	_expect_false(
+		bool(active_round_disconnected["connected"]),
+		"active Round切断状態をdecodeできる"
+	)
+	_expect_equal(
+		int(active_round_disconnected["reconnect_deadline_tick"]),
+		-1,
+		"active Round切断のdeadlineなしをdecodeできる"
+	)
 
 	var connected := CombatInputProtocolScript.parse_player_connection_changed_payload(
 		JSON.stringify({

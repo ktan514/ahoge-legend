@@ -1,6 +1,7 @@
 extends SceneTree
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _second_socket = null
 
@@ -46,6 +47,18 @@ func _run() -> void:
 		_fail("P2 Device認証に失敗しました。")
 		return
 	var p2_user_id := str(second_session.user_id)
+	var p1_hit_count := [0]
+	var p1_states: Array[Dictionary] = []
+	online_session.round_hit_count_changed.connect(
+		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
+			if user_id == p1_user_id:
+				p1_hit_count[0] = hit_count
+	)
+	online_session.combat_state_changed.connect(
+		func(user_id: String, state_name: String, _server_tick: int, _charge_ratio: float) -> void:
+			if user_id == p1_user_id:
+				p1_states.append({"state": state_name})
+	)
 
 	# Room code形式、guest leave、host close後のcode無効化を先に検証する。
 	var temporary_room: Dictionary = await online_session.create_friend_room()
@@ -238,10 +251,9 @@ func _run() -> void:
 		_fail("P2がFriend authoritative matchへjoinできませんでした。")
 		return
 
-	var saved: Dictionary = online_session.get_saved_match_for_current_user()
-	if str(saved.get("match_id", "")) != first_match_id \
-			or str(saved.get("match_mode", "")) != "friend":
-		_fail("Friend matchが未解決match lockへfriend modeで保存されていません。")
+	var active_before: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_before.get("ok", false)) 			or not bool(active_before.get("active", false)) 			or str(active_before.get("match_id", "")) != first_match_id 			or str(active_before.get("match_mode", "")) != OnlineConfigScript.MATCH_MODE_FRIEND 			or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("Friend matchがserver-side active contextへ保存されていません。")
 		return
 
 	var start_deadline := Time.get_ticks_msec() + 7000
@@ -251,20 +263,23 @@ func _run() -> void:
 		_fail("Friend match Round 1が開始しませんでした。")
 		return
 
-	# P2を切断し、既存15秒Reconnect契約でFriend Match Resultを確定する。
+	# P2切断後もactive Roundを進行し、P1がRound 1を終了した時点から
+	# Round境界15秒timeoutでRound 2不戦勝となり、2-0のFriend Match Resultを確定する。
 	_second_socket.close()
 	_second_socket = null
+	if not await _p1_finish_friend_round(online_session, p1_hit_count, p1_states):
+		return
 
-	var result_deadline := Time.get_ticks_msec() + 18000
+	var result_deadline := Time.get_ticks_msec() + 22000
 	while Time.get_ticks_msec() < result_deadline and (match_event[0] as Dictionary).is_empty():
 		await create_timer(0.05).timeout
 	var first_result: Dictionary = match_event[0]
 	if first_result.is_empty():
-		_fail("Friend matchのDISCONNECT_TIMEOUT結果を受信できませんでした。")
+		_fail("Friend matchのRound不戦勝後BO3結果を受信できませんでした。")
 		return
 	if str(first_result.get("winner_user_id", "")) != p1_user_id \
 			or str(first_result.get("loser_user_id", "")) != p2_user_id \
-			or str(first_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT":
+			or str(first_result.get("finish_cause", "")) != "BO3":
 		_fail("Friend matchのserver authoritative結果が期待値と一致しません。")
 		return
 
@@ -313,7 +328,7 @@ func _run() -> void:
 	if not bool(reauth.get("ok", false)) or str(reauth.get("user_id", "")) != p1_user_id:
 		_fail("Friend終了後のP1再ログインに失敗しました。")
 		return
-	var resumed: Dictionary = await online_session.resume_saved_match_after_login()
+	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) \
 			or str(resumed.get("destination", "")) != "friend_character_select":
 		_fail("終了済みFriend matchの復帰先がfriend_character_selectではありません。")
@@ -333,8 +348,17 @@ func _run() -> void:
 		_fail("終了済みFriendの遷移確定前に再戦Readyできました。")
 		return
 
-	if not online_session.acknowledge_saved_match_destination():
-		_fail("終了済みFriendの未解決match lockを遷移確定後に解除できませんでした。")
+	var p1_ack: Dictionary = await online_session.acknowledge_active_match_destination()
+	if not bool(p1_ack.get("ok", false)):
+		_fail("終了済みFriendのP1 server contextを解除できませんでした。")
+		return
+	var p2_ack = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_ACK,
+		JSON.stringify({"match_id": first_match_id})
+	)
+	if p2_ack == null or p2_ack.is_exception():
+		_fail("終了済みFriendのP2 server contextを解除できませんでした。")
 		return
 
 	# 同じroom・同じcharacterを維持し、両者が再度Readyすると新しいmatchを生成する。
@@ -366,6 +390,59 @@ func _run() -> void:
 	)
 	quit(0)
 
+
+func _p1_finish_friend_round(online_session, p1_hit_count: Array, p1_states: Array[Dictionary]) -> bool:
+	for hit_index in range(1, 6):
+		var state_start := p1_states.size()
+		var press: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+		if not bool(press.get("ok", false)):
+			_fail("Friend P1 ATTACK_PRESSを送信できませんでした。")
+			return false
+
+		var charging_deadline := Time.get_ticks_msec() + 3000
+		var charging_seen := false
+		while Time.get_ticks_msec() < charging_deadline:
+			for index in range(state_start, p1_states.size()):
+				if str(p1_states[index].get("state", "")) == "CHARGING":
+					charging_seen = true
+					break
+			if charging_seen:
+				break
+			await create_timer(0.02).timeout
+		if not charging_seen:
+			_fail("Friend P1 CHARGINGを確認できませんでした。")
+			return false
+
+		var release: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+		if not bool(release.get("ok", false)):
+			_fail("Friend P1 ATTACK_RELEASEを送信できませんでした。")
+			return false
+
+		var hit_deadline := Time.get_ticks_msec() + 4000
+		while Time.get_ticks_msec() < hit_deadline and int(p1_hit_count[0]) < hit_index:
+			await create_timer(0.02).timeout
+		if int(p1_hit_count[0]) < hit_index:
+			_fail("Friend P1 authoritative Hit count=%dを確認できませんでした。" % hit_index)
+			return false
+
+		if hit_index < 5:
+			var idle_deadline := Time.get_ticks_msec() + 4000
+			var idle_seen := false
+			while Time.get_ticks_msec() < idle_deadline:
+				for index in range(state_start, p1_states.size()):
+					if str(p1_states[index].get("state", "")) == "IDLE":
+						idle_seen = true
+				if idle_seen:
+					break
+				await create_timer(0.02).timeout
+			if not idle_seen:
+				_fail("Friend P1が次の攻撃前にIDLEへ復帰しませんでした。")
+				return false
+	return true
 
 func _rpc_dict(client, session, rpc_id: String, payload: Dictionary) -> Dictionary:
 	var result = await client.rpc_async(session, rpc_id, JSON.stringify(payload))

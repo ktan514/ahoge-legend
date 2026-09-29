@@ -1,6 +1,7 @@
 extends Control
 
 signal rematch_requested
+signal next_match_requested
 signal character_select_requested
 signal top_requested
 
@@ -18,10 +19,91 @@ func _ready() -> void:
 
 	var root := VBoxContainer.new()
 	root.alignment = BoxContainer.ALIGNMENT_CENTER
-	root.custom_minimum_size = Vector2(520.0, 0.0)
+	root.custom_minimum_size = Vector2(560.0, 0.0)
 	root.add_theme_constant_override("separation", 12)
 	center.add_child(root)
 
+	var mode := str(_summary.get("mode", "local"))
+	if mode == "ranked":
+		_build_ranked_result(root)
+	else:
+		_build_local_result(root)
+
+
+func _build_ranked_result(root: VBoxContainer) -> void:
+	var title := Label.new()
+	title.text = "YOU WIN" if bool(_summary.get("local_won", false)) else "YOU LOSE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	root.add_child(title)
+
+	var local_user_id := str(_summary.get("local_user_id", ""))
+	var round_wins: Dictionary = _summary.get("round_wins_by_user", {})
+	var local_score := int(round_wins.get(local_user_id, 0))
+	var opponent_score := 0
+	for user_id in round_wins.keys():
+		if str(user_id) != local_user_id:
+			opponent_score = int(round_wins.get(user_id, 0))
+			break
+
+	var details := Label.new()
+	details.text = "%s  %d - %d  %s" % [
+		str(_summary.get("local_character_id", "")),
+		local_score,
+		opponent_score,
+		str(_summary.get("opponent_character_id", "")),
+	]
+	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(details)
+
+	var cause := Label.new()
+	cause.text = "FINISH: %s" % str(_summary.get("finish_cause", ""))
+	cause.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(cause)
+
+	var rating_before: Dictionary = _summary.get("rating_before", {})
+	var rating_after: Dictionary = _summary.get("rating_after", {})
+	var rating := Label.new()
+	if not rating_after.is_empty() and not rating_before.is_empty():
+		var before_value := int(rating_before.get("rating", 1500))
+		var after_value := int(rating_after.get("rating", before_value))
+		var delta := after_value - before_value
+		rating.text = "Rating  %d → %d  (%+d)" % [before_value, after_value, delta]
+	elif not rating_after.is_empty():
+		rating.text = "Rating  %d" % int(rating_after.get("rating", 1500))
+	else:
+		rating.text = "Rating: server同期結果を取得できませんでした。"
+	rating.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(rating)
+
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("separation", 12)
+	root.add_child(actions)
+
+	var next_match := Button.new()
+	next_match.text = "NEXT MATCH"
+	next_match.pressed.connect(func() -> void:
+		next_match_requested.emit()
+	)
+	actions.add_child(next_match)
+
+	var character_select := Button.new()
+	character_select.text = "CHANGE CHARACTER"
+	character_select.pressed.connect(func() -> void:
+		character_select_requested.emit()
+	)
+	actions.add_child(character_select)
+
+	var top := Button.new()
+	top.text = "EXIT"
+	top.pressed.connect(func() -> void:
+		top_requested.emit()
+	)
+	actions.add_child(top)
+
+
+func _build_local_result(root: VBoxContainer) -> void:
 	var title := Label.new()
 	var winner := int(_summary.get("winner", 0))
 	title.text = "PLAYER %d WIN" % (winner + 1)

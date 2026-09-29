@@ -3,7 +3,9 @@ set -euo pipefail
 
 for arg in "$@"; do
   if [[ "$arg" == res://tests/* ]]; then
-    export AHOGE_TEST_RESET_MATCH_CONTEXT=1
+    if [[ -z "${AHOGE_DEVICE_ID_OVERRIDE:-}" ]]; then
+      export AHOGE_DEVICE_ID_OVERRIDE="ahoge-test-$-${RANDOM:-0}-$(date +%s)"
+    fi
     break
   fi
 done

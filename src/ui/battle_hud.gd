@@ -12,6 +12,8 @@ var _message: Label
 var _connection: Label
 var _countdown: Label
 var _network_overlay: Label
+var _help: Label
+var _exit_button: Button
 var _player_one_name: Label
 var _player_two_name: Label
 var _player_one_visual
@@ -84,17 +86,17 @@ func _ready() -> void:
 	_message.add_theme_font_size_override("font_size", 20)
 	root.add_child(_message)
 
-	var help := Label.new()
-	help.text = "P1: 左クリック Attack/Charge・右クリック Parry/Dodge | P2: Q Attack/Charge・E Parry/Dodge"
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(help)
+	_help = Label.new()
+	_help.text = "P1: 左クリック Attack/Charge・右クリック Parry/Dodge | P2: Q Attack/Charge・E Parry/Dodge"
+	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(_help)
 
-	var exit := Button.new()
-	exit.text = "EXIT TEST"
-	exit.pressed.connect(func() -> void:
+	_exit_button = Button.new()
+	_exit_button.text = "EXIT TEST"
+	_exit_button.pressed.connect(func() -> void:
 		exit_requested.emit()
 	)
-	root.add_child(exit)
+	root.add_child(_exit_button)
 
 	var countdown_layer := CenterContainer.new()
 	countdown_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -134,6 +136,16 @@ func set_connection_status(text: String) -> void:
 	_connection.text = text
 
 
+func set_help_text(text: String) -> void:
+	if _help != null:
+		_help.text = text
+
+
+func set_exit_button_text(text: String) -> void:
+	if _exit_button != null:
+		_exit_button.text = text
+
+
 func show_round_result(winner_label: String, round_number: int, p1_score: int, p2_score: int) -> void:
 	_countdown.text = "%s TAKES ROUND %d\nSCORE %d - %d" % [
 		winner_label,
@@ -156,6 +168,13 @@ func clear_round_countdown() -> void:
 
 func show_network_overlay(text: String) -> void:
 	_network_overlay.text = text
+
+
+func show_opponent_wait_countdown(remaining_seconds: int) -> void:
+	_status.text = "NEXT ROUND: WAITING FOR OPPONENT"
+	_timer.text = ""
+	_message.text = ""
+	_network_overlay.text = "WAITING FOR OPPONENT...\n%d" % maxi(0, remaining_seconds)
 
 
 func clear_network_overlay() -> void:

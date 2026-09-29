@@ -4,6 +4,7 @@
     "./src/combat_config.ts",
     "./src/round_config.ts",
     "./src/season_service.ts",
+    "./src/active_online_match_service.ts",
     "./src/friend_match_service.ts",
     "./src/ahoge_ranking_service.ts",
     "./src/rating_service.ts",

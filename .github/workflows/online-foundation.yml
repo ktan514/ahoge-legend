@@ -11,6 +11,8 @@ on:
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-season-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
+      - "scripts/client-ranked-gameflow-smoke.sh"
+      - "scripts/client-ranked-hv-opponent.sh"
       - "scripts/client-reconnect-smoke.sh"
       - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
@@ -48,6 +50,8 @@ on:
       - "tests/realtime_smoke.gd"
       - "tests/season_smoke.gd"
       - "tests/friend_match_smoke.gd"
+      - "tests/ranked_gameflow_smoke.gd"
+      - "tools/ranked_hv_opponent.gd"
       - "tests/reconnect_smoke.gd"
       - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
@@ -82,6 +86,8 @@ on:
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-season-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
+      - "scripts/client-ranked-gameflow-smoke.sh"
+      - "scripts/client-ranked-hv-opponent.sh"
       - "scripts/client-reconnect-smoke.sh"
       - "scripts/client-auto-reconnect-smoke.sh"
       - "scripts/client-reconnect-timeout-smoke.sh"
@@ -119,6 +125,8 @@ on:
       - "tests/realtime_smoke.gd"
       - "tests/season_smoke.gd"
       - "tests/friend_match_smoke.gd"
+      - "tests/ranked_gameflow_smoke.gd"
+      - "tools/ranked_hv_opponent.gd"
       - "tests/reconnect_smoke.gd"
       - "tests/auto_reconnect_smoke.gd"
       - "tests/reconnect_timeout_smoke.gd"
@@ -309,6 +317,10 @@ jobs:
       - name: Godot authoritative Match Result smoke
         if: matrix.group == 'match'
         run: ./scripts/client-match-result-smoke.sh
+
+      - name: Godot Ranked major GameFlow smoke
+        if: matrix.group == 'match'
+        run: bash ./scripts/client-ranked-gameflow-smoke.sh
 
       - name: Godot authoritative 85 second timer smoke
         if: matrix.group == 'long'

@@ -1,6 +1,7 @@
 extends Control
 
 signal local_test_requested
+signal online_battle_requested
 signal exit_requested
 
 
@@ -37,8 +38,10 @@ func _ready() -> void:
 	menu.add_child(local_button)
 
 	var online_button := Button.new()
-	online_button.text = "ONLINE BATTLE（後続Issue）"
-	online_button.disabled = true
+	online_button.text = "ONLINE BATTLE"
+	online_button.pressed.connect(func() -> void:
+		online_battle_requested.emit()
+	)
 	menu.add_child(online_button)
 
 	var ranking_button := Button.new()
