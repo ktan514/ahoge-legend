@@ -17,7 +17,7 @@ const MATCH_SNAPSHOT_OPCODE = 115;
 const PLAYER_CONNECTION_CHANGED_OPCODE = 116;
 
 const ROUND_COUNTDOWN_SECONDS = 3;
-const RECONNECT_GRACE_TICKS = 15 * AUTHORITATIVE_MATCH_TICK_RATE;
+const ROUND_BOUNDARY_RECONNECT_GRACE_TICKS = 15 * AUTHORITATIVE_MATCH_TICK_RATE;
 const ROUND_RESULT_HOLD_TICKS = 2 * AUTHORITATIVE_MATCH_TICK_RATE;
 
 const ROUNDS_TO_WIN_MATCH = 2;
@@ -108,6 +108,7 @@ interface AhogeRankedMatchState {
   roundCountdownStartTick: number;
   roundCountdownValue: number;
   reconnectDeadlineTickByUser: {[key: string]: number};
+  disconnectedUserIds: {[key: string]: boolean};
   roundBoundaryPauseStartTick: number;
   matchFinished: boolean;
   matchWinnerUserId: string;
@@ -205,6 +206,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundCountdownStartTick: -1,
       roundCountdownValue: -1,
       reconnectDeadlineTickByUser: {},
+      disconnectedUserIds: {},
       roundBoundaryPauseStartTick: -1,
       matchFinished: false,
       matchWinnerUserId: "",
@@ -247,7 +249,7 @@ const rankedMatchJoinAttempt: nkruntime.MatchJoinAttemptFunction<AhogeRankedMatc
     reconnectDeadline !== undefined &&
     tick >= reconnectDeadline
   ) {
-    return {state: state, accept: false, rejectMessage: "reconnect grace expired"};
+    return {state: state, accept: false, rejectMessage: "round boundary reconnect grace expired"};
   }
 
   if (!isSupportedCharacterId(state.characterIdByUser[presence.userId])) {
@@ -282,7 +284,9 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
 
   presences.forEach(function (presence): void {
     const reconnectDeadline = state.reconnectDeadlineTickByUser[presence.userId];
-    const isReconnect = reconnectDeadline !== undefined;
+    const isReconnect =
+      state.disconnectedUserIds[presence.userId] === true ||
+      reconnectDeadline !== undefined;
 
     state.presences[presence.userId] = presence;
     if (state.lastInputSequenceByUser[presence.userId] === undefined) {
@@ -303,6 +307,7 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
 
     if (isReconnect) {
       delete state.reconnectDeadlineTickByUser[presence.userId];
+      delete state.disconnectedUserIds[presence.userId];
       reconnectedUserIds.push(presence.userId);
     }
   });
@@ -338,18 +343,28 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
     delete state.presences[presence.userId];
 
     if (!state.matchFinished) {
-      const deadlineTick = tick + RECONNECT_GRACE_TICKS;
-      state.reconnectDeadlineTickByUser[presence.userId] = deadlineTick;
-      if (!isActiveRoundPhase(state)) {
+      state.disconnectedUserIds[presence.userId] = true;
+
+      if (isActiveRoundPhase(state)) {
+        // active Round中は15秒deadlineを開始しない。
+        // Roundそのものを進行し、同Round終了までいつでも復帰可能にする。
+        delete state.reconnectDeadlineTickByUser[presence.userId];
+        broadcastPlayerConnectionChanged(
+          dispatcher,
+          presence.userId,
+          false,
+          -1,
+          tick
+        );
+      } else {
         beginRoundBoundaryReconnectWait(state, tick);
+        startRoundBoundaryReconnectDeadline(
+          dispatcher,
+          state,
+          presence.userId,
+          tick
+        );
       }
-      broadcastPlayerConnectionChanged(
-        dispatcher,
-        presence.userId,
-        false,
-        deadlineTick,
-        tick
-      );
     }
   });
 
@@ -387,6 +402,43 @@ function beginRoundBoundaryReconnectWait(
   if (state.roundBoundaryPauseStartTick < 0) {
     state.roundBoundaryPauseStartTick = tick;
   }
+}
+
+function startRoundBoundaryReconnectDeadline(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  userId: string,
+  tick: number
+): void {
+  if (state.presences[userId]) {
+    return;
+  }
+  if (state.reconnectDeadlineTickByUser[userId] !== undefined) {
+    return;
+  }
+
+  const deadlineTick = tick + ROUND_BOUNDARY_RECONNECT_GRACE_TICKS;
+  state.reconnectDeadlineTickByUser[userId] = deadlineTick;
+  state.disconnectedUserIds[userId] = true;
+  broadcastPlayerConnectionChanged(
+    dispatcher,
+    userId,
+    false,
+    deadlineTick,
+    tick
+  );
+}
+
+function startRoundBoundaryReconnectDeadlines(
+  dispatcher: nkruntime.MatchDispatcher,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  participantUserIds(state).forEach(function (userId): void {
+    if (!state.presences[userId]) {
+      startRoundBoundaryReconnectDeadline(dispatcher, state, userId, tick);
+    }
+  });
 }
 
 function resumeRoundBoundaryAfterReconnect(
@@ -856,6 +908,7 @@ function finishRound(
     broadcastMatchResult(dispatcher, state, tick);
   } else if (!allExpectedPlayersConnected(state)) {
     beginRoundBoundaryReconnectWait(state, tick);
+    startRoundBoundaryReconnectDeadlines(dispatcher, state, tick);
   }
 }
 
@@ -954,6 +1007,7 @@ function startNextRound(
   }
   if (!allExpectedPlayersConnected(state)) {
     beginRoundBoundaryReconnectWait(state, tick);
+    startRoundBoundaryReconnectDeadlines(dispatcher, state, tick);
     return;
   }
 
@@ -1607,12 +1661,18 @@ function resolveReconnectTimeout(
     }
   );
 
-  // 両者同時切断は別契約で扱うため、ここでは片側timeoutだけを勝敗確定する。
+  // 両者同時切断は別契約。片側だけのRound境界timeoutだけを勝敗確定する。
   if (expiredUserIds.length !== 1) {
     return;
   }
 
   const loserUserId = expiredUserIds[0];
+  if (state.presences[loserUserId]) {
+    delete state.reconnectDeadlineTickByUser[loserUserId];
+    delete state.disconnectedUserIds[loserUserId];
+    return;
+  }
+
   let winnerUserId = "";
   const participantIds = participantUserIds(state);
   for (let index = 0; index < participantIds.length; index += 1) {
@@ -1623,6 +1683,7 @@ function resolveReconnectTimeout(
     }
   }
 
+  // 接続中playerが存在しない場合は勝者を作らない。
   if (!winnerUserId) {
     return;
   }
