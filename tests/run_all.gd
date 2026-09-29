@@ -347,6 +347,11 @@ func _test_ranked_recovery_policy() -> void:
 		2,
 		"未解決match復帰のretry上限は2回"
 	)
+	_expect_equal(
+		OnlineConfigScript.ROUND_BOUNDARY_RECONNECT_WAIT_SECONDS,
+		15,
+		"Round境界の切断復帰待機は15秒"
+	)
 
 
 func _test_ranked_character_contract() -> void:

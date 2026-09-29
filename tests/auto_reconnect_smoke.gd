@@ -191,7 +191,7 @@ func _run() -> void:
 		_fail("予期しないSocket切断でReconnectが開始しませんでした。")
 		return
 	if not _reconnect_succeeded or _snapshot.is_empty():
-		_fail("OnlineSessionが15秒以内に自動Reconnectできませんでした。")
+		_fail("OnlineSessionがactive Roundへ自動Reconnectできませんでした。")
 		return
 	if online_session.current_match_id != original_match_id:
 		_fail("Reconnect後にmatch IDが変わりました。")

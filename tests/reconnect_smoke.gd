@@ -197,17 +197,34 @@ func _run() -> void:
 		_fail("切断前timerを取得できませんでした。")
 		return
 
+	var disconnect_event_start := _p1_connections.size()
 	_second_socket.close()
 	_second_socket = null
 
 	if not await _wait_connection(_p2_user_id, false, 3000):
 		_fail("P2切断eventをP1が受信できませんでした。")
 		return
+	var active_disconnect := _connection_event_since(
+		_p2_user_id,
+		false,
+		disconnect_event_start
+	)
+	if active_disconnect.is_empty() 			or int(active_disconnect.get("reconnect_deadline_tick", 0)) != -1:
+		_fail("active Round中の切断で15秒deadlineが開始されています。")
+		return
 
 	if not await _wait_timer_less_than(timer_before_disconnect, 2500):
 		_fail("active Round中のP2切断でtimerが停止しました。")
 		return
 
+	# active Round中は15秒を超えても切断敗北にせず、同Roundへの復帰権を保持する。
+	await create_timer(16.2).timeout
+	var active_after_15: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_after_15.get("ok", false)) 			or not bool(active_after_15.get("active", false)) 			or str(active_after_15.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("active Round中に15秒経過しただけでmatchが終了しました。")
+		return
+
+	var boundary_event_start := _p1_connections.size()
 	for hit_index in range(1, 6):
 		if not await _p1_attack_once(online_session, hit_index):
 			return
@@ -236,6 +253,15 @@ func _run() -> void:
 		return
 	if int(score.get("round_wins_by_user", {}).get(_p1_user_id, -1)) != 1:
 		_fail("P2切断中のRound取得数が1ではありません。")
+		return
+
+	var boundary_disconnect := await _wait_boundary_deadline(
+		_p2_user_id,
+		boundary_event_start,
+		3000
+	)
+	if boundary_disconnect.is_empty() 			or int(boundary_disconnect.get("reconnect_deadline_tick", -1)) <= int(boundary_disconnect.get("server_tick", 0)):
+		_fail("Round終了後にP2の15秒boundary deadlineが開始されませんでした。")
 		return
 
 	await create_timer(2.5).timeout
@@ -464,6 +490,33 @@ func _wait_connection(user_id: String, connected: bool, timeout_ms: int) -> bool
 				return true
 		await create_timer(0.02).timeout
 	return false
+
+
+func _connection_event_since(
+	user_id: String,
+	connected: bool,
+	start_index: int
+) -> Dictionary:
+	for index in range(start_index, _p1_connections.size()):
+		var event := _p1_connections[index]
+		if str(event.get("user_id", "")) == user_id 				and bool(event.get("connected", false)) == connected:
+			return event
+	return {}
+
+
+func _wait_boundary_deadline(
+	user_id: String,
+	start_index: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for index in range(start_index, _p1_connections.size()):
+			var event := _p1_connections[index]
+			if str(event.get("user_id", "")) == user_id 					and not bool(event.get("connected", true)) 					and int(event.get("reconnect_deadline_tick", -1)) >= 0:
+				return event
+		await create_timer(0.02).timeout
+	return {}
 
 
 func _fail(message: String) -> void:
