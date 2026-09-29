@@ -115,12 +115,14 @@ interface AhogeRankedMatchState {
   matchFinishedAtUnixMs: number;
   ratingSettlementDone: boolean;
   ratingSettlementRetryTick: number;
+  activeMatchResultPersisted: boolean;
+  activeMatchResultRetryTick: number;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
   ctx,
   logger,
-  _nk,
+  nk,
   params
 ) {
   const expectedUserIds: {[key: string]: boolean} = {};
@@ -155,6 +157,19 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       if (isSupportedCharacterId(characterId)) characterIdByUser[userId] = characterId;
     });
   }
+
+  const matchId = String(ctx.matchId || "");
+  const participantIds = Object.keys(expectedUserIds);
+  if (!matchId || participantIds.length !== 2) {
+    throw new Error("invalid authoritative match participants");
+  }
+  createActiveOnlineMatchForUsers(
+    nk,
+    participantIds,
+    matchId,
+    matchMode,
+    Date.now()
+  );
 
   logger.info("ahoge_ranked authoritative match initialized.");
 
@@ -196,7 +211,9 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       matchFinishCause: MATCH_FINISH_CAUSE_NONE,
       matchFinishedAtUnixMs: -1,
       ratingSettlementDone: false,
-      ratingSettlementRetryTick: 0
+      ratingSettlementRetryTick: 0,
+      activeMatchResultPersisted: false,
+      activeMatchResultRetryTick: 0
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -1493,6 +1510,56 @@ function settleRankedRatingIfNeeded(
   state.ratingSettlementRetryTick = tick + AUTHORITATIVE_MATCH_TICK_RATE;
 }
 
+
+function persistActiveMatchResultIfNeeded(
+  nk: nkruntime.Nakama,
+  state: AhogeRankedMatchState,
+  tick: number
+): void {
+  if (!state.matchFinished || state.activeMatchResultPersisted) {
+    return;
+  }
+  if (tick < state.activeMatchResultRetryTick) {
+    return;
+  }
+
+  const snapshot = {
+    server_tick: tick,
+    match_mode: state.matchMode,
+    round_number: state.roundNumber,
+    round_wins_by_user: roundWinsSnapshot(state),
+    round_hit_count_by_user: state.roundHitCountByUser,
+    remaining_seconds: state.roundRemainingSeconds,
+    round_finished: state.roundFinished,
+    round_winner_user_id: state.roundWinnerUserId,
+    round_finish_cause: state.roundFinishCause,
+    round_awaiting_overtime: state.roundAwaitingOvertime,
+    round_overtime: state.roundOvertime,
+    round_countdown_active: state.roundCountdownActive,
+    round_countdown_value: state.roundCountdownValue,
+    match_finished: true,
+    match_winner_user_id: state.matchWinnerUserId,
+    match_finish_cause: state.matchFinishCause,
+    character_id_by_user: state.characterIdByUser
+  };
+
+  const persisted = markActiveOnlineMatchResult(
+    nk,
+    participantUserIds(state),
+    state.matchId,
+    state.matchMode,
+    snapshot,
+    Date.now()
+  );
+  if (persisted) {
+    state.activeMatchResultPersisted = true;
+    return;
+  }
+
+  state.activeMatchResultRetryTick =
+    tick + AUTHORITATIVE_MATCH_TICK_RATE;
+}
+
 function settleFriendRoomIfNeeded(
   nk: nkruntime.Nakama,
   state: AhogeRankedMatchState,
@@ -1586,6 +1653,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   resolveReconnectTimeout(dispatcher, state, tick);
   settleRankedRatingIfNeeded(nk, logger, state, tick);
   settleFriendRoomIfNeeded(nk, state, tick);
+  persistActiveMatchResultIfNeeded(nk, state, tick);
 
   if (
     state.roundResetPending &&

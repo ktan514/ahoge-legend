@@ -27,6 +27,8 @@ let InitModule: nkruntime.InitModule = function (
   initializer.registerRpc("ahoge_current_rating", currentRatingRpc);
   initializer.registerRpc("ahoge_player_ranking", playerRankingRpc);
   initializer.registerRpc("ahoge_legend_ranking", ahogeLegendRankingRpc);
+  initializer.registerRpc("ahoge_active_match_get", activeOnlineMatchGetRpc);
+  initializer.registerRpc("ahoge_active_match_ack", activeOnlineMatchAckRpc);
   initializer.registerRpc("ahoge_friend_room_create", friendRoomCreateRpc);
   initializer.registerRpc("ahoge_friend_room_join", friendRoomJoinRpc);
   initializer.registerRpc("ahoge_friend_room_status", friendRoomStatusRpc);

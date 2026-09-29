@@ -363,6 +363,7 @@ function friendRoomJoinRpc(
     throw new Error("authentication required");
   }
 
+  requireNoActiveOnlineMatchForUser(nk, ctx.userId);
   const parsed = parseFriendRoomPayload(payload);
   const roomCode = parseFriendRoomCode(parsed);
   const now = Date.now();
