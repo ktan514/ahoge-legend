@@ -238,10 +238,9 @@ func _run() -> void:
 		_fail("P2がFriend authoritative matchへjoinできませんでした。")
 		return
 
-	var saved: Dictionary = online_session.get_saved_match_for_current_user()
-	if str(saved.get("match_id", "")) != first_match_id \
-			or str(saved.get("match_mode", "")) != "friend":
-		_fail("Friend matchが未解決match lockへfriend modeで保存されていません。")
+	var active_before: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_before.get("ok", false)) 			or not bool(active_before.get("active", false)) 			or str(active_before.get("match_id", "")) != first_match_id 			or str(active_before.get("match_mode", "")) != OnlineConfigScript.MATCH_MODE_FRIEND 			or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("Friend matchがserver-side active contextへ保存されていません。")
 		return
 
 	var start_deadline := Time.get_ticks_msec() + 7000
@@ -313,7 +312,7 @@ func _run() -> void:
 	if not bool(reauth.get("ok", false)) or str(reauth.get("user_id", "")) != p1_user_id:
 		_fail("Friend終了後のP1再ログインに失敗しました。")
 		return
-	var resumed: Dictionary = await online_session.resume_saved_match_after_login()
+	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) \
 			or str(resumed.get("destination", "")) != "friend_character_select":
 		_fail("終了済みFriend matchの復帰先がfriend_character_selectではありません。")
@@ -333,8 +332,17 @@ func _run() -> void:
 		_fail("終了済みFriendの遷移確定前に再戦Readyできました。")
 		return
 
-	if not online_session.acknowledge_saved_match_destination():
-		_fail("終了済みFriendの未解決match lockを遷移確定後に解除できませんでした。")
+	var p1_ack: Dictionary = await online_session.acknowledge_active_match_destination()
+	if not bool(p1_ack.get("ok", false)):
+		_fail("終了済みFriendのP1 server contextを解除できませんでした。")
+		return
+	var p2_ack = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_ACK,
+		JSON.stringify({"match_id": first_match_id})
+	)
+	if p2_ack == null or p2_ack.is_exception():
+		_fail("終了済みFriendのP2 server contextを解除できませんでした。")
 		return
 
 	# 同じroom・同じcharacterを維持し、両者が再度Readyすると新しいmatchを生成する。
