@@ -8,6 +8,9 @@ var _second_ticket: String = ""
 var _second_match_id: String = ""
 var _second_failure: String = ""
 var _second_match_result: Dictionary = {}
+var _second_round_result: Dictionary = {}
+var _second_connection_events: Array[Dictionary] = []
+var _second_input_sequence: int = 0
 
 
 func _init() -> void:
@@ -155,14 +158,77 @@ func _run() -> void:
 		_fail("P1のserver-side active matchが保存されていません。")
 		return
 
-	# P1のアプリ終了相当。server側ではP1が切断状態になるが保存matchは残す。
+	# P1のアプリ終了相当。active Round中なのでこの時点では15秒deadlineを開始しない。
+	var disconnect_event_start := _second_connection_events.size()
 	online_session.clear_runtime_session_preserving_match()
 
+	var active_disconnect := await _wait_second_connection_event(
+		p1_user_id,
+		false,
+		disconnect_event_start,
+		3000
+	)
+	if active_disconnect.is_empty():
+		_fail("P1切断eventをP2が受信できませんでした。")
+		return
+	if int(active_disconnect.get("reconnect_deadline_tick", 0)) != -1:
+		_fail("active Round中の切断で15秒deadlineが開始されています。")
+		return
+
+	# active Round中は15秒を超えてもmatchを終了しない。
+	await create_timer(16.2).timeout
+	if not _second_match_result.is_empty():
+		_fail("active Round中に15秒経過しただけでMatch Resultが確定しました。")
+		return
+	var active_rpc = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_GET
+	)
+	if active_rpc == null or active_rpc.is_exception():
+		_fail("15秒経過後のactive match状態を確認できませんでした。")
+		return
+	var active_parsed = JSON.parse_string(str(active_rpc.payload))
+	if not active_parsed is Dictionary 			or not bool((active_parsed as Dictionary).get("active", false)) 			or str((active_parsed as Dictionary).get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("active Round中15秒経過後もACTIVEが維持されていません。")
+		return
+
+	# P2が切断中P1へ5Hit取り、Round 1を通常ルールで終了させる。
+	var boundary_event_start := _second_connection_events.size()
+	for hit_index in range(1, 6):
+		if not await _second_attack_once(hit_index):
+			return
+
+	var round_result_deadline := Time.get_ticks_msec() + 5000
+	while Time.get_ticks_msec() < round_result_deadline and _second_round_result.is_empty():
+		await create_timer(0.05).timeout
+	if _second_round_result.is_empty():
+		_fail("P1切断中にRound 1を終了できませんでした。")
+		return
+	if str(_second_round_result.get("winner_user_id", "")) != p2_user_id:
+		_fail("P1切断中のRound 1 winnerがP2ではありません。")
+		return
+
+	var boundary_disconnect := await _wait_second_boundary_deadline(
+		p1_user_id,
+		boundary_event_start,
+		3000
+	)
+	if boundary_disconnect.is_empty():
+		_fail("Round終了後にP1の15秒boundary deadlineが開始されませんでした。")
+		return
+
+	# Round取得だけではRatingを更新しない。
+	var p2_rating_after_round := await _read_current_rating(second_client, second_session)
+	if not _same_rating_record(initial_p2_rating, p2_rating_after_round):
+		_fail("Round 1終了時点でPlayer Ratingが更新されました。")
+		return
+
+	# Round境界15秒timeoutで初めてP2のMatch Win / P1のMatch Loseを確定する。
 	var result_deadline := Time.get_ticks_msec() + 18000
 	while Time.get_ticks_msec() < result_deadline and _second_match_result.is_empty():
 		await create_timer(0.05).timeout
 	if _second_match_result.is_empty():
-		_fail("15秒超過後のMatch ResultをP2が受信できませんでした。")
+		_fail("Round境界15秒超過後のMatch ResultをP2が受信できませんでした。")
 		return
 
 	if str(_second_match_result.get("winner_user_id", "")) != p2_user_id 			or str(_second_match_result.get("loser_user_id", "")) != p1_user_id 			or str(_second_match_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT" 			or int(_second_match_result.get("final_round_number", -1)) != 1:
@@ -170,8 +236,8 @@ func _run() -> void:
 		return
 
 	var scores: Dictionary = _second_match_result.get("round_wins_by_user", {})
-	if int(scores.get(p1_user_id, -1)) != 0 or int(scores.get(p2_user_id, -1)) != 0:
-		_fail("切断敗北でBO3 scoreが人工的に変更されました。")
+	if int(scores.get(p1_user_id, -1)) != 0 or int(scores.get(p2_user_id, -1)) != 1:
+		_fail("切断敗北時のRound scoreが通常Round Resultと一致しません。")
 		return
 
 	# 15秒を超えても元matchは未解決lockとして残る。
