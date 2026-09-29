@@ -1017,17 +1017,12 @@ func leave_friend_room(room_code: String) -> Dictionary:
 
 
 func join_friend_match_from_room(room: Dictionary) -> Dictionary:
+	var expected_match_id := str(room.get("current_match_id", ""))
 	var active_check: Dictionary = await refresh_active_online_match()
 	if not bool(active_check.get("ok", false)):
-		return _friend_room_fail(
-			"active_match_check",
-			str(active_check.get("message", "未解決対戦をserverで確認できませんでした。"))
-		)
-	if bool(active_check.get("active", false)) or has_unresolved_match_context():
-		return _friend_room_fail(
-			"join_match",
-			"未解決の対戦があります。元の対戦を復帰または終了処理してから新しいFriend matchへ参加してください。"
-		)
+		return _friend_room_fail("active_match_check", str(active_check.get("message", "")))
+	if not bool(active_check.get("active", false)) 			or str(active_check.get("match_id", "")) != expected_match_id 			or str(active_check.get("match_mode", "")) != OnlineConfigScript.MATCH_MODE_FRIEND:
+		return _friend_room_fail("active_match", "Friend対戦のserver contextが一致しません。")
 	if not is_realtime_connected():
 		return _friend_room_fail(
 			"join_match",
