@@ -1359,10 +1359,9 @@ func is_reconnecting() -> bool:
 
 
 func reconnect_remaining_seconds() -> int:
-	if not _reconnect_in_progress:
-		return 0
-	var remaining_ms := maxi(0, _reconnect_deadline_msec - Time.get_ticks_msec())
-	return int(ceil(float(remaining_ms) / 1000.0))
+	# active Round中のReconnectにclient側15秒deadlineは持たない。
+	# 15秒timeoutはserverがRound境界へ入った時点から管理する。
+	return 0
 
 
 func _on_realtime_connected(candidate) -> void:
@@ -1401,8 +1400,8 @@ func _begin_reconnect() -> void:
 	_reconnect_in_progress = true
 	_reconnect_generation += 1
 	var generation := _reconnect_generation
-	_reconnect_deadline_msec = Time.get_ticks_msec() + OnlineConfigScript.RECONNECT_GRACE_SECONDS * 1000
-	reconnect_started.emit(OnlineConfigScript.RECONNECT_GRACE_SECONDS)
+	_reconnect_deadline_msec = 0
+	reconnect_started.emit(0)
 	call_deferred("_run_reconnect_loop", generation)
 
 
@@ -1421,7 +1420,8 @@ func _run_reconnect_loop(generation: int) -> void:
 			if join_result != null and not join_result.is_exception() and bool(join_result.authoritative):
 				joined_match = join_result
 				current_match_id = str(join_result.match_id)
-				# 15秒以内なら進行中snapshot、超過後なら終了済みsnapshotをserverが返す。
+				# active Round中は時間制限なく同じRoundへ復帰できる。
+				# Round境界timeout後ならserverの確定Resultへ復帰する。
 				# MATCH_SNAPSHOT受信時点でreconnect_succeededとする。
 				return
 

@@ -91,11 +91,7 @@ func _connect_online_signals() -> void:
 
 func _process(_delta: float) -> void:
 	if _online_session.is_reconnecting():
-		var remaining: int = int(_online_session.reconnect_remaining_seconds())
-		if remaining > 0:
-			hud.show_network_overlay("RECONNECTING...\n%d" % remaining)
-		else:
-			hud.show_network_overlay("RESTORING ORIGINAL MATCH...")
+		hud.show_network_overlay("RECONNECTING...")
 
 
 func _input(event: InputEvent) -> void:
@@ -417,7 +413,7 @@ func _emit_ranked_match_completed(summary: Dictionary) -> void:
 func _on_reconnect_started(_grace_seconds: int) -> void:
 	_input_ready = false
 	hud.set_connection_status("RANKED: RECONNECTING")
-	hud.show_network_overlay("RECONNECTING...\n%d" % _online_session.reconnect_remaining_seconds())
+	hud.show_network_overlay("RECONNECTING...")
 
 
 func _on_reconnect_succeeded(_match_id: String) -> void:
