@@ -1440,7 +1440,7 @@ AUTHENTICATED
 認証前のSocket接続は受け付けない。
 
 この段階ではMatchmaker、match join、対戦入力送信、再接続制御を実装しない。
-意図しない切断後15秒の復帰仕様は後続Issueで実装する。
+切断復帰は後続Issueで実装し、active Round中はdeadlineなし、Round境界のみ15秒待機とする。
 
 Socket接続URLにはSession tokenが含まれるため、Nakama SDKのDEBUGログを通常運用で有効にしない。
 HTTP認証と同様、raw tokenをログへ出力しない。
@@ -1846,9 +1846,9 @@ Match Result確定時、serverは対応roomを `POST_MATCH` へ戻し、両者�
 
 #### 15.2.7 Reconnect / 未解決match lock
 
-Friend matchへjoinした後は既存 `MatchResumeStore` に `match_mode=friend` として保存する。
+Friend matchへjoinした後は既存 Nakama `user_id` 単位のserver-side `active_online_match/current` に `match_mode=friend` として保持する。
 
-- 進行中Friend matchへは既存15秒Reconnect契約で同一matchへ復帰する
+- 進行中Friend matchもRankedと同じく、active Round中はdeadlineなしで同一matchへ復帰し、Round境界のみ15秒待機する
 - 終了済みFriend matchへ再ログインした場合はResultを再表示せずFriend文脈のCharacter Selectへ戻す
 - 未解決match contextがある間、`OnlineSession` は新しいFriend room作成・参加・対戦開始を拒否する
 - Match Not Found / Invalid Match IDの安全解除契約を変更しない
