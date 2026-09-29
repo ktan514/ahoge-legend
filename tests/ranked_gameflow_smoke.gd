@@ -24,16 +24,14 @@ func _run() -> void:
 
 	var app = AppRootScene.instantiate()
 	get_root().add_child(app)
-	await process_frame
-	if str(app.call("current_screen_name")) != "TopMenu":
-		_fail("起動時にTopMenuが表示されません。", app)
+	if not await _wait_screen(app, "TopMenu", 6000):
+		_fail("起動時のserver状態確認後にTopMenuが表示されません。", app)
 		return
 
 	var top = app.get_child(0)
 	top.emit_signal("online_battle_requested")
-	await process_frame
-	if str(app.call("current_screen_name")) != "BattleModeSelect":
-		_fail("ONLINE BATTLEからBattleModeSelectへ遷移しません。", app)
+	if not await _wait_screen(app, "BattleModeSelect", 5000):
+		_fail("ONLINE BATTLEからserver状態確認後にBattleModeSelectへ遷移しません。", app)
 		return
 
 	var mode_screen = app.get_child(0)
@@ -122,6 +120,34 @@ func _run() -> void:
 		_fail("Ranked初期snapshotのmatch_modeが不正です。", app)
 		return
 
+	var third_client = nakama.create_client(
+		OnlineConfigScript.SERVER_KEY,
+		OnlineConfigScript.HOST,
+		OnlineConfigScript.PORT,
+		OnlineConfigScript.SCHEME,
+		OnlineConfigScript.CLIENT_TIMEOUT_SECONDS,
+		OnlineConfigScript.CLIENT_LOG_LEVEL
+	)
+	var third_session = await third_client.authenticate_device_async(
+		Crypto.new().generate_random_bytes(32).hex_encode(),
+		null,
+		true
+	)
+	if third_session == null or third_session.is_exception():
+		_fail("P3 Device認証に失敗しました。", app)
+		return
+	var third_active_rpc = await third_client.rpc_async(
+		third_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_GET
+	)
+	if third_active_rpc == null or third_active_rpc.is_exception():
+		_fail("P3 active match確認に失敗しました。", app)
+		return
+	var third_active = JSON.parse_string(str(third_active_rpc.payload))
+	if not third_active is Dictionary or bool((third_active as Dictionary).get("active", false)):
+		_fail("P1/P2の未解決matchが別user P3へ混入しています。", app)
+		return
+
 	# runtime接続を失っても未解決match lockを保持し、TOPのONLINE BATTLE再選択で
 	# 新規matchmakingへ行かず元のauthoritative matchへ強制復帰する。
 	var original_match_id := str(online_session.current_match_id)
@@ -147,8 +173,11 @@ func _run() -> void:
 	if not await _wait_screen(app, "MatchResult", 25000):
 		_fail("authoritative Match ResultからUI-11へ遷移しません。", app)
 		return
+	if not await _wait_no_active_match(online_session, 6000):
+		_fail("UI-11表示確定後もserver-side active matchが残っています。", app)
+		return
 	if not online_session.can_start_new_online_match():
-		_fail("UI-11表示確定後も未解決match lockが残っています。", app)
+		_fail("UI-11表示確定後もruntime lockが残っています。", app)
 		return
 
 	var result_screen = app.get_child(0)
@@ -193,6 +222,16 @@ func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
 		if not _second_failure.is_empty():
 			return false
 		if str(app.call("current_screen_name")) == screen_name:
+			return true
+		await create_timer(0.05).timeout
+	return false
+
+
+func _wait_no_active_match(online_session, timeout_ms: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var active: Dictionary = await online_session.refresh_active_online_match()
+		if bool(active.get("ok", false)) and not bool(active.get("active", false)):
 			return true
 		await create_timer(0.05).timeout
 	return false
