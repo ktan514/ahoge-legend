@@ -28,15 +28,25 @@ func _ready() -> void:
 		_show_m1_authoritative_battle()
 		return
 
-	if _online_session.has_saved_match_context_file():
-		_show_loading("RESTORING ONLINE MATCH...")
-		call_deferred("_restore_saved_match_flow")
-	else:
+	_show_loading("CHECKING ONLINE STATE...")
+	call_deferred("_initialize_online_state")
+
+
+func _initialize_online_state() -> void:
+	if not _online_session.is_authenticated():
+		var auth_result: Dictionary = await _online_session.authenticate_local_device()
+		if not bool(auth_result.get("ok", false)):
+			_show_top_menu()
+			return
+
+	var active: Dictionary = await _online_session.refresh_active_online_match()
+	if not bool(active.get("ok", false)):
 		_show_top_menu()
-
-
-func _restore_saved_match_flow() -> void:
-	await _force_resume_unresolved_ranked_match()
+		return
+	if bool(active.get("active", false)):
+		await _force_resume_unresolved_ranked_match()
+		return
+	_show_top_menu()
 
 
 func _show_top_menu() -> void:
@@ -47,10 +57,18 @@ func _show_top_menu() -> void:
 
 
 func _on_online_battle_requested() -> void:
-	if (
-		_online_session.has_saved_match_context_file()
-		or _online_session.has_unresolved_match_context()
-	):
+	_show_loading("CHECKING ONLINE STATE...")
+	if not _online_session.is_authenticated():
+		var auth_result: Dictionary = await _online_session.authenticate_local_device()
+		if not bool(auth_result.get("ok", false)):
+			_show_top_menu()
+			return
+
+	var active: Dictionary = await _online_session.refresh_active_online_match()
+	if not bool(active.get("ok", false)):
+		_show_top_menu()
+		return
+	if bool(active.get("active", false)):
 		await _force_resume_unresolved_ranked_match()
 		return
 	_show_battle_mode_select()
@@ -63,13 +81,6 @@ func _show_battle_mode_select() -> void:
 
 
 func _on_ranked_requested(screen: Control) -> void:
-	if (
-		_online_session.has_saved_match_context_file()
-		or _online_session.has_unresolved_match_context()
-	):
-		await _force_resume_unresolved_ranked_match()
-		return
-
 	if is_instance_valid(screen):
 		screen.call("set_status", "Nakamaへ接続中...")
 
@@ -80,10 +91,12 @@ func _on_ranked_requested(screen: Control) -> void:
 				screen.call("set_status", str(auth_result.get("message", "認証に失敗しました。")))
 			return
 
-	if (
-		_online_session.has_saved_match_context_file()
-		or _online_session.has_unresolved_match_context()
-	):
+	var active: Dictionary = await _online_session.refresh_active_online_match()
+	if not bool(active.get("ok", false)):
+		if is_instance_valid(screen) and _current_screen == screen:
+			screen.call("set_status", str(active.get("message", "未解決対戦を確認できませんでした。")))
+		return
+	if bool(active.get("active", false)):
 		await _force_resume_unresolved_ranked_match()
 		return
 
