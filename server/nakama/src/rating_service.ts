@@ -193,10 +193,9 @@ function rankedMatchSettlementExists(
 }
 
 function shouldUpdateRatingForFinishCause(finishCause: string): boolean {
-  return (
-    finishCause === MATCH_FINISH_CAUSE_BO3 ||
-    finishCause === MATCH_FINISH_CAUSE_DISCONNECT_TIMEOUT
-  );
+  // Round境界timeoutはDISCONNECT_FORFEITというRound ResultとしてBO3へ集約する。
+  // Ratingは最終的に2本先取したMatch Resultに対して1回だけ更新する。
+  return finishCause === MATCH_FINISH_CAUSE_BO3;
 }
 
 function settleRankedMatchRating(

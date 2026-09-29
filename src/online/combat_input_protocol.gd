@@ -290,25 +290,19 @@ static func parse_match_result_payload(payload: String) -> Dictionary:
 	var finish_cause := str(parsed["finish_cause"])
 	if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
 		return {}
-	if finish_cause not in ["BO3", "DISCONNECT_TIMEOUT"]:
+	if finish_cause != "BO3":
 		return {}
 	if not _valid_round_wins(parsed["round_wins_by_user"]):
 		return {}
 	var scores: Dictionary = parsed["round_wins_by_user"]
 	var final_round_number := int(parsed["final_round_number"])
-	if finish_cause == "BO3":
-		if int(scores.get(winner_user_id, -1)) != 2:
-			return {}
-		var loser_rounds := int(scores.get(loser_user_id, -1))
-		if loser_rounds < 0 or loser_rounds > 1:
-			return {}
-		if final_round_number < 2 or final_round_number > 3:
-			return {}
-	else:
-		if int(scores.get(winner_user_id, -1)) < 0 or int(scores.get(loser_user_id, -1)) < 0:
-			return {}
-		if final_round_number < 1 or final_round_number > 3:
-			return {}
+	if int(scores.get(winner_user_id, -1)) != 2:
+		return {}
+	var loser_rounds := int(scores.get(loser_user_id, -1))
+	if loser_rounds < 0 or loser_rounds > 1:
+		return {}
+	if final_round_number < 2 or final_round_number > 3:
+		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
 	return parsed
@@ -393,7 +387,7 @@ static func parse_match_snapshot_payload(payload: String) -> Dictionary:
 			return {}
 	var match_finish_cause := str(parsed["match_finish_cause"])
 	if bool(parsed["match_finished"]):
-		if match_finish_cause not in ["BO3", "DISCONNECT_TIMEOUT"]:
+		if match_finish_cause != "BO3":
 			return {}
 	else:
 		if match_finish_cause != "NONE":

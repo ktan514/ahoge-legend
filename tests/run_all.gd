@@ -701,7 +701,7 @@ func _test_authoritative_match_result_protocol() -> void:
 	_expect_equal(int(event["final_round_number"]), 3, "Match Result final roundをdecodeできる")
 	_expect_equal(str(event["finish_cause"]), "BO3", "Match Result finish causeをdecodeできる")
 
-	var disconnect_payload := JSON.stringify({
+	var legacy_disconnect_payload := JSON.stringify({
 		"winner_user_id": "player-1",
 		"loser_user_id": "player-2",
 		"round_wins_by_user": {"player-1": 0, "player-2": 0},
@@ -709,9 +709,13 @@ func _test_authoritative_match_result_protocol() -> void:
 		"finish_cause": "DISCONNECT_TIMEOUT",
 		"server_tick": 700,
 	})
-	var disconnect_event := CombatInputProtocolScript.parse_match_result_payload(disconnect_payload)
-	_expect_equal(str(disconnect_event["finish_cause"]), "DISCONNECT_TIMEOUT", "切断敗北Match Resultをdecodeできる")
-	_expect_equal(int(disconnect_event["round_wins_by_user"]["player-1"]), 0, "切断敗北でRound scoreを改ざんしない")
+	var legacy_disconnect_event := CombatInputProtocolScript.parse_match_result_payload(
+		legacy_disconnect_payload
+	)
+	_expect_true(
+		legacy_disconnect_event.is_empty(),
+		"旧Match強制敗北DISCONNECT_TIMEOUTを拒否する"
+	)
 
 	var invalid := CombatInputProtocolScript.parse_match_result_payload(
 		JSON.stringify({
