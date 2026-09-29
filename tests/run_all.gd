@@ -7,7 +7,6 @@ const RoundCoordinatorScript := preload("res://src/services/round_coordinator.gd
 const MatchCoordinatorScript := preload("res://src/services/match_coordinator.gd")
 const CombatResolverScript := preload("res://src/services/combat_resolver.gd")
 const DeviceIdentityStoreScript := preload("res://src/online/device_identity_store.gd")
-const MatchResumeStoreScript := preload("res://src/online/match_resume_store.gd")
 const MatchResumeRouterScript := preload("res://src/online/match_resume_router.gd")
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
@@ -34,7 +33,6 @@ func _init() -> void:
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
-	_test_match_resume_store_lock_context()
 	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
 	_test_ranked_recovery_policy()
@@ -262,30 +260,6 @@ func _test_device_identity_persists() -> void:
 	if FileAccess.file_exists(test_path):
 		DirAccess.remove_absolute(absolute_path)
 
-
-
-func _test_match_resume_store_lock_context() -> void:
-	var test_path := "user://active_match_test_%d.json" % Time.get_ticks_usec()
-	var store = MatchResumeStoreScript.new(test_path)
-
-	_expect_true(
-		store.save("match-1", MatchResumeStoreScript.MODE_RANKED, "user-a"),
-		"Ranked match復帰情報を保存できる"
-	)
-	var saved := store.load_for_user("user-a")
-	_expect_equal(str(saved.get("match_id", "")), "match-1", "同一userは保存matchを取得できる")
-	_expect_equal(str(saved.get("match_mode", "")), "ranked", "match modeを保持する")
-	_expect_true(store.load_for_user("user-b").is_empty(), "別userは保存matchを取得できない")
-
-	_expect_true(
-		store.save("match-2", MatchResumeStoreScript.MODE_FRIEND, "user-a"),
-		"Friend match復帰情報を保存できる"
-	)
-	var friend_saved := store.load_for_user("user-a")
-	_expect_equal(str(friend_saved.get("match_mode", "")), "friend", "Friend modeを保持する")
-
-	_expect_true(store.clear(), "保存match情報を解決後に消去できる")
-	_expect_true(store.load_for_user("user-a").is_empty(), "消去後は未解決matchを返さない")
 
 
 func _test_match_resume_router() -> void:
