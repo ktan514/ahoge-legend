@@ -214,7 +214,7 @@ func _run() -> void:
 		_second_socket = null
 
 	# active Round中の切断だけでは敗北にしない。serverがP2切断を認識した後、
-	# P1が5HitでRound 1を終え、Round境界15秒timeoutでMatch Resultを確定させる。
+	# P1が5HitでRound 1を終え、Round境界15秒timeoutでRound 2不戦勝となり2-0のBO3 Resultを確定させる。
 	if not await _p1_finish_round(online_session, p1_hit_count, p1_states):
 		return
 
@@ -227,8 +227,8 @@ func _run() -> void:
 	if str((finished_result[0] as Dictionary).get("winner_user_id", "")) != p1_user_id:
 		_fail("終了済みRankedのserver確定winnerがP1ではありません。")
 		return
-	if str((finished_result[0] as Dictionary).get("finish_cause", "")) != "DISCONNECT_TIMEOUT":
-		_fail("終了済みRankedのfinish causeがDISCONNECT_TIMEOUTではありません。")
+	if str((finished_result[0] as Dictionary).get("finish_cause", "")) != "BO3":
+		_fail("Round不戦勝後の終了済みRanked finish causeがBO3ではありません。")
 		return
 
 	# 次のsmokeがbaselineを読む前に、今回のAHOGE projection完了まで待つ。

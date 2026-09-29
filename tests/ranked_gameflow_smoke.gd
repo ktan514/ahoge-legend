@@ -196,7 +196,7 @@ func _run() -> void:
 		return
 
 	# P2切断後もactive Roundは進行する。P1がRound 1を終了させた時点から
-	# 15秒のRound境界復帰待機を開始し、timeoutでserver authoritativeに勝敗確定する。
+	# 15秒のRound境界復帰待機を開始し、timeoutでRound 2不戦勝→2-0のBO3 Resultをserver authoritativeに確定する。
 	_second_socket.close()
 	_second_socket = null
 	if not await _p1_finish_round(online_session, app, p1_hit_count, p1_states):

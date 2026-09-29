@@ -623,6 +623,23 @@ func _test_authoritative_round_result_protocol() -> void:
 	_expect_equal(event["finish_cause"], "HIT_LIMIT", "Round Result finish causeをdecodeできる")
 	_expect_equal(int(event["winner_hits"]), 5, "Round Result winner hitsをdecodeできる")
 
+	var forfeit_event := CombatInputProtocolScript.parse_round_result_payload(
+		JSON.stringify({
+			"round_number": 2,
+			"winner_user_id": "player-1",
+			"loser_user_id": "player-2",
+			"finish_cause": "DISCONNECT_FORFEIT",
+			"winner_hits": 0,
+			"loser_hits": 0,
+			"server_tick": 2000,
+		})
+	)
+	_expect_equal(
+		str(forfeit_event.get("finish_cause", "")),
+		"DISCONNECT_FORFEIT",
+		"Round境界timeoutの不戦敗Resultをdecodeできる"
+	)
+
 	var invalid := CombatInputProtocolScript.parse_round_result_payload(
 		JSON.stringify({
 			"round_number": 0,

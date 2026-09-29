@@ -264,7 +264,7 @@ func _run() -> void:
 		return
 
 	# P2切断後もactive Roundを進行し、P1がRound 1を終了した時点から
-	# Round境界15秒timeoutでFriend Match Resultを確定する。
+	# Round境界15秒timeoutでRound 2不戦勝となり、2-0のFriend Match Resultを確定する。
 	_second_socket.close()
 	_second_socket = null
 	if not await _p1_finish_friend_round(online_session, p1_hit_count, p1_states):
@@ -275,11 +275,11 @@ func _run() -> void:
 		await create_timer(0.05).timeout
 	var first_result: Dictionary = match_event[0]
 	if first_result.is_empty():
-		_fail("Friend matchのDISCONNECT_TIMEOUT結果を受信できませんでした。")
+		_fail("Friend matchのRound不戦勝後BO3結果を受信できませんでした。")
 		return
 	if str(first_result.get("winner_user_id", "")) != p1_user_id \
 			or str(first_result.get("loser_user_id", "")) != p2_user_id \
-			or str(first_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT":
+			or str(first_result.get("finish_cause", "")) != "BO3":
 		_fail("Friend matchのserver authoritative結果が期待値と一致しません。")
 		return
 

@@ -170,22 +170,13 @@ func _run() -> void:
 		_fail("Round 1が開始しませんでした。")
 		return
 
-	# 切断側P1が1本リードした状態を作る。Round取得だけではまだmatch結果ではない。
+	# P1がRound 1を通常勝利して1-0を作る。Round勝利だけではRatingを更新しない。
 	if not await _p1_finish_opening_round(
 		online_session,
 		p1_hit_count,
 		p1_states
 	):
 		return
-	var round_two_deadline := Time.get_ticks_msec() + 8000
-	while Time.get_ticks_msec() < round_two_deadline and not round_two_started[0]:
-		await create_timer(0.05).timeout
-	if not round_two_started[0]:
-		_fail("P1 1本先取後にRound 2が開始しませんでした。")
-		return
-
-	_second_round_result = {}
-	_second_hit_count = 0
 
 	var original_match_id: String = str(p1_joined[0])
 	var active_before: Dictionary = await online_session.refresh_active_online_match()
@@ -193,86 +184,94 @@ func _run() -> void:
 		_fail("P1のserver-side active matchが保存されていません。")
 		return
 
-	# P1が1-0でリードしたRound 2中に切断。active Roundなのでこの時点では15秒deadlineを開始しない。
-	var disconnect_event_start := _second_connection_events.size()
+	var p2_rating_after_round_one := await _read_current_rating(second_client, second_session)
+	if not _same_rating_record(initial_p2_rating, p2_rating_after_round_one):
+		_fail("Round 1終了時点でPlayer Ratingが更新されました。")
+		return
+
+	# Round 1終了直後にP1を切断する。次Round開始前なので15秒deadlineを開始する。
+	var first_boundary_event_start := _second_connection_events.size()
 	online_session.clear_runtime_session_preserving_match()
 
-	var active_disconnect := await _wait_second_connection_event(
+	var first_boundary_disconnect := await _wait_second_boundary_deadline(
 		p1_user_id,
-		false,
-		disconnect_event_start,
+		first_boundary_event_start,
 		3000
 	)
-	if active_disconnect.is_empty():
-		_fail("P1切断eventをP2が受信できませんでした。")
-		return
-	if int(active_disconnect.get("reconnect_deadline_tick", 0)) != -1:
-		_fail("active Round中の切断で15秒deadlineが開始されています。")
+	if first_boundary_disconnect.is_empty():
+		_fail("Round 2開始前にP1の15秒boundary deadlineが開始されませんでした。")
 		return
 
-	# active Round中は15秒を超えてもmatchを終了しない。
-	await create_timer(16.2).timeout
-	if not _second_match_result.is_empty():
-		_fail("active Round中に15秒経過しただけでMatch Resultが確定しました。")
+	_second_round_result = {}
+	_second_match_result = {}
+
+	# 1回目の15秒timeoutはMatch強制敗北ではなく、Round 2の不戦敗。
+	var first_forfeit_deadline := Time.get_ticks_msec() + 18000
+	while Time.get_ticks_msec() < first_forfeit_deadline and _second_round_result.is_empty():
+		await create_timer(0.05).timeout
+	if _second_round_result.is_empty():
+		_fail("Round 2の切断不戦敗Resultを受信できませんでした。")
 		return
-	var active_rpc = await second_client.rpc_async(
+	if int(_second_round_result.get("round_number", -1)) != 2 \
+			or str(_second_round_result.get("winner_user_id", "")) != p2_user_id \
+			or str(_second_round_result.get("loser_user_id", "")) != p1_user_id \
+			or str(_second_round_result.get("finish_cause", "")) != "DISCONNECT_FORFEIT":
+		_fail("Round 2のDISCONNECT_FORFEIT Resultが期待値と一致しません。")
+		return
+	if not _second_match_result.is_empty():
+		_fail("1-1の時点でMatch Resultが確定しました。")
+		return
+
+	var p2_rating_after_first_forfeit := await _read_current_rating(second_client, second_session)
+	if not _same_rating_record(initial_p2_rating, p2_rating_after_first_forfeit):
+		_fail("Round 2不戦敗時点でPlayer Ratingが更新されました。")
+		return
+
+	var active_after_first_forfeit_rpc = await second_client.rpc_async(
 		second_session,
 		OnlineConfigScript.ACTIVE_MATCH_RPC_GET
 	)
-	if active_rpc == null or active_rpc.is_exception():
-		_fail("15秒経過後のactive match状態を確認できませんでした。")
+	if active_after_first_forfeit_rpc == null or active_after_first_forfeit_rpc.is_exception():
+		_fail("Round 2不戦敗後のactive match状態を確認できませんでした。")
 		return
-	var active_parsed = JSON.parse_string(str(active_rpc.payload))
-	if not active_parsed is Dictionary 			or not bool((active_parsed as Dictionary).get("active", false)) 			or str((active_parsed as Dictionary).get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
-		_fail("active Round中15秒経過後もACTIVEが維持されていません。")
-		return
-
-	# P2が切断中P1へ5Hit取り、Round 1を通常ルールで終了させる。
-	var boundary_event_start := _second_connection_events.size()
-	for hit_index in range(1, 6):
-		if not await _second_attack_once(hit_index):
-			return
-
-	var round_result_deadline := Time.get_ticks_msec() + 5000
-	while Time.get_ticks_msec() < round_result_deadline and _second_round_result.is_empty():
-		await create_timer(0.05).timeout
-	if _second_round_result.is_empty():
-		_fail("P1切断中にRound 2を終了できませんでした。")
-		return
-	if int(_second_round_result.get("round_number", -1)) != 2 			or str(_second_round_result.get("winner_user_id", "")) != p2_user_id:
-		_fail("P1切断中のRound 2 winnerがP2ではありません。")
+	var active_after_first_forfeit = JSON.parse_string(str(active_after_first_forfeit_rpc.payload))
+	if not active_after_first_forfeit is Dictionary \
+			or not bool((active_after_first_forfeit as Dictionary).get("active", false)) \
+			or str((active_after_first_forfeit as Dictionary).get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("Round 2不戦敗後もMatch未決着ACTIVEを維持できていません。")
 		return
 
-	var boundary_disconnect := await _wait_second_boundary_deadline(
-		p1_user_id,
-		boundary_event_start,
-		3000
-	)
-	if boundary_disconnect.is_empty():
-		_fail("Round終了後にP1の15秒boundary deadlineが開始されませんでした。")
+	# Round 3は改めて新しい15秒待機。最初の不戦敗だけで連続自動敗北にはしない。
+	_second_round_result = {}
+	var second_wait_start := Time.get_ticks_msec()
+	await create_timer(5.0).timeout
+	if not _second_round_result.is_empty() or not _second_match_result.is_empty():
+		_fail("Round 3の新しい15秒待機を行わず即時不戦敗になりました。")
 		return
 
-	# Round取得だけではRatingを更新しない。
-	var p2_rating_after_round := await _read_current_rating(second_client, second_session)
-	if not _same_rating_record(initial_p2_rating, p2_rating_after_round):
-		_fail("Round 2終了時点でPlayer Ratingが更新されました。")
-		return
-
-	# Round境界15秒timeoutで初めてP2のMatch Win / P1のMatch Loseを確定する。
-	var result_deadline := Time.get_ticks_msec() + 18000
-	while Time.get_ticks_msec() < result_deadline and _second_match_result.is_empty():
+	var final_deadline := second_wait_start + 18000
+	while Time.get_ticks_msec() < final_deadline and _second_match_result.is_empty():
 		await create_timer(0.05).timeout
 	if _second_match_result.is_empty():
-		_fail("Round境界15秒超過後のMatch ResultをP2が受信できませんでした。")
+		_fail("Round 3の15秒待機後にMatch Resultを受信できませんでした。")
+		return
+	if _second_round_result.is_empty() \
+			or int(_second_round_result.get("round_number", -1)) != 3 \
+			or str(_second_round_result.get("winner_user_id", "")) != p2_user_id \
+			or str(_second_round_result.get("finish_cause", "")) != "DISCONNECT_FORFEIT":
+		_fail("Round 3のDISCONNECT_FORFEIT Resultが期待値と一致しません。")
 		return
 
-	if str(_second_match_result.get("winner_user_id", "")) != p2_user_id 			or str(_second_match_result.get("loser_user_id", "")) != p1_user_id 			or str(_second_match_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT" 			or int(_second_match_result.get("final_round_number", -1)) != 2:
-		_fail("DISCONNECT_TIMEOUT Match Resultが期待値と一致しません。")
+	if str(_second_match_result.get("winner_user_id", "")) != p2_user_id \
+			or str(_second_match_result.get("loser_user_id", "")) != p1_user_id \
+			or str(_second_match_result.get("finish_cause", "")) != "BO3" \
+			or int(_second_match_result.get("final_round_number", -1)) != 3:
+		_fail("不戦敗Roundを含むBO3 Match Resultが期待値と一致しません。")
 		return
 
 	var scores: Dictionary = _second_match_result.get("round_wins_by_user", {})
-	if int(scores.get(p1_user_id, -1)) != 1 or int(scores.get(p2_user_id, -1)) != 1:
-		_fail("切断側P1が1本先取済みでもRound scoreを改ざんせずP2 Match Winにできていません。")
+	if int(scores.get(p1_user_id, -1)) != 1 or int(scores.get(p2_user_id, -1)) != 2:
+		_fail("1-0から2回のRound不戦敗で1-2になっていません。")
 		return
 
 	# Round境界timeout後もResult確認までは元matchを未解決contextとして保持する。
@@ -291,7 +290,7 @@ func _run() -> void:
 		5000
 	)
 	if ratings.is_empty():
-		_fail("DISCONNECT_TIMEOUT後のRatingがElo期待値へ更新されませんでした。")
+		_fail("Round不戦敗を含むBO3後のRatingがElo期待値へ更新されませんでした。")
 		return
 
 	var ahoge_after := await _wait_ahoge_counts(
@@ -302,7 +301,7 @@ func _run() -> void:
 		5000
 	)
 	if ahoge_after.is_empty():
-		_fail("DISCONNECT_TIMEOUT後AHOGE LEGEND Rankingが期待集計へ更新されませんでした。")
+		_fail("Round不戦敗を含むBO3後AHOGE LEGEND Rankingが期待集計へ更新されませんでした。")
 		return
 
 	var forbidden: Dictionary = await online_session.start_ranked_matchmaking(
@@ -310,19 +309,19 @@ func _run() -> void:
 		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
 	)
 	if bool(forbidden.get("ok", false)) or str(forbidden.get("step", "")) != "unresolved_match":
-		_fail("切断敗北後の結果未解決中に新しいRankedを開始できました。")
+		_fail("BO3結果未解決中に新しいRankedを開始できました。")
 		return
 
 	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
-		_fail("Round境界timeout後の終了済みmatchへ再接続できませんでした。")
+		_fail("Round不戦敗を含む終了済みmatchへ再接続できませんでした。")
 		return
 	if str(resumed.get("destination", "")) != "ranked_result":
 		_fail("終了済みRankedの復帰先がranked_resultではありません。")
 		return
 
 	var snapshot: Dictionary = resumed.get("snapshot", {})
-	if not bool(snapshot.get("match_finished", false)) 			or str(snapshot.get("match_mode", "")) != "ranked" 			or str(snapshot.get("match_winner_user_id", "")) != p2_user_id 			or str(snapshot.get("match_finish_cause", "")) != "DISCONNECT_TIMEOUT":
+	if not bool(snapshot.get("match_finished", false)) 			or str(snapshot.get("match_mode", "")) != "ranked" 			or str(snapshot.get("match_winner_user_id", "")) != p2_user_id 			or str(snapshot.get("match_finish_cause", "")) != "BO3":
 		_fail("終了済みRanked snapshotがMatch Resultと一致しません。")
 		return
 
