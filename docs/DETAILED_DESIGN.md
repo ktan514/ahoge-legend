@@ -2051,7 +2051,7 @@ leaderboard owner UUIDはランキングrecordの安定owner識別だけに使�
 - 同character同士の場合: そのcharacterの `total_ranked_matches + 2`
 - Round Resultでは加算しない
 - Friend Matchでは加算しない
-- `DISCONNECT_TIMEOUT` は通常Ranked勝敗として加算する
+- Round境界15秒timeoutはそのRoundの不戦敗としてRound取得数へ反映し、最終的に通常BO3で確定したMatch結果だけをRanked集計へ加算する
 - server障害 / 両者同時切断は加算しない
 - authoritative match ID単位のsettlementで二重集計しない
 
@@ -2406,9 +2406,11 @@ SHORT_TEST
 - active Round中に片側が切断してもRoundを停止しない
 - active Round中は切断からの経過時間に関係なく、そのRoundが終了するまで再接続を許可する
 - Round境界で片側が未接続の場合だけ15秒の復帰待機を開始する
-- Round境界の15秒以内に復帰すればmatchを継続する
-- Round境界の15秒以内に復帰しなければ、接続中playerをmatch winner、切断playerをmatch loserとして終了する
-- 切断timeoutを原因として切断playerがwinnerになる経路は禁止する
+- Round境界の15秒以内に復帰すれば対象Roundを通常開始する
+- Round境界の15秒以内に復帰しなければ、その対象Roundだけを接続中playerの不戦勝・切断playerの不戦敗として処理する
+- 不戦勝で2本先取に到達した場合は通常BO3としてMatchを終了する
+- 不戦勝後もMatch未決着なら、次Roundについて新しい15秒deadlineを開始する
+- active Round中の通常結果で切断playerが2本先取した場合は、そのMatch Winを有効とする
 - server障害や両者同時切断は別途エラー終了として扱い、Rating更新を行わない方向で実装する
 
 #### 21.5.1 片側切断時のactive Round進行
@@ -2442,21 +2444,21 @@ Round開始前、Countdown中、Round終了後のいずれかで片側が未接�
 
 #### 21.5.3 Round境界15秒timeout
 
-片側だけが未接続のままRound境界reconnect deadlineへ到達した場合、server authoritativeにmatchを終了する。
+片側だけが未接続のままRound境界reconnect deadlineへ到達した場合、server authoritativeに**その対象Roundの不戦敗**を確定する。Match全体を直接強制敗北にはしない。
 
-- match finish cause: `DISCONNECT_TIMEOUT`
-- 接続中playerをwinner、deadline超過playerをloserとする
-- 残りRound数、現在のRound取得数、Hit数、切断前の優勢状況はwinner判定に使用しない
-- 切断playerをwinnerにする分岐を持たない
-- BO3 Round取得数を人工的に2へ変更しない
-- `MATCH_RESULT` は通常BO3と同じeventを使い、`finish_cause` で区別する
-- 通常2本先取は `finish_cause=BO3`
-- disconnect敗北では現在Round番号・現在Round取得数をそのままResultへ含める
-- clientはdisconnect timeoutを独自判定せず、serverのMatch Resultを正本とする
+- Round finish cause: `DISCONNECT_FORFEIT`
+- 接続中playerをそのRoundのwinner、deadline超過playerをそのRoundのloserとする
+- 対象RoundのHit数は0-0として扱い、通常の戦闘入力やHit判定は行わない
+- 不戦勝Roundを通常のBO3 Round取得数へ+1する
+- 不戦勝で2本先取に到達した場合は `match_finish_cause=BO3` としてMatch Resultを確定する
+- 不戦勝後も2本先取でなければ、次Roundへ進み、切断playerが未復帰なら改めて新しい15秒deadlineを開始する
+- 例: 0-1で相手未接続 → 15秒timeout → 1-1 → 次Roundについて再度15秒待機 → 再timeout → 2-1で接続中playerのMatch Win
+- active Round中に切断playerが通常ルールでRoundを取り、それが2本目なら15秒待機を挟まずそのMatch Winを有効とする
+- clientは不戦敗を独自判定せず、serverのRound Result / BO3 Score / Match Resultを正本とする
 
-15秒はRound境界の復帰待機期限であり、active Round中の復帰期限でもclientのretry終了期限でもない。
+15秒はRound境界で「これから開始する1Round」の出場待機期限であり、active Round中の復帰期限でもclientのretry終了期限でもない。
 
-deadline超過後に切断playerがゲームへ戻った場合は、server-side `RESULT_PENDING` の確定Resultを取得し、敗北結果画面へ復帰する。別matchを開始してはならない。
+deadline超過後に切断playerが戻った場合、Match未決着なら最新authoritative snapshotへ同期して次の待機中Roundから復帰する。すでに2本先取でMatch終了済みならserver-side `RESULT_PENDING` の確定Resultを取得する。
 
 #### 21.5.4 再接続成功時の同期
 
@@ -2572,7 +2574,7 @@ Rating settlementはRoundではなくMatch結果に対して1回だけ行う。
 
 - Round 1 / Round 2 / Round 3の各Round終了ではRatingを更新しない
 - 通常BO3で2本先取が成立した時に1match分更新する
-- Round境界15秒timeoutで `DISCONNECT_TIMEOUT` が成立した時も1match分更新する
+- Round境界15秒timeoutで成立した不戦勝Round自体ではRatingを更新しない。2本先取でMatch Resultが確定した時だけ1match分更新する
 - Friend Matchは従来どおりRating非対象
 - server障害 / 両者同時切断など勝敗を通常確定しない終了はRating更新しない
 
@@ -2594,7 +2596,7 @@ new_rating
 - 勝者 `score = 1`
 - 敗者 `score = 0`
 - 更新後Ratingは標準的な四捨五入で整数化する
-- 通常BO3と `DISCONNECT_TIMEOUT` は同じRating更新対象
+- 通常戦闘Roundと `DISCONNECT_FORFEIT` Roundを含め、最終的に `BO3` で確定したRanked MatchだけをRating更新対象とする
 - Friend MatchはRating更新対象外
 - server障害 / 両者同時切断など勝敗を通常確定しない終了はRating更新しない
 

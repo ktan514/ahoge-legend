@@ -318,7 +318,9 @@ Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件�
 - 同Round中は15秒を超えても復帰可能
 - Round終了時またはRound開始前に未接続playerがいる場合、そこから15秒待機
 - 15秒以内の復帰で次Round継続
-- 15秒timeoutで接続中playerのmatch勝利
+- 15秒timeoutはその対象Roundの不戦敗とし、接続中playerへ1Round加算する
+- 不戦勝で2本先取なら通常BO3としてMatch終了し、未決着なら次Roundについて改めて15秒待機する
+- active Roundの通常結果で切断playerが2本先取した場合はその勝利を有効とする
 - RatingはRoundではなくMatch確定時に1回だけ更新
 
 #90完了後に#54 Human Verificationを再実施する。
