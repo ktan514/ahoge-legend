@@ -429,6 +429,8 @@ static func parse_player_connection_changed_payload(payload: String) -> Dictiona
 	if bool(parsed["connected"]):
 		if deadline_tick != -1:
 			return {}
-	elif deadline_tick < int(parsed["server_tick"]):
+	elif deadline_tick != -1 and deadline_tick < int(parsed["server_tick"]):
+		# disconnected=falseではない。active Round中は -1 = deadlineなしを正式値とする。
+		# Round境界待機中だけfuture server tickのdeadlineを持つ。
 		return {}
 	return parsed

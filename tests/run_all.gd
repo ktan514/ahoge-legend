@@ -806,6 +806,24 @@ func _test_authoritative_player_connection_protocol() -> void:
 	_expect_false(bool(disconnected["connected"]), "切断状態をdecodeできる")
 	_expect_equal(int(disconnected["reconnect_deadline_tick"]), 1950, "再接続deadlineをdecodeできる")
 
+	var active_round_disconnected := CombatInputProtocolScript.parse_player_connection_changed_payload(
+		JSON.stringify({
+			"user_id": "player-2",
+			"connected": false,
+			"reconnect_deadline_tick": -1,
+			"server_tick": 1550,
+		})
+	)
+	_expect_false(
+		bool(active_round_disconnected["connected"]),
+		"active Round切断状態をdecodeできる"
+	)
+	_expect_equal(
+		int(active_round_disconnected["reconnect_deadline_tick"]),
+		-1,
+		"active Round切断のdeadlineなしをdecodeできる"
+	)
+
 	var connected := CombatInputProtocolScript.parse_player_connection_changed_payload(
 		JSON.stringify({
 			"user_id": "player-2",
