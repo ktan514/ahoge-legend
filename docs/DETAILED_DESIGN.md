@@ -2517,9 +2517,19 @@ active Round
   → timeout: 対象RoundをDISCONNECT_FORFEITとして確定
 ```
 
-Human Verificationでは、同一P2 userで「切断」と「15秒待機中の復帰」を再現できる必要がある。HV専用opponentは初回起動時のDevice IDを一時検証用ファイルへ保持し、`reconnect` モードでは同じDevice IDで再認証したうえでserver-side `active_online_match/current` から元match IDを取得して再joinする。
+Human Verificationでは、同一P2 userで「切断」と「15秒待機中の復帰」を再現できる必要がある。HV専用opponentは一度生成したDevice IDを一時検証用ファイルへ保持し、保存済みDevice IDがある限り上書きしない。
 
-この一時ファイルはHuman Verification toolだけが使用する検証credentialであり、製品clientのgameplay/account状態の正本には使用しない。
+引数なしの既定モードは `auto` とし、同じDevice IDで認証後にserver-side `active_online_match/current` を確認する。
+
+- `ACTIVE` がある → 同じP2 userで元matchへ自動rejoinする
+- `RESULT_PENDING` がある → HV用synthetic P2の前回結果だけacknowledgeしてから新規matchmakingへ進む
+- active contextなし → 同じP2 userで新規matchmakingへ進む
+- `reconnect` 明示時に `ACTIVE` がない → 明示FAILする
+- `new` 明示時に `ACTIVE` がある → credentialを上書きせず明示FAILする
+
+これにより、切断後に誤って引数なしコマンドを再実行しても別P2 userへ切り替わらず、元matchへの復帰を優先する。
+
+この一時ファイルはHuman Verification toolだけが使用する検証credentialであり、製品clientのgameplay/account状態の正本には使用しない。RESULT_PENDINGのacknowledgeもHV用synthetic P2の検証後処理に限定する。
 
 #### 21.5.6 再ログイン時のMatch復帰
 
