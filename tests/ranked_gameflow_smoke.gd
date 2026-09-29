@@ -61,18 +61,18 @@ func _run() -> void:
 		_fail("P2 Device認証に失敗しました。", app)
 		return
 	var p2_user_id := str(second_session.user_id)
-	var p2_disconnected := [false]
 	var p1_hit_count := [0]
+	var p1_states: Array[Dictionary] = []
 	var p1_user_id := str(online_session.session.user_id)
-	online_session.player_connection_changed.connect(
-		func(user_id: String, connected: bool, _deadline_tick: int, _server_tick: int) -> void:
-			if user_id == p2_user_id and not connected:
-				p2_disconnected[0] = true
-	)
 	online_session.round_hit_count_changed.connect(
 		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
 			if user_id == p1_user_id:
 				p1_hit_count[0] = hit_count
+	)
+	online_session.combat_state_changed.connect(
+		func(user_id: String, state_name: String, _server_tick: int, _charge_ratio: float) -> void:
+			if user_id == p1_user_id:
+				p1_states.append({"state": state_name})
 	)
 
 	_second_socket = nakama.create_socket_from(second_client)
@@ -191,7 +191,7 @@ func _run() -> void:
 	if not bool(p2_disconnected[0]):
 		_fail("P2切断をserverが認識しませんでした。", app)
 		return
-	if not await _p1_finish_round(online_session, app, p1_hit_count):
+	if not await _p1_finish_round(online_session, app, p1_hit_count, p1_states):
 		return
 
 	if not await _wait_screen(app, "MatchResult", 25000):
@@ -251,30 +251,58 @@ func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
 	return false
 
 
-func _p1_finish_round(online_session, app, p1_hit_count: Array) -> bool:
+func _p1_finish_round(online_session, app, p1_hit_count: Array, p1_states: Array[Dictionary]) -> bool:
 	for hit_index in range(1, 6):
+		var state_start := p1_states.size()
 		var press: Dictionary = await online_session.send_combat_input(
 			CombatInputProtocolScript.ACTION_ATTACK_PRESS
 		)
 		if not bool(press.get("ok", false)):
 			_fail("P1 ATTACK_PRESSを送信できませんでした。", app)
 			return false
-		await create_timer(0.05).timeout
+
+		var charging_deadline := Time.get_ticks_msec() + 3000
+		var charging_seen := false
+		while Time.get_ticks_msec() < charging_deadline:
+			for index in range(state_start, p1_states.size()):
+				if str(p1_states[index].get("state", "")) == "CHARGING":
+					charging_seen = true
+					break
+			if charging_seen:
+				break
+			await create_timer(0.02).timeout
+		if not charging_seen:
+			_fail("P1 CHARGINGを確認できませんでした。", app)
+			return false
+
 		var release: Dictionary = await online_session.send_combat_input(
 			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
 		)
 		if not bool(release.get("ok", false)):
 			_fail("P1 ATTACK_RELEASEを送信できませんでした。", app)
 			return false
+
 		var hit_deadline := Time.get_ticks_msec() + 4000
 		while Time.get_ticks_msec() < hit_deadline and int(p1_hit_count[0]) < hit_index:
 			await create_timer(0.02).timeout
 		if int(p1_hit_count[0]) < hit_index:
 			_fail("P1 authoritative Hit count=%dを確認できませんでした。" % hit_index, app)
 			return false
-		await create_timer(0.75).timeout
-	return true
 
+		if hit_index < 5:
+			var idle_deadline := Time.get_ticks_msec() + 4000
+			var idle_seen := false
+			while Time.get_ticks_msec() < idle_deadline:
+				for index in range(state_start, p1_states.size()):
+					if str(p1_states[index].get("state", "")) == "IDLE":
+						idle_seen = true
+				if idle_seen:
+					break
+				await create_timer(0.02).timeout
+			if not idle_seen:
+				_fail("P1が次の攻撃前にIDLEへ復帰しませんでした。", app)
+				return false
+	return true
 
 func _wait_no_active_match(online_session, timeout_ms: int) -> bool:
 	var deadline := Time.get_ticks_msec() + timeout_ms
