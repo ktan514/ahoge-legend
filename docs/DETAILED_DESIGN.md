@@ -201,6 +201,72 @@ Realtime SocketはDevice認証済みSessionを使用して接続する。
 Matchmaker、Authoritative Match HandlerはRealtime Socket基盤の後続Issueで接続する。
 Nakama側のカスタムサーバーロジックはTypeScriptを使用する。
 
+#### 3.9.1 ユーザー永続データの正本
+
+ユーザーに紐づく永続的なゲーム状態はclientローカルファイルを正本にしない。
+
+- ユーザー識別の正本はNakama `user_id`
+- gameplay / account / progression / ranking / match状態などのユーザー永続データはNakama Storage Engineを正本とする
+- Nakama Storage EngineはPostgreSQLへ永続化される
+- 独自ユーザーマスタを二重管理しない
+- custom SQL / custom tableは、Nakama標準Storageで表現できない明確な要件がない限り使用しない
+- clientはserver状態の一時runtime cacheを持てるが、再起動後の正本にはしない
+- `user://active_online_match.json` のようなgameplay状態ファイルは禁止する
+- 端末固有Device IDは開発用Device Authenticationを成立させるためのcredentialであり、gameplay/account状態の正本には使用しない
+- Steam Authentication導入後の本番ユーザー識別はSteam/Nakamaへ移行する
+
+端末固有の表示・音量・入力設定など、account正本ではなく端末設定として扱う情報を将来ローカル保存する場合は、ユーザーgameplayデータと明確に分離する。
+
+#### 3.9.2 Active Online Match
+
+未解決online matchはユーザーごとのserver-side Storage objectで管理する。
+
+```text
+collection = active_online_match
+key        = current
+user_id    = Nakama user_id
+```
+
+1ユーザーにつき未解決online matchは最大1件とする。
+
+保持内容:
+
+```text
+match_id
+match_mode        # ranked / friend
+state             # ACTIVE / RESULT_PENDING
+created_at_unix_ms
+updated_at_unix_ms
+result_snapshot   # RESULT_PENDING時のserver確定結果
+```
+
+Storage objectはserver-only read/writeとし、clientは専用RPC経由でのみ照会・acknowledgeする。
+
+状態遷移:
+
+```text
+match成立
+→ ACTIVE
+
+server authoritative match終了
+→ RESULT_PENDING
+  + server確定Result snapshotを永続化
+
+clientが遷移先を確定
+→ acknowledge
+→ active_online_match/current を削除
+```
+
+起動時およびONLINE BATTLE開始前は、認証後の現在`user_id`についてserverへactive matchを問い合わせる。
+
+- active contextなし → 通常導線
+- ACTIVEかつserver上にmatchあり → 同じauthoritative matchへ復帰
+- ACTIVEだがserver上にmatchなし → server側でstale contextを安全解除し通常導線
+- RESULT_PENDING → DBに保存されたserver確定Resultから結果導線へ復帰
+- 他userのactive context → 現在userへ影響させない
+
+未解決matchの有無を「ローカルファイルが存在するか」で判定してはならない。
+
 ### 3.10 RankingService
 
 責務:
@@ -404,11 +470,11 @@ Rankedでは `REMATCH` を表示しない。
 
 通常Match ResultをUI-11へ接続した時点で、そのmatchの保存済み未解決contextは遷移先確定済みとして解除する。再ログイン復帰の場合も、`ranked_result` のUI-11表示を確定してから解除する。
 
-起動時に同一userの保存済みmatchがある場合は新規Rankedを開始せず、既存 `resume_saved_match_after_login()` を優先する。
+起動時に認証後の現在userへserver-side active matchがある場合は新規Rankedを開始せず、active match復帰を優先する。clientローカルファイルの存在は判定に使用しない。
 
 さらに、未解決Ranked match contextが残っている状態でUI-03の `RANKED MATCH` を選択した場合、警告表示だけで操作を止めてはならない。AppRootは新規matchmakingへ進まず、`RESTORING ORIGINAL MATCH...` を表示して既存matchのserver確認と復帰を強制開始する。UI-04からUI-05へ進む直前に未解決contextを検出した場合も同じ強制復帰を行う。
 
-強制復帰は既存 `repair_unresolved_match_context()` / `resume_saved_match_after_login()` の契約を再利用し、serverが返したsnapshotだけで復帰先を決定する。
+強制復帰はserver-side `active_online_match/current` を正本とし、server RPCが返したactive contextとauthoritative snapshot / Resultだけで復帰先を決定する。
 
 復帰時の接続契約は次で固定する。
 

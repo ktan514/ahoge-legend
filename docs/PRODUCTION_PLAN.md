@@ -32,7 +32,7 @@
 - M1 Battle Core #53 Human Verification PASS
 - 工程3 #24 completed
 
-現在は工程4前半のRanked主要導線 #86 / PR #87 を進め、**#54 M2 Ranked主要導線 Human Verification** をblocking gateとしている。
+現在は工程4前半のRanked主要導線 #86 / PR #87 を進めている。#54 Human Verificationでローカルmatch保存に起因するuser取り違えを検出したため、**#89 ユーザー永続データserver正本化** をblocking修正として先に完了し、その後 #54 M2 Ranked主要導線 Human Verificationを再実施する。
 
 Human Verification中に未解決match復帰仕様を見直し、元matchへの強制復帰、10秒timeout、retry上限2回、失敗後TopMenuへ戻して再選択時に再試行する契約を確定した。
 
@@ -277,22 +277,23 @@ RC1
 
 現在からの優先順は次とする。
 
-1. #86 Ranked主要GameFlowのCI / fresh review / #54 Human Verification完了
-2. #54 M2 PASS
-3. #88 Ahoge Rating計算・storage・settlement・ranking backend移行
-4. UI-11 Ahoge Rating表示接続
-5. UI-12 AHOGE LEGEND Rating Ranking接続
-6. Friend残画面 / UI-02 / UI-06 / UI-07 / UI-08
-7. 共通Loading / Error / Back / Decide / Cancel
-8. #55 M3主要12画面Human Verification
-9. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
-10. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
-11. 演出・音・台詞
-12. Steam認証
-13. AWS本番
-14. Windows実機・WAN試験
-15. balance / performance調整
-16. Release Candidate
+1. #89で未解決matchをNakama user_id単位のserver-side Storage正本へ移行
+2. #86 Ranked主要GameFlowのCI / fresh review / #54 Human Verification完了
+3. #54 M2 PASS
+4. #88 Ahoge Rating計算・storage・settlement・ranking backend移行
+5. UI-11 Ahoge Rating表示接続
+6. UI-12 AHOGE LEGEND Rating Ranking接続
+7. Friend残画面 / UI-02 / UI-06 / UI-07 / UI-08
+8. 共通Loading / Error / Back / Decide / Cancel
+9. #55 M3主要12画面Human Verification
+10. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
+11. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
+12. 演出・音・台詞
+13. Steam認証
+14. AWS本番
+15. Windows実機・WAN試験
+16. balance / performance調整
+17. Release Candidate
 
 Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件は、#88でシミュレーション可能な構造を用意したうえでbalance検証により確定する。実装担当判断だけで固定しない。
 
