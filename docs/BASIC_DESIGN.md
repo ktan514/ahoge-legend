@@ -584,16 +584,19 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - Stagger: 0.45秒
 - ショート投擲のアホ毛再生時間: 0.60秒
 - 初期ネットワーク方針: rollbackなし、Nakamaサーバー権威、入力にsequence番号を付与
-- 切断時再接続猶予: 15秒
 - Round進行中の片側切断: 試合全体は停止せず、接続中の側・85秒timer・戦闘・Overtimeは継続する
+- Round進行中は切断からの経過時間に関係なく、同じRoundが終了するまで再接続を許可する
 - 切断側: 新しい入力は停止するが、serverが切断前に受理済みのaction stateはauthoritative tickで進行する
-- Round開始前 / Round終了後の片側切断: 両者が揃うまで次のRound進行へ移らない
+- 同じRound中に復帰した場合: server authoritative snapshotへ同期し、その時点のRoundを継続する
+- Round開始前 / Round終了後の片側切断: 次Roundを開始せず、Round境界で15秒の復帰待機を開始する
+- Round境界の15秒以内に復帰した場合: snapshot同期後に次Roundへ進む
+- Round境界の15秒以内に復帰しない場合: 残りRound数・Round取得数・Hit数に関係なく接続中playerをmatch winner、切断playerをmatch loserとして終了する
 - 再接続成功時: server authoritative snapshotを受信し、復帰時点の状態へ同期する
 - 対戦中のゲーム終了 / client再起動後も、再ログイン時にNakama user_id単位のserver-side active matchへ復帰を試みる
 - 対戦join後は「未解決の対戦」としてlockし、Battle復帰または終了後遷移が確定するまで新しいRanked / Friend対戦を開始できない
 - 同一プロセス内のSocket切断と再ログイン後の復帰は同じ未解決match復帰契約を使用する
-- 15秒はactive Battleへ戻れるserver側猶予であり、clientが元matchの解決を諦める期限にはしない
-- 15秒を超えてserver側で切断敗北が確定した後も、回線復旧時は同じmatchへ接続して終了済みsnapshotを取得する
+- 15秒はactive Round中の切断時には開始せず、Round終了時点またはRound開始前の境界で未接続playerがいる場合にだけ開始する
+- Round境界15秒timeoutで切断敗北が確定した後も、回線復旧時はserver-side RESULT_PENDINGから終了済みResultを取得する
 - 再ログイン時にmatchが進行中ならBattleへ復帰する
 - 再ログイン時にRanked matchが終了済みならBattleを再表示せず、authoritative結果をUI-11へ表示する
 - 再ログイン時にFriend matchが終了済みなら結果画面を再表示せず、Character Select（選択メニュー）へ戻す

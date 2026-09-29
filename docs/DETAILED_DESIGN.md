@@ -2401,110 +2401,106 @@ SHORT_TEST
 
 ### 21.5 切断・再接続
 
-- 意図しない切断後15秒間は再接続を許可する
-- 同じNakama user IDで復帰した場合は同一プレイヤーとして復帰させる
-- 15秒以内に復帰しなければ切断側のマッチ敗北とする
-- サーバー障害や両者同時切断は別途エラー終了として扱い、Rating更新を行わない方向で実装する
+切断・再接続はserver authoritativeなmatch stateを正本とする。
 
-#### 21.5.1 片側切断時の進行
+- active Round中に片側が切断してもRoundを停止しない
+- active Round中は切断からの経過時間に関係なく、そのRoundが終了するまで再接続を許可する
+- Round境界で片側が未接続の場合だけ15秒の復帰待機を開始する
+- Round境界の15秒以内に復帰すればmatchを継続する
+- Round境界の15秒以内に復帰しなければ、接続中playerをmatch winner、切断playerをmatch loserとして終了する
+- 切断timeoutを原因として切断playerがwinnerになる経路は禁止する
+- server障害や両者同時切断は別途エラー終了として扱い、Rating更新を行わない方向で実装する
+
+#### 21.5.1 片側切断時のactive Round進行
 
 Round進行中に片側だけが切断した場合、match全体は停止しない。
 
-- 接続中プレイヤーのcombat inputは通常どおり受理する
-- 85秒timerは停止しない
-- Overtimeへ到達した場合も通常どおり進行する
-- 切断プレイヤーは新規inputを送信できない
+- 85秒timerは継続する
+- Overtimeも通常ルールで進行する
+- 接続中playerは通常どおり入力できる
+- 切断playerは新規inputを送信できない
 - 切断前にserverが受理済みのWINDUP / STRIKE / COOLDOWN / Defense / Stagger / SHORT Regrow等はserver tick基準で通常どおり進行する
 - 切断を理由に受理済みactionを巻き戻さない
-- 接続中プレイヤーから切断プレイヤーへの有効Hit判定もserver authoritativeに継続する
+- 接続中playerから切断playerへの有効Hit判定もserver authoritativeに継続する
 - 切断中playerは無防備扱いとし、DefenseResultは常に `NONE` とする
 - 切断前にPARRY / DODGEがactiveだった場合でも、切断後に到達したContactでは防御成立させない
 - 切断前にserverが受理済みの攻撃actionは従来どおり進行し得るが、防御能力だけはpresence喪失時点で無効化する
+- active Round中は15秒deadlineを開始しない
 
-ただし、Round境界では両者が揃うまで進行を待つ。
+同じRound中に切断playerが復帰した場合、経過秒数に関係なく再joinを許可し、最新authoritative snapshotへ同期してそのRoundを継続する。
 
-- Round 1開始前に片側が不在ならCountdownを開始しない
-- Round Countdown中に片側が切断した場合はCountdownを停止し、復帰後に残りCountdownから再開する
-- Round終了後に片側が不在ならRound Result / BO3 scoreは確定するが、次Round Countdownへ進まない
-- Round進行中の切断後、そのまま5 Hit / TIMEOUT / OVERTIME_HITでRoundが終了した場合も、Round終了地点で再接続待ちへ入る
-- Round Result表示hold中に切断した場合、holdの残り時間を停止し、復帰後に残り時間から再開する
-- Match自体が通常勝敗で終了した場合は次Round待機へ移らずMatch Resultを確定する
+#### 21.5.2 Round境界の復帰待機
 
-#### 21.5.2 再接続成功時の同期
+Round開始前、Countdown中、Round終了後のいずれかで片側が未接続の場合、次のRound進行を止める。
 
-serverは切断でplayer stateを破棄しない。presenceだけを切断状態へ変更し、少なくとも次を15秒間保持する。
+- Countdown中に片側が切断した場合はCountdownを停止する
+- Round進行中の切断後、そのまま5 Hit / TIMEOUT / OVERTIME_HITでRoundが終了した場合、Round終了地点から復帰待機へ入る
+- Round Result表示hold中に切断した場合もRound境界待機へ入る
+- Round境界へ入った時点で、未接続playerごとに15秒のreconnect deadlineを開始する
+- Round境界の15秒以内に全expected playerが復帰した場合、authoritative snapshot同期後に残りCountdown / Result holdを再開し、次Roundへ進む
+- Match自体が通常BO3で終了した場合はRound境界待機へ入らずMatch Resultを確定する
 
-- user ID / character ID
-- last accepted input sequence
-- combat state / charge ratio
-- ahoge availability / regrow tick
-- Hit数
+#### 21.5.3 Round境界15秒timeout
+
+片側だけが未接続のままRound境界reconnect deadlineへ到達した場合、server authoritativeにmatchを終了する。
+
+- match finish cause: `DISCONNECT_TIMEOUT`
+- 接続中playerをwinner、deadline超過playerをloserとする
+- 残りRound数、現在のRound取得数、Hit数、切断前の優勢状況はwinner判定に使用しない
+- 切断playerをwinnerにする分岐を持たない
+- BO3 Round取得数を人工的に2へ変更しない
+- `MATCH_RESULT` は通常BO3と同じeventを使い、`finish_cause` で区別する
+- 通常2本先取は `finish_cause=BO3`
+- disconnect敗北では現在Round番号・現在Round取得数をそのままResultへ含める
+- clientはdisconnect timeoutを独自判定せず、serverのMatch Resultを正本とする
+
+15秒はRound境界の復帰待機期限であり、active Round中の復帰期限でもclientのretry終了期限でもない。
+
+deadline超過後に切断playerがゲームへ戻った場合は、server-side `RESULT_PENDING` の確定Resultを取得し、敗北結果画面へ復帰する。別matchを開始してはならない。
+
+#### 21.5.4 再接続成功時の同期
+
+serverは切断でplayer stateを破棄しない。presenceだけを切断状態へ変更する。
+
+少なくとも次をmatch stateとして保持する。
+
+- match ID
+- match mode
+- character ID
 - Round番号
 - Round取得数
-- Round timer
-- Overtime state
-- Round Result / Match Result state
-- Round Countdown state
-- reconnect deadline
+- Hit数
+- timer
+- Overtime
+- action state
+- last input sequence
+- reconnect状態
+- Round境界deadline（境界待機中のみ）
 
 同じNakama user IDが同一matchへ再joinした場合、serverは再接続playerへ最新authoritative snapshotを送信する。
 
-snapshotには少なくとも次を含める。
-
-```text
-server_tick
-round_number
-round_wins_by_user
-round_hit_count_by_user
-remaining_seconds
-round_finished
-round_winner_user_id
-round_finish_cause
-round_overtime
-round_countdown_active
-round_countdown_value
-match_finished
-match_winner_user_id
-last_input_sequence
-combat_state_by_user
-```
-
 clientはsnapshotを正本として現在表示・入力sequenceを更新する。切断中に受信できなかったeventをclient側で再計算・再生して追いつこうとしない。
 
+active Round中の復帰では、切断中も進行したtimer / Hit / action stateを含む現在状態へ同期する。
 
-表示同期も同じsnapshot / server eventの時刻情報を正本とする。頭部・アホ毛の描画座標を毎frame network同期するのではなく、次の論理情報からclientが現在の描画位相を算出する。
-
-- action state
-- action開始 / 終了server tick
-- Contact予定tick
-- Defense active / Just終了tick
-- Stagger終了tick
-- SHORT regrow終了tick
-- charge ratio
-- 現在server tick
-
-基準位置と各actionのmotion範囲はclient定義を使用する。呼吸やアホ毛の細かな二次動作はclientローカルでよいが、Hit / Clash / Defense / Round結果は見た目座標へ依存させない。
-
-#### 21.5.3 再接続待機中のフェーズ管理
+#### 21.5.5 再接続待機中のフェーズ管理
 
 serverは「active Round」と「Round境界」を区別する。
 
 ```text
 active Round
   → 片側切断でも進行継続
+  → reconnect deadlineなし
+  → 同Round終了まで復帰可能
 
-pre-Round / Countdown
-  → 両者が揃うまで開始・Countdown進行を待機
-
-post-Round / Result hold
-  → Resultは確定
-  → 両者が揃うまで次Roundへ進まない
+pre-Round / Countdown / post-Round
+  → 次Round進行を停止
+  → 未接続playerに15秒deadline開始
+  → 復帰: 次Round進行再開
+  → timeout: 接続中playerのmatch勝利
 ```
 
-15秒猶予はRound phaseの停止とは独立して実時間相当server tickで進行する。
-
-
-#### 21.5.4 再ログイン時のMatch復帰
+#### 21.5.6 再ログイン時のMatch復帰
 
 Socketの一時切断だけでなく、ゲーム終了・client crash・再起動後に同じアカウントでログインした場合も、直前のオンライン対戦へ復帰できるようにする。
 
@@ -2570,22 +2566,15 @@ Login
 - `character_id_by_user`
 - `match_mode`
 
+#### 21.5.7 Ratingとの関係
 
-#### 21.5.5 再接続期限超過
+Rating settlementはRoundではなくMatch結果に対して1回だけ行う。
 
-片側だけが切断した状態で、そのplayerのreconnect deadlineへ到達した場合はserver authoritativeにmatchを終了する。
-
-- match finish cause: `DISCONNECT_TIMEOUT`
-- 接続中playerをwinner、期限超過playerをloserとする
-- BO3 Round取得数を人工的に2へ変更しない
-- `MATCH_RESULT` は通常BO3と同じeventを使い、`finish_cause` で区別する
-- 通常2本先取は `finish_cause=BO3`
-- disconnect敗北では現在Round番号・現在Round取得数をそのままResultへ含める
-- clientはdisconnect timeoutを独自判定せず、serverのMatch Resultを正本とする
-- 15秒はserverがactive matchを切断敗北へ確定する期限であり、clientの再接続retry終了期限ではない
-- clientは回線が戻るまで元matchへの接続試行を継続してよい
-- 15秒超過後に接続が戻った場合は、終了済みmatchへjoinして `DISCONNECT_TIMEOUT` のsnapshot / Resultを取得し、別matchを開始しない
-
+- Round 1 / Round 2 / Round 3の各Round終了ではRatingを更新しない
+- 通常BO3で2本先取が成立した時に1match分更新する
+- Round境界15秒timeoutで `DISCONNECT_TIMEOUT` が成立した時も1match分更新する
+- Friend Matchは従来どおりRating非対象
+- server障害 / 両者同時切断など勝敗を通常確定しない終了はRating更新しない
 
 ### 21.6 プレイヤーランキング初期値
 

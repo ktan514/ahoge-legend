@@ -868,24 +868,23 @@ PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし�
 
 ### 18.2 再接続中
 
-自分の接続が切れた場合:
+自分の接続が切れた場合、active Round中は敗北までの15秒カウントダウンを表示しない。
 
 ```text
 RECONNECTING...
-15
-14
-13
-...
 ```
 
-15秒以内に復帰した場合は、server authoritative snapshotを受信して現在の対戦状態へ同期する。
+active Round中に復帰した場合は、server authoritative snapshotを受信し、切断中も進行したtimer / Hit / action stateを含む現在状態へ同期して同じRoundへ戻る。
 
 相手だけが切断した場合:
 
 - Round進行中はBattleを継続する。相手側は新規操作を行えない
+- active Round中は15秒timeoutを開始しない
 - Round開始前またはRound終了後は `WAITING FOR OPPONENT...` を表示し、次Roundへの進行を待つ
+- Round境界へ入った時点から15秒の復帰待機を開始する
+- Round境界15秒以内に相手が復帰したらserver stateへ同期し、次Round進行を再開する
+- Round境界15秒を超えて相手が未復帰なら、接続中playerのMatch Winとしてserverが確定する
 - Countdown中に相手が切断した場合はCountdown表示を停止する
-- 相手が復帰したらserver stateに同期して待機表示を解除する
 
 再接続待機Overlayは最終デザインではなく、工程4の全画面UI見直し対象とする。
 
@@ -895,7 +894,7 @@ RECONNECTING...
 - server-side active matchが`RESULT_PENDING / ranked`: Battleを表示せずUI-11へ直接遷移
 - server-side active matchが`RESULT_PENDING / friend`: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
 - 未解決matchがある間は新しいRanked / Friend開始操作を無効化し、元matchの復帰または終了処理を優先する
-- 15秒を超えても回線が未復旧の場合、clientは元matchを破棄せず接続復旧を待つ。復旧後に終了済み結果を取得する
+- Round境界timeout後に切断playerが戻った場合はserver確定Resultを取得して敗北Resultを表示する
 - serverが元matchに対して確定的に `NOT_FOUND` を返した場合のみ「元の対戦は復旧できませんでした」と通信エラー表示し、古い対戦lockを解除する
 - 通信エラー画面には「対戦状態を再確認」操作を用意できる。この操作はserver確認を行い、元matchが存在しないと確定した場合だけlockを解除する
 - 「lockを強制解除して新しい対戦を開始」のような無条件解除操作は提供しない

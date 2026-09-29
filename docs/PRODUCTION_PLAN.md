@@ -24,7 +24,7 @@
 - Nakama 3.41.0 + PostgreSQL 16.8-alpine
 - Device Authentication / Realtime Socket
 - Ranked Matchmaker
-- 15秒切断・再接続 / server-side active match復帰
+- active Round中の無期限復帰 / Round境界15秒待機 / server-side active match復帰
 - Player Elo Rating / PLAYER Ranking
 - AHOGE LEGEND Ranking初期実装
 - 月次Season / 過去Season保持
@@ -134,7 +134,7 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 1. Matchmaker検索幅を10秒ごとに±100拡大
 2. 最大±500
 3. 60秒以降の待機継続
-4. 15秒切断・再接続
+4. active Round継続・Round境界15秒切断復帰
 5. Elo Player Rating
 6. PLAYER Ranking
 7. AHOGE LEGEND Ranking初期実装
@@ -308,3 +308,17 @@ Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件�
 - 指定された実画面マイルストーンはblocking gateとし、PASSするまで次の対象工程へ進まない
 - マイルストーンでは必ず実ウィンドウまたは実配布ビルドを起動し、headless試験だけで代替しない
 - マイルストーンで想定との大きな乖離を発見した場合は、後工程へ進む前に設計・実装を修正する
+
+
+## #90 切断復帰のRound境界15秒方式
+
+#54 Human Verificationで切断決着の見え方を確認し、15秒deadlineの開始位置を変更した。
+
+- active Round中はdeadlineを開始しない
+- 同Round中は15秒を超えても復帰可能
+- Round終了時またはRound開始前に未接続playerがいる場合、そこから15秒待機
+- 15秒以内の復帰で次Round継続
+- 15秒timeoutで接続中playerのmatch勝利
+- RatingはRoundではなくMatch確定時に1回だけ更新
+
+#90完了後に#54 Human Verificationを再実施する。
