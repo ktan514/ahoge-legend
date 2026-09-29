@@ -12,6 +12,7 @@ var _second_round_result: Dictionary = {}
 var _second_connection_events: Array[Dictionary] = []
 var _second_input_sequence: int = 0
 var _second_hit_count: int = 0
+var _second_user_id: String = ""
 
 
 func _init() -> void:
@@ -66,6 +67,7 @@ func _run() -> void:
 		_fail("P2 Device認証に失敗しました。")
 		return
 	var p2_user_id := str(second_session.user_id)
+	_second_user_id = p2_user_id
 
 	var initial_p1_rating := await _read_current_rating(
 		online_session.client,
@@ -241,7 +243,7 @@ func _run() -> void:
 		_fail("切断敗北時のRound scoreが通常Round Resultと一致しません。")
 		return
 
-	# 15秒を超えても元matchは未解決lockとして残る。
+	# Round境界timeout後もResult確認までは元matchを未解決contextとして保持する。
 	var reauth: Dictionary = await online_session.authenticate_local_device()
 	if not bool(reauth.get("ok", false)) or str(reauth.get("user_id", "")) != p1_user_id:
 		_fail("P1再ログインに失敗しました。")
@@ -281,7 +283,7 @@ func _run() -> void:
 
 	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
-		_fail("15秒超過後の終了済みmatchへ再接続できませんでした。")
+		_fail("Round境界timeout後の終了済みmatchへ再接続できませんでした。")
 		return
 	if str(resumed.get("destination", "")) != "ranked_result":
 		_fail("終了済みRankedの復帰先がranked_resultではありません。")
@@ -470,7 +472,7 @@ func _on_second_match_state(match_state) -> void:
 		var hit_count := CombatInputProtocolScript.parse_round_hit_count_changed_payload(
 			str(match_state.data)
 		)
-		if not hit_count.is_empty() 				and str(hit_count.get("user_id", "")) == str(_second_session.user_id):
+		if not hit_count.is_empty() 				and str(hit_count.get("user_id", "")) == _second_user_id:
 			_second_hit_count = int(hit_count.get("hit_count", 0))
 		return
 

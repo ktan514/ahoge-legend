@@ -224,6 +224,48 @@ func _run() -> void:
 		_fail("active Round中に15秒経過しただけでmatchが終了しました。")
 		return
 
+	# 15秒超過後でも同じRoundへ復帰でき、切断中に進んだserver stateへ同期する。
+	_rejoined_snapshot = {}
+	if not await _connect_second_socket(false):
+		return
+	var active_rejoin = await _second_socket.join_match_async(_second_match_id)
+	if active_rejoin == null or active_rejoin.is_exception():
+		_fail("active Round切断15秒超過後にP2が再joinできませんでした。")
+		return
+	var active_snapshot_deadline := Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < active_snapshot_deadline and _rejoined_snapshot.is_empty():
+		await create_timer(0.02).timeout
+	if _rejoined_snapshot.is_empty():
+		_fail("active Round再join時にauthoritative snapshotを受信できませんでした。")
+		return
+	if bool(_rejoined_snapshot.get("round_finished", true)) 			or int(_rejoined_snapshot.get("round_number", -1)) != 1 			or int(_rejoined_snapshot.get("remaining_seconds", 85)) >= timer_before_disconnect:
+		_fail("active Round再join snapshotが切断中に進んだ状態を反映していません。")
+		return
+	if not await _wait_connection(_p2_user_id, true, 3000):
+		_fail("active Round15秒超過後のP2復帰eventを受信できませんでした。")
+		return
+
+	# 同じRound中にもう一度切断し、今度はRound終了まで未復帰にする。
+	var second_disconnect_start := _p1_connections.size()
+	_second_socket.close()
+	_second_socket = null
+	if not await _wait_connection_since(
+		_p2_user_id,
+		false,
+		second_disconnect_start,
+		3000
+	):
+		_fail("P2の2回目切断eventを受信できませんでした。")
+		return
+	var second_active_disconnect := _connection_event_since(
+		_p2_user_id,
+		false,
+		second_disconnect_start
+	)
+	if second_active_disconnect.is_empty() 			or int(second_active_disconnect.get("reconnect_deadline_tick", 0)) != -1:
+		_fail("2回目のactive Round切断で15秒deadlineが開始されています。")
+		return
+
 	var boundary_event_start := _p1_connections.size()
 	for hit_index in range(1, 6):
 		if not await _p1_attack_once(online_session, hit_index):
@@ -488,6 +530,20 @@ func _wait_connection(user_id: String, connected: bool, timeout_ms: int) -> bool
 		for event in _p1_connections:
 			if str(event.get("user_id", "")) == user_id and bool(event.get("connected", false)) == connected:
 				return true
+		await create_timer(0.02).timeout
+	return false
+
+
+func _wait_connection_since(
+	user_id: String,
+	connected: bool,
+	start_index: int,
+	timeout_ms: int
+) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if not _connection_event_since(user_id, connected, start_index).is_empty():
+			return true
 		await create_timer(0.02).timeout
 	return false
 
