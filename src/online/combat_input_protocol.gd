@@ -210,7 +210,7 @@ static func parse_round_result_payload(payload: String) -> Dictionary:
 		return {}
 	if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
 		return {}
-	if finish_cause not in ["HIT_LIMIT", "TIMEOUT", "OVERTIME_HIT"]:
+	if finish_cause not in ["HIT_LIMIT", "TIMEOUT", "OVERTIME_HIT", "DISCONNECT_FORFEIT"]:
 		return {}
 	if int(parsed["winner_hits"]) < 0 or int(parsed["loser_hits"]) < 0:
 		return {}

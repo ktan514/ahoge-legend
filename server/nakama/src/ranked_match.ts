@@ -43,10 +43,10 @@ const ROUND_FINISH_CAUSE_NONE = "NONE";
 const ROUND_FINISH_CAUSE_HIT_LIMIT = "HIT_LIMIT";
 const ROUND_FINISH_CAUSE_TIMEOUT = "TIMEOUT";
 const ROUND_FINISH_CAUSE_OVERTIME_HIT = "OVERTIME_HIT";
+const ROUND_FINISH_CAUSE_DISCONNECT_FORFEIT = "DISCONNECT_FORFEIT";
 
 const MATCH_FINISH_CAUSE_NONE = "NONE";
 const MATCH_FINISH_CAUSE_BO3 = "BO3";
-const MATCH_FINISH_CAUSE_DISCONNECT_TIMEOUT = "DISCONNECT_TIMEOUT";
 
 const CHARACTER_LONG_TEST = "LONG_TEST";
 const CHARACTER_SHORT_TEST = "SHORT_TEST";
@@ -243,15 +243,6 @@ const rankedMatchJoinAttempt: nkruntime.MatchJoinAttemptFunction<AhogeRankedMatc
     };
   }
 
-  const reconnectDeadline = state.reconnectDeadlineTickByUser[presence.userId];
-  if (
-    !state.matchFinished &&
-    reconnectDeadline !== undefined &&
-    tick >= reconnectDeadline
-  ) {
-    return {state: state, accept: false, rejectMessage: "round boundary reconnect grace expired"};
-  }
-
   if (!isSupportedCharacterId(state.characterIdByUser[presence.userId])) {
     return {state: state, accept: false, rejectMessage: "character was not selected"};
   }
@@ -281,6 +272,10 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
   presences
 ) {
   const reconnectedUserIds: string[] = [];
+
+  // deadline超過後のjoinがmatch loopより先に到着しても、
+  // 期限超過した対象Roundの不戦敗を先にserver authoritativeに確定する。
+  resolveRoundBoundaryTimeout(dispatcher, state, tick);
 
   presences.forEach(function (presence): void {
     const reconnectDeadline = state.reconnectDeadlineTickByUser[presence.userId];
@@ -391,7 +386,11 @@ function isActiveRoundPhase(state: AhogeRankedMatchState): boolean {
     !state.matchFinished &&
     !state.roundFinished &&
     !state.roundCountdownActive &&
-    state.roundTimerStartTick >= 0
+    (
+      state.roundTimerStartTick >= 0 ||
+      state.roundAwaitingOvertime ||
+      state.roundOvertime
+    )
   );
 }
 
@@ -1646,7 +1645,43 @@ function settleFriendRoomIfNeeded(
 }
 
 
-function resolveReconnectTimeout(
+function prepareRoundForDisconnectForfeit(
+  state: AhogeRankedMatchState
+): boolean {
+  // 直前Roundが完了済みなら、timeout対象は「次のRound」。
+  // Countdown / Round開始前の切断なら、現在roundNumberがそのまま対象Round。
+  if (state.roundFinished) {
+    state.roundNumber += 1;
+  }
+
+  if (state.roundNumber < 1 || state.roundNumber > MAX_ROUNDS) {
+    return false;
+  }
+
+  state.roundResetPending = false;
+  state.roundResultHoldUntilTick = -1;
+  state.roundCountdownActive = false;
+  state.roundCountdownStartTick = -1;
+  state.roundCountdownValue = -1;
+  state.roundTimerStartTick = -1;
+  state.roundTimerEndTick = -1;
+  state.roundRemainingSeconds = ROUND_DURATION_SECONDS;
+  state.roundFinished = false;
+  state.roundWinnerUserId = "";
+  state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
+  state.roundAwaitingOvertime = false;
+  state.roundOvertime = false;
+  state.roundHitCountSnapshotBroadcast = true;
+
+  participantUserIds(state).forEach(function (userId): void {
+    state.roundHitCountByUser[userId] = 0;
+    state.combatStateByUser[userId] = createIdleCombatState(true);
+  });
+
+  return true;
+}
+
+function resolveRoundBoundaryTimeout(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
   tick: number
@@ -1661,7 +1696,7 @@ function resolveReconnectTimeout(
     }
   );
 
-  // 両者同時切断は別契約。片側だけのRound境界timeoutだけを勝敗確定する。
+  // 両者同時切断は別契約。片側だけのRound境界timeoutだけを処理する。
   if (expiredUserIds.length !== 1) {
     return;
   }
@@ -1683,23 +1718,27 @@ function resolveReconnectTimeout(
     }
   }
 
-  // 接続中playerが存在しない場合は勝者を作らない。
+  // 接続中playerが存在しない場合は不戦勝を作らない。
   if (!winnerUserId) {
     return;
   }
 
-  state.matchFinished = true;
-  state.matchWinnerUserId = winnerUserId;
-  state.matchFinishCause = MATCH_FINISH_CAUSE_DISCONNECT_TIMEOUT;
-  state.matchFinishedAtUnixMs = Date.now();
-  state.roundResetPending = false;
-  state.roundCountdownActive = false;
+  // 今回期限超過したdeadlineを消してから不戦敗Roundを確定する。
+  // Match未決着ならfinishRoundが次Round用の新しい15秒deadlineを作る。
+  delete state.reconnectDeadlineTickByUser[loserUserId];
   state.roundBoundaryPauseStartTick = -1;
 
-  delete state.reconnectDeadlineTickByUser[loserUserId];
+  if (!prepareRoundForDisconnectForfeit(state)) {
+    return;
+  }
 
-  lockRoundCombat(dispatcher, state, tick);
-  broadcastMatchResult(dispatcher, state, tick);
+  finishRound(
+    dispatcher,
+    state,
+    winnerUserId,
+    ROUND_FINISH_CAUSE_DISCONNECT_FORFEIT,
+    tick
+  );
 }
 
 const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = function (
@@ -1711,7 +1750,7 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   state,
   messages
 ) {
-  resolveReconnectTimeout(dispatcher, state, tick);
+  resolveRoundBoundaryTimeout(dispatcher, state, tick);
   settleRankedRatingIfNeeded(nk, logger, state, tick);
   settleFriendRoomIfNeeded(nk, state, tick);
   persistActiveMatchResultIfNeeded(nk, state, tick);
