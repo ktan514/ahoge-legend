@@ -167,10 +167,13 @@ func _show_ranked_character_select() -> void:
 
 
 func _show_ranked_matching(character_id: String) -> void:
-	if (
-		_online_session.has_saved_match_context_file()
-		or _online_session.has_unresolved_match_context()
-	):
+	var active: Dictionary = await _online_session.refresh_active_online_match()
+	if not bool(active.get("ok", false)):
+		_show_battle_mode_select()
+		if is_instance_valid(_current_screen):
+			_current_screen.call("set_status", str(active.get("message", "未解決対戦を確認できませんでした。")))
+		return
+	if bool(active.get("active", false)):
 		await _force_resume_unresolved_ranked_match()
 		return
 
@@ -256,8 +259,10 @@ func _show_ranked_result(summary: Dictionary) -> void:
 	screen.connect("character_select_requested", Callable(self, "_show_ranked_character_select"))
 	screen.connect("top_requested", Callable(self, "_show_top_menu"))
 
-	# Result画面への遷移が確定した後だけ未解決match contextを解除する。
-	_online_session.acknowledge_saved_match_destination()
+	# Result画面への遷移が確定した後だけserver-side active contextを解除する。
+	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		printerr("Ranked Result active match ack failed: %s" % str(ack_result.get("message", "")))
 
 
 func _wait_for_ranked_rating_settlement(rating_before: Dictionary) -> Dictionary:
