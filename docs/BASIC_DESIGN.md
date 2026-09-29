@@ -589,7 +589,7 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - 切断側: 新しい入力は停止するが、serverが切断前に受理済みのaction stateはauthoritative tickで進行する
 - Round開始前 / Round終了後の片側切断: 両者が揃うまで次のRound進行へ移らない
 - 再接続成功時: server authoritative snapshotを受信し、復帰時点の状態へ同期する
-- 対戦中のゲーム終了 / client再起動後も、再ログイン時に保存済みmatch IDへ復帰を試みる
+- 対戦中のゲーム終了 / client再起動後も、再ログイン時にNakama user_id単位のserver-side active matchへ復帰を試みる
 - 対戦join後は「未解決の対戦」としてlockし、Battle復帰または終了後遷移が確定するまで新しいRanked / Friend対戦を開始できない
 - 同一プロセス内のSocket切断と再ログイン後の復帰は同じ未解決match復帰契約を使用する
 - 15秒はactive Battleへ戻れるserver側猶予であり、clientが元matchの解決を諦める期限にはしない

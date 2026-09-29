@@ -2508,17 +2508,7 @@ post-Round / Result hold
 
 Socketの一時切断だけでなく、ゲーム終了・client crash・再起動後に同じアカウントでログインした場合も、直前のオンライン対戦へ復帰できるようにする。
 
-clientはauthoritative matchへjoinした時点で、少なくとも次を端末永続領域へ保存する。
-
-```text
-match_id
-match_mode       # ranked / friend
-saved_user_id
-```
-
-認証成功後、保存済みmatchが存在し、`saved_user_id` が現在ログインuser IDと一致する場合は通常メニュー表示より先に復帰判定を行う。
-
-この保存済みmatchは「未解決の対戦lock」として扱う。同一プロセス内の切断でもアプリ再起動後でも契約を分けない。
+未解決matchの正本はclientローカルファイルではなく、Nakama `user_id` ごとのserver-side `active_online_match/current` とする。認証成功後、現在userのactive contextをserverへ問い合わせ、通常メニュー表示より先に復帰判定を行う。
 
 未解決matchが存在する間は次を禁止する。
 
@@ -2526,60 +2516,60 @@ saved_user_id
 - 新しいFriend room対戦開始
 - 未解決matchを無視して別matchへjoinすること
 
-clientは元matchの解決を最優先する。元matchの解決とは次のいずれかを指す。
+server-side active contextは次の状態を持つ。
 
-1. `match_finished=false` のsnapshotを受信し、Battleへ復帰
-2. `match_finished=true / ranked` のsnapshotを受信し、UI-11 Resultへ遷移
-3. `match_finished=true / friend` のsnapshotを受信し、Character Selectへ遷移
-4. server側から元matchが存在しないことを確定的に返され、復帰不能処理が完了
+```text
+ACTIVE
+  → match_id / match_mode を正本として同じauthoritative matchへ復帰
 
-lock永久残留対策として、clientは「対戦状態を修復」操作を持てるようにする。
+RESULT_PENDING
+  → server確定Result snapshotを正本として結果導線へ復帰
+```
 
-修復操作はlockを無条件削除しない。
+復帰判定:
 
-1. 保存済みmatch IDを読み出す
-2. serverへRealtime接続する
-3. 同じmatch IDへのjoinを試みる
-4. join成功ならsnapshotを受信し、通常の復帰先へ進む
-5. serverが確定的に `Match Not Found` を返した場合は古いlockを解除する
-6. 保存match IDが構文上不正でserverが `Invalid match ID` を返した場合も、実在matchを指し得ないローカル破損としてlockを解除する
-7. timeout / network error / server errorではlockを解除しない
+1. `active=false` → 通常導線
+2. `ACTIVE` → Realtime接続後、同じmatch IDへjoinしauthoritative snapshotを受信
+3. `RESULT_PENDING / ranked` → Battleを再表示せずUI-11 Resultへ遷移
+4. `RESULT_PENDING / friend` → Friend文脈のCharacter Selectへ遷移
+5. `ACTIVE` だがserver上にmatchが存在しない → serverがstale contextを安全解除
+6. timeout / network error / server error → contextを解除せず再試行可能な状態を保持
 
-これにより、client側バグや異常終了でlockが残っても復旧可能にしつつ、active matchを手動解除して別対戦へ逃げることはできない。
+clientは未解決matchの有無・match ID・結果をローカルファイルから推測しない。
 
-Nakamaの `NOT_FOUND`（gRPC code 5 / HTTP 404）を、保存済みmatchがserver上に存在しないことを示す確定的な復帰不能として扱う。この場合だけ古い未解決match lockを解除し、復帰不能エラー画面を経て新しい対戦を開始可能にする。通信失敗・timeout・UNAVAILABLE等ではlockを解除しない。
-
-1〜3では遷移先が確定するまでlockを解除しない。
+Result画面またはFriend側の復帰先への遷移が確定した後、clientはserverへacknowledgeを送り、対応する `active_online_match/current` を削除する。それ以前にcontextを削除してはならない。
 
 ```text
 Login
-→ saved match有無を確認
-→ Realtime接続
-→ saved match IDへjoin
-→ MATCH_SNAPSHOT受信
-   ├─ match_finished=false
+→ Nakama user_id確定
+→ active_online_match/current をserver照会
+   ├─ なし
+   │    → 通常メニュー
+   ├─ ACTIVE
+   │    → Realtime接続
+   │    → 同じmatch IDへjoin
+   │    → MATCH_SNAPSHOT
    │    → Battleへ復帰
-   └─ match_finished=true
-        ├─ ranked → UI-11 Match Resultだけ表示
-        └─ friend → Character Selectへ遷移
+   └─ RESULT_PENDING
+        ├─ ranked → UI-11 Match Result
+        └─ friend → Character Select
+             ↓
+        遷移確定後acknowledge
+        → server context削除
 ```
 
 進行中matchへの復帰では、同一プロセス内Reconnectと同じauthoritative snapshotを正本とする。
 
-終了済みmatchについてもexpected userの再joinを許可し、serverは終了済みsnapshotを返す。終了済みsnapshotには少なくとも次を含める。
+終了済みmatchについては、match process自体が終了・回収された後でも復帰できるよう、server-side contextへ確定Result snapshotを保存する。Result snapshotには少なくとも次を含める。
 
 - `match_finished=true`
 - `match_winner_user_id`
 - `match_finish_cause`
 - `round_wins_by_user`
 - `round_number`
+- `character_id_by_user`
 - `match_mode`
 
-RankedではこのsnapshotからUI-11表示用summaryを構築し、Battleへ一瞬戻してからResultへ遷移する実装にはしない。
-
-Friendでは終了済みmatchのResult再表示を行わず、Friend room文脈のCharacter Select（選択メニュー）へ戻す。Friend Match自体は工程3後段で実装するため、#69ではmodeを保持できる復帰契約まで先行実装し、実Friend導線接続はFriend Match実装時に検証する。
-
-saved match情報は、復帰先が確定して不要になった時点で消去する。認証user IDが異なる場合は他userのsaved matchへjoinしない。
 
 #### 21.5.5 再接続期限超過
 

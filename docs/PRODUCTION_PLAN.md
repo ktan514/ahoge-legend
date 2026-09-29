@@ -24,7 +24,7 @@
 - Nakama 3.41.0 + PostgreSQL 16.8-alpine
 - Device Authentication / Realtime Socket
 - Ranked Matchmaker
-- 15秒切断・再接続 / 保存済みmatch復帰
+- 15秒切断・再接続 / server-side active match復帰
 - Player Elo Rating / PLAYER Ranking
 - AHOGE LEGEND Ranking初期実装
 - 月次Season / 過去Season保持
@@ -149,7 +149,7 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - Ranked / Friendが両方成立する
 - FriendはPlayer Rating非対象
 - PLAYER / AHOGE LEGENDの月次Season基盤が動作する
-- 保存済みmatch復帰・切断決着・過去Season保持が成立する
+- user_id単位のserver-side active match復帰・切断決着・過去Season保持が成立する
 
 ## 7. 工程4: GameFlow・主要12画面
 
