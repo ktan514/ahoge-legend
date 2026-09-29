@@ -880,12 +880,15 @@ active Round中に復帰した場合は、server authoritative snapshotを受信
 
 - Round進行中はBattleを継続する。相手側は新規操作を行えない
 - active Round中は15秒timeoutを開始しない
-- Round開始前またはRound終了後は `WAITING FOR OPPONENT...` を表示し、次Roundへの進行を待つ
-- Round境界へ入った時点から15秒の復帰待機を開始する
-- Round境界15秒以内に相手が復帰したらserver stateへ同期し、次Round進行を再開する
+- Round終了時はまず前Round Resultを表示し、Result表示中は15秒を消費しない
+- Result表示完了後に次Round開始側へ切り替える
+- 次Round開始側で相手が未接続なら `WAITING FOR OPPONENT...` と残り秒数を表示する
+- 待機表示は `15 → 14 → ... → 1 → 0` と減少する
+- 15秒以内に相手が復帰したらserver stateへ同期し、待機表示を終了して対象RoundのCountdownから通常開始する
+- 0表示だけでは勝敗を確定せず、serverの `DISCONNECT_FORFEIT` Round Resultを受信して初めて不戦勝 / 不戦敗を表示する
 - Round境界15秒を超えて相手が未復帰なら、その対象Roundを接続中playerの不戦勝・切断playerの不戦敗としてserverが確定する
-- 不戦勝で2本先取ならMatch Resultへ進む。未決着なら次Roundについて改めて `WAITING FOR OPPONENT...` と15秒待機を開始する
-- Countdown中に相手が切断した場合はCountdown表示を停止する
+- 不戦勝で2本先取ならMatch Resultへ進む。未決着なら前Round Result表示後、次Round開始側で改めて `WAITING FOR OPPONENT...` と新しい15秒待機を開始する
+- Countdown中に相手が切断した場合はCountdown表示を停止し、その対象Roundの開始側で15秒待機へ切り替える
 
 再接続待機Overlayは最終デザインではなく、工程4の全画面UI見直し対象とする。
 

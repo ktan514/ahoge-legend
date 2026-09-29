@@ -195,14 +195,33 @@ func _run() -> void:
 		_fail("server authoritative Round 1開始を確認できませんでした。", app)
 		return
 
-	# P2切断後もactive Roundは進行する。P1がRound 1を終了させた時点から
-	# 15秒のRound境界復帰待機を開始し、timeoutでRound 2不戦勝→2-0のBO3 Resultをserver authoritativeに確定する。
+	# P2切断後もactive Roundは進行する。P1がRound 1を終了したらResultを先に表示し、
+	# 次Round開始側へ切り替わってから15秒待機し、timeoutでRound 2不戦勝→2-0 BO3を確定する。
 	_second_socket.close()
 	_second_socket = null
 	if not await _p1_finish_round(online_session, app, p1_hit_count, p1_states):
 		return
 
-	if not await _wait_screen(app, "MatchResult", 25000):
+	# 前Round Resultを先に表示し、その表示中には15秒待機を重ねない。
+	if not await _wait_label_text(app, "TAKES ROUND 1", 1500):
+		_fail("Round 1 Result表示を確認できませんでした。", app)
+		return
+	if _has_label_text(app, "WAITING FOR OPPONENT..."):
+		_fail("Round 1 Result表示中に相手再接続15秒待機が始まりました。", app)
+		return
+
+	# Result hold完了後、次Round開始側で15秒カウントを表示する。
+	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n15", 5000):
+		_fail("次Round開始側でWAITING FOR OPPONENT 15秒表示が始まりませんでした。", app)
+		return
+	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n14", 2500):
+		_fail("相手再接続待機カウントが15から14へ減少しませんでした。", app)
+		return
+	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n0", 20000):
+		_fail("相手再接続待機カウントの0表示を確認できませんでした。", app)
+		return
+
+	if not await _wait_screen(app, "MatchResult", 5000):
 		_fail("authoritative Match ResultからUI-11へ遷移しません。", app)
 		return
 	if not await _wait_no_active_match(online_session, 6000):
@@ -319,6 +338,24 @@ func _wait_no_active_match(online_session, timeout_ms: int) -> bool:
 		if bool(active.get("ok", false)) and not bool(active.get("active", false)):
 			return true
 		await create_timer(0.05).timeout
+	return false
+
+
+func _has_label_text(root: Node, text: String) -> bool:
+	if root is Label and str(root.text).contains(text):
+		return true
+	for child in root.get_children():
+		if _has_label_text(child, text):
+			return true
+	return false
+
+
+func _wait_label_text(root: Node, text: String, timeout_ms: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if _has_label_text(root, text):
+			return true
+		await create_timer(0.02).timeout
 	return false
 
 

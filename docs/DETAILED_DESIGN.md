@@ -2433,14 +2433,26 @@ Round進行中に片側だけが切断した場合、match全体は停止しな�
 
 #### 21.5.2 Round境界の復帰待機
 
-Round開始前、Countdown中、Round終了後のいずれかで片側が未接続の場合、次のRound進行を止める。
+Round境界は「前Round Result」と「次Round開始側」を明確に分離する。
 
-- Countdown中に片側が切断した場合はCountdownを停止する
-- Round進行中の切断後、そのまま5 Hit / TIMEOUT / OVERTIME_HITでRoundが終了した場合、Round終了地点から復帰待機へ入る
-- Round Result表示hold中に切断した場合もRound境界待機へ入る
-- Round境界へ入った時点で、未接続playerごとに15秒のreconnect deadlineを開始する
-- Round境界の15秒以内に全expected playerが復帰した場合、authoritative snapshot同期後に残りCountdown / Result holdを再開し、次Roundへ進む
-- Match自体が通常BO3で終了した場合はRound境界待機へ入らずMatch Resultを確定する
+```text
+前Round戦闘
+→ 前Round Result hold
+→ 次Round開始側へ切替
+→ 相手接続状態確認
+   ├─ 接続済み → Countdown / Round開始
+   └─ 未接続 → ここから15秒reconnect deadline
+```
+
+- Countdown中に片側が切断した場合はCountdownを停止し、その対象Roundの開始側で15秒待機へ入る
+- Round進行中の切断後、そのまま5 Hit / TIMEOUT / OVERTIME_HITでRoundが終了した場合、まず前Round Result holdを通常どおり完了する
+- Round Result hold中は15秒deadlineを開始せず、待機時間を消費しない
+- Round Result hold中に切断した場合も、deadline開始はResult hold完了後まで遅延する
+- Result hold完了後にRound番号・Hit数・戦闘状態を次Round開始側へ切り替える
+- その時点で未接続playerがいる場合、未接続playerごとに15秒のreconnect deadlineを開始する
+- deadline前に全expected playerが復帰した場合、authoritative snapshot同期後にdeadlineを削除し、その対象RoundのCountdownから通常開始する
+- clientの待機カウント表示は表示専用であり、0到達を勝敗判定には使用しない
+- Match自体が通常BO3で終了した場合は次Round開始側へ移行せずMatch Resultを確定する
 
 #### 21.5.3 Round境界15秒timeout
 
@@ -2456,7 +2468,7 @@ Round開始前、Countdown中、Round終了後のいずれかで片側が未接�
 - active Round中に切断playerが通常ルールでRoundを取り、それが2本目なら15秒待機を挟まずそのMatch Winを有効とする
 - clientは不戦敗を独自判定せず、serverのRound Result / BO3 Score / Match Resultを正本とする
 
-15秒はRound境界で「これから開始する1Round」の出場待機期限であり、active Round中の復帰期限でもclientのretry終了期限でもない。
+15秒は前Round Result hold完了後に次Round開始側へ切り替わってから始まる「これから開始する1Round」の出場待機期限であり、active Round中の復帰期限でもclientのretry終了期限でもない。
 
 deadline超過後に切断playerが戻った場合、Match未決着なら最新authoritative snapshotへ同期して次の待機中Roundから復帰する。すでに2本先取でMatch終了済みならserver-side `RESULT_PENDING` の確定Resultを取得する。
 

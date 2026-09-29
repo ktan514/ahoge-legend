@@ -588,7 +588,9 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - Round進行中は切断からの経過時間に関係なく、同じRoundが終了するまで再接続を許可する
 - 切断側: 新しい入力は停止するが、serverが切断前に受理済みのaction stateはauthoritative tickで進行する
 - 同じRound中に復帰した場合: server authoritative snapshotへ同期し、その時点のRoundを継続する
-- Round開始前 / Round終了後の片側切断: 対象Roundを開始せず、Round境界で15秒の復帰待機を開始する
+- Round終了後の片側切断: 前Round Result表示を先に完了し、その表示時間中は15秒を消費しない
+- Result表示完了後に次Round開始側へ切り替え、相手が未接続ならそこで15秒の復帰待機を開始する
+- Round開始前 / Countdown中の片側切断: その対象Roundの開始側で15秒の復帰待機を開始する
 - Round境界の15秒以内に復帰した場合: snapshot同期後に対象Roundへ進む
 - Round境界の15秒以内に復帰しない場合: その対象Roundだけを切断playerの不戦敗、接続中playerの不戦勝としてRound取得数へ反映する
 - 不戦勝を加算して2本先取になれば通常BO3としてMatch終了する
@@ -598,7 +600,7 @@ macOS対応を行う場合も、ゲームルールやコンテンツ実装がOS�
 - 対戦中のゲーム終了 / client再起動後も、再ログイン時にNakama user_id単位のserver-side active matchへ復帰を試みる
 - 対戦join後は「未解決の対戦」としてlockし、Battle復帰または終了後遷移が確定するまで新しいRanked / Friend対戦を開始できない
 - 同一プロセス内のSocket切断と再ログイン後の復帰は同じ未解決match復帰契約を使用する
-- 15秒はactive Round中の切断時には開始せず、Round終了時点またはRound開始前の境界で未接続playerがいる場合にだけ開始する
+- 15秒はactive Round中にも前Round Result表示中にも開始せず、Result表示完了後に次Round開始側へ切り替えた時点、またはRound開始前 / Countdown中に未接続playerがいる場合に開始する
 - Round境界15秒timeoutで不戦敗Roundが成立した後もMatch未決着なら同じ未解決matchを維持し、次Roundの復帰待機へ進む
 - 不戦敗Roundを含む通常BO3でMatchが終了した後は、回線復旧時にserver-side RESULT_PENDINGから終了済みResultを取得する
 - 再ログイン時にmatchが進行中ならBattleへ復帰する

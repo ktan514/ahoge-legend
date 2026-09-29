@@ -170,6 +170,13 @@ func show_network_overlay(text: String) -> void:
 	_network_overlay.text = text
 
 
+func show_opponent_wait_countdown(remaining_seconds: int) -> void:
+	_status.text = "NEXT ROUND: WAITING FOR OPPONENT"
+	_timer.text = ""
+	_message.text = ""
+	_network_overlay.text = "WAITING FOR OPPONENT...\n%d" % maxi(0, remaining_seconds)
+
+
 func clear_network_overlay() -> void:
 	_network_overlay.text = ""
 

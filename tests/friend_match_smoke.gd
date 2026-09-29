@@ -270,7 +270,7 @@ func _run() -> void:
 	if not await _p1_finish_friend_round(online_session, p1_hit_count, p1_states):
 		return
 
-	var result_deadline := Time.get_ticks_msec() + 18000
+	var result_deadline := Time.get_ticks_msec() + 22000
 	while Time.get_ticks_msec() < result_deadline and (match_event[0] as Dictionary).is_empty():
 		await create_timer(0.05).timeout
 	var first_result: Dictionary = match_event[0]

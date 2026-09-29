@@ -19,6 +19,7 @@ var _p1_results: Array[Dictionary] = []
 var _p1_scores: Array[Dictionary] = []
 var _p1_countdowns: Array[Dictionary] = []
 var _p1_defense: Array[Dictionary] = []
+var _p1_connection_events: Array[Dictionary] = []
 var _round_started_numbers: Array[int] = []
 var _last_p1_release_sequence: int = 0
 var _rejoined_snapshot: Dictionary = {}
@@ -113,6 +114,15 @@ func _run() -> void:
 				"server_tick": server_tick,
 				"input_sequence": input_sequence,
 				"result": result,
+			})
+	)
+	online_session.player_connection_changed.connect(
+		func(user_id: String, connected: bool, reconnect_deadline_tick: int, server_tick: int) -> void:
+			_p1_connection_events.append({
+				"user_id": user_id,
+				"connected": connected,
+				"reconnect_deadline_tick": reconnect_deadline_tick,
+				"server_tick": server_tick,
 			})
 	)
 
@@ -253,11 +263,28 @@ func _run() -> void:
 		return
 
 
-	await create_timer(2.5).timeout
+	# 前Round Result hold中は15秒deadlineを開始しない。
+	var boundary_event_start := _p1_connection_events.size()
+	await create_timer(1.0).timeout
+	if _has_boundary_deadline_since(_p2_user_id, boundary_event_start):
+		_fail("Round 1 Result表示中にRound 2の15秒deadlineが開始されました。")
+		return
+
+	# Result hold完了後に次Round開始側へ切り替わってからdeadlineが始まる。
+	var boundary_deadline := await _wait_boundary_deadline(
+		_p2_user_id,
+		boundary_event_start,
+		5000
+	)
+	if boundary_deadline.is_empty():
+		_fail("Round 2開始側へ切り替わった後に15秒deadlineが開始されませんでした。")
+		return
 	if _has_countdown_for_round(2):
 		_fail("P2不在のままRound 2 Countdownが開始しました。")
 		return
 
+	# deadline内でP2が復帰すれば不戦敗にせずRound 2を通常開始する。
+	await create_timer(2.0).timeout
 	_rejoined_snapshot = {}
 	if not await _connect_second_socket(false):
 		return
@@ -273,9 +300,17 @@ func _run() -> void:
 		_fail("P2再join時にauthoritative snapshotを受信できませんでした。")
 		return
 
-	if int(_rejoined_snapshot.get("round_number", -1)) != 1 			or not bool(_rejoined_snapshot.get("round_finished", false)) 			or int(_rejoined_snapshot.get("round_hit_count_by_user", {}).get(_p1_user_id, -1)) != 5 			or int(_rejoined_snapshot.get("round_wins_by_user", {}).get(_p1_user_id, -1)) != 1:
-		_fail("P2再join snapshotがRound終了時のauthoritative stateと一致しません。")
+	if int(_rejoined_snapshot.get("round_number", -1)) != 2 \
+			or bool(_rejoined_snapshot.get("round_finished", true)) \
+			or int(_rejoined_snapshot.get("round_hit_count_by_user", {}).get(_p1_user_id, -1)) != 0 \
+			or int(_rejoined_snapshot.get("round_wins_by_user", {}).get(_p1_user_id, -1)) != 1:
+		_fail("deadline内P2再join snapshotがRound 2開始待機状態と一致しません。")
 		return
+	for event in _p1_results:
+		if int(event.get("round_number", -1)) == 2 \
+				and str(event.get("finish_cause", "")) == "DISCONNECT_FORFEIT":
+			_fail("deadline内にP2復帰したのにRound 2不戦敗が確定しました。")
+			return
 
 	if not await _wait_countdown(2, 3, 5000):
 		_fail("P2復帰後にRound 2 Countdownが再開しませんでした。")
@@ -436,6 +471,33 @@ func _wait_score(completed_round_number: int, timeout_ms: int) -> Dictionary:
 	while Time.get_ticks_msec() < deadline:
 		for event in _p1_scores:
 			if int(event.get("completed_round_number", -1)) == completed_round_number:
+				return event
+		await create_timer(0.02).timeout
+	return {}
+
+
+func _has_boundary_deadline_since(user_id: String, start_index: int) -> bool:
+	for index in range(start_index, _p1_connection_events.size()):
+		var event := _p1_connection_events[index]
+		if str(event.get("user_id", "")) == user_id \
+				and not bool(event.get("connected", true)) \
+				and int(event.get("reconnect_deadline_tick", -1)) >= 0:
+			return true
+	return false
+
+
+func _wait_boundary_deadline(
+	user_id: String,
+	start_index: int,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		for index in range(start_index, _p1_connection_events.size()):
+			var event := _p1_connection_events[index]
+			if str(event.get("user_id", "")) == user_id \
+					and not bool(event.get("connected", true)) \
+					and int(event.get("reconnect_deadline_tick", -1)) >= 0:
 				return event
 		await create_timer(0.02).timeout
 	return {}

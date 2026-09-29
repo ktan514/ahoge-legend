@@ -1,6 +1,7 @@
 extends Control
 
 const CombatConfigScript := preload("res://src/config/combat_config.gd")
+const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
@@ -27,6 +28,10 @@ var _round_countdown_active: bool = false
 var _round_finished: bool = false
 var _completion_emitted: bool = false
 var _go_clear_generation: int = 0
+var _opponent_boundary_waiting: bool = false
+var _opponent_boundary_wait_started_msec: int = 0
+var _opponent_boundary_wait_display_seconds: int = -1
+var _opponent_boundary_wait_generation: int = 0
 var _snapshot := {
 	"round_number": 1,
 	"player_one_hits": 0,
@@ -92,6 +97,9 @@ func _connect_online_signals() -> void:
 func _process(_delta: float) -> void:
 	if _online_session.is_reconnecting():
 		hud.show_network_overlay("RECONNECTING...")
+		return
+	if _opponent_boundary_waiting:
+		_update_opponent_boundary_wait_countdown()
 
 
 func _input(event: InputEvent) -> void:
@@ -274,12 +282,19 @@ func _on_round_result(
 	round_number: int,
 	winner_user_id: String,
 	_loser_user_id: String,
-	_finish_cause: String,
+	finish_cause: String,
 	_winner_hits: int,
 	_loser_hits: int,
 	_server_tick: int
 ) -> void:
 	_round_finished = true
+	if finish_cause == "DISCONNECT_FORFEIT" and _opponent_boundary_waiting:
+		_opponent_boundary_waiting = false
+		_opponent_boundary_wait_display_seconds = 0
+		_opponent_boundary_wait_generation += 1
+		var generation := _opponent_boundary_wait_generation
+		hud.show_opponent_wait_countdown(0)
+		call_deferred("_clear_forfeit_wait_overlay_after_delay", generation)
 	hud.flash_message("ROUND %d WINNER: %s" % [round_number, _player_label(winner_user_id)])
 
 
@@ -304,6 +319,7 @@ func _on_bo3_score_changed(
 
 
 func _on_round_started(round_number: int, round_wins_by_user: Dictionary, _server_tick: int) -> void:
+	_stop_opponent_boundary_wait()
 	_snapshot["round_number"] = round_number
 	_snapshot["remaining_seconds"] = 85
 	_snapshot["player_one_hits"] = 0
@@ -319,6 +335,7 @@ func _on_round_started(round_number: int, round_wins_by_user: Dictionary, _serve
 
 
 func _on_round_countdown_changed(round_number: int, countdown_value: int, _server_tick: int) -> void:
+	_stop_opponent_boundary_wait()
 	_snapshot["round_number"] = round_number
 	_snapshot["remaining_seconds"] = 85
 	_snapshot["player_one_hits"] = 0
@@ -352,6 +369,10 @@ func _on_match_result(
 	finish_cause: String,
 	_server_tick: int
 ) -> void:
+	# server結果は確定済み。表示上だけ0を短時間残してからUI-11へ遷移する。
+	if _opponent_boundary_wait_display_seconds == 0:
+		await get_tree().create_timer(0.25).timeout
+	_stop_opponent_boundary_wait()
 	if _completion_emitted:
 		return
 	_apply_round_wins(round_wins_by_user)
@@ -417,7 +438,8 @@ func _on_reconnect_started(_grace_seconds: int) -> void:
 
 
 func _on_reconnect_succeeded(_match_id: String) -> void:
-	hud.clear_network_overlay()
+	if not _opponent_boundary_waiting:
+		hud.clear_network_overlay()
 	if _match_finished:
 		hud.set_connection_status("RANKED: MATCH FINISHED")
 		_input_ready = false
@@ -435,18 +457,60 @@ func _on_reconnect_failed(message: String) -> void:
 func _on_player_connection_changed(
 	user_id: String,
 	connected: bool,
-	_reconnect_deadline_tick: int,
+	reconnect_deadline_tick: int,
 	_server_tick: int
 ) -> void:
 	if user_id != _opponent_user_id:
 		return
 	if connected:
-		hud.clear_network_overlay()
+		_stop_opponent_boundary_wait()
 		hud.set_connection_status("RANKED: READY")
-	elif _round_finished or _round_countdown_active:
-		hud.show_network_overlay("WAITING FOR OPPONENT...")
+	elif reconnect_deadline_tick >= 0:
+		_start_opponent_boundary_wait()
 	else:
+		_stop_opponent_boundary_wait()
 		hud.set_connection_status("RANKED: OPPONENT RECONNECTING")
+
+
+func _start_opponent_boundary_wait() -> void:
+	_input_ready = false
+	_attack_held = false
+	_opponent_boundary_waiting = true
+	_opponent_boundary_wait_started_msec = Time.get_ticks_msec()
+	_opponent_boundary_wait_display_seconds = OnlineConfigScript.ROUND_BOUNDARY_RECONNECT_WAIT_SECONDS
+	_opponent_boundary_wait_generation += 1
+	hud.clear_round_countdown()
+	hud.set_connection_status("RANKED: WAITING FOR OPPONENT")
+	hud.show_opponent_wait_countdown(_opponent_boundary_wait_display_seconds)
+
+
+func _update_opponent_boundary_wait_countdown() -> void:
+	var elapsed_msec := maxi(0, Time.get_ticks_msec() - _opponent_boundary_wait_started_msec)
+	var elapsed_seconds := int(elapsed_msec / 1000)
+	var remaining := maxi(
+		0,
+		OnlineConfigScript.ROUND_BOUNDARY_RECONNECT_WAIT_SECONDS - elapsed_seconds
+	)
+	if remaining == _opponent_boundary_wait_display_seconds:
+		return
+	_opponent_boundary_wait_display_seconds = remaining
+	hud.show_opponent_wait_countdown(remaining)
+
+
+func _stop_opponent_boundary_wait() -> void:
+	if not _opponent_boundary_waiting and _opponent_boundary_wait_display_seconds < 0:
+		return
+	_opponent_boundary_waiting = false
+	_opponent_boundary_wait_display_seconds = -1
+	_opponent_boundary_wait_generation += 1
+	hud.clear_network_overlay()
+
+
+func _clear_forfeit_wait_overlay_after_delay(generation: int) -> void:
+	await get_tree().create_timer(0.25).timeout
+	if generation == _opponent_boundary_wait_generation and not _opponent_boundary_waiting:
+		_opponent_boundary_wait_display_seconds = -1
+		hud.clear_network_overlay()
 
 
 func _on_exit_requested() -> void:

@@ -196,7 +196,7 @@ func _run() -> void:
 	var first_boundary_disconnect := await _wait_second_boundary_deadline(
 		p1_user_id,
 		first_boundary_event_start,
-		3000
+		5000
 	)
 	if first_boundary_disconnect.is_empty():
 		_fail("Round 2開始前にP1の15秒boundary deadlineが開始されませんでした。")
@@ -249,7 +249,7 @@ func _run() -> void:
 		_fail("Round 3の新しい15秒待機を行わず即時不戦敗になりました。")
 		return
 
-	var final_deadline := second_wait_start + 18000
+	var final_deadline := second_wait_start + 20000
 	while Time.get_ticks_msec() < final_deadline and _second_match_result.is_empty():
 		await create_timer(0.05).timeout
 	if _second_match_result.is_empty():

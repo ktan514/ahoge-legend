@@ -218,7 +218,7 @@ func _run() -> void:
 	if not await _p1_finish_round(online_session, p1_hit_count, p1_states):
 		return
 
-	var finish_deadline := Time.get_ticks_msec() + 18000
+	var finish_deadline := Time.get_ticks_msec() + 22000
 	while Time.get_ticks_msec() < finish_deadline and (finished_result[0] as Dictionary).is_empty():
 		await create_timer(0.05).timeout
 	if (finished_result[0] as Dictionary).is_empty():

@@ -351,6 +351,17 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
           -1,
           tick
         );
+      } else if (state.roundFinished && state.roundResetPending) {
+        // 前Round Result hold中は15秒を消費しない。
+        // hold完了後に次Round開始側へ切り替えてからdeadlineを開始する。
+        delete state.reconnectDeadlineTickByUser[presence.userId];
+        broadcastPlayerConnectionChanged(
+          dispatcher,
+          presence.userId,
+          false,
+          -1,
+          tick
+        );
       } else {
         beginRoundBoundaryReconnectWait(state, tick);
         startRoundBoundaryReconnectDeadline(
@@ -905,9 +916,6 @@ function finishRound(
   );
   if (state.matchFinished) {
     broadcastMatchResult(dispatcher, state, tick);
-  } else if (!allExpectedPlayersConnected(state)) {
-    beginRoundBoundaryReconnectWait(state, tick);
-    startRoundBoundaryReconnectDeadlines(dispatcher, state, tick);
   }
 }
 
@@ -1004,17 +1012,40 @@ function startNextRound(
   if (!state.roundResetPending || state.matchFinished) {
     return;
   }
-  if (!allExpectedPlayersConnected(state)) {
-    beginRoundBoundaryReconnectWait(state, tick);
-    startRoundBoundaryReconnectDeadlines(dispatcher, state, tick);
-    return;
-  }
 
+  // 前Round Result holdを完了してから次Round開始側へ遷移する。
+  // 相手不在でもRound番号を先に進め、ここから15秒deadlineを開始する。
   state.roundResetPending = false;
   state.roundResultHoldUntilTick = -1;
   state.roundNumber += 1;
   if (state.roundNumber > MAX_ROUNDS) {
     state.matchFinished = true;
+    return;
+  }
+
+  if (!allExpectedPlayersConnected(state)) {
+    state.roundCountdownActive = false;
+    state.roundCountdownStartTick = -1;
+    state.roundCountdownValue = -1;
+    state.roundTimerStartTick = -1;
+    state.roundTimerEndTick = -1;
+    state.roundRemainingSeconds = ROUND_DURATION_SECONDS;
+    state.roundFinished = false;
+    state.roundWinnerUserId = "";
+    state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
+    state.roundAwaitingOvertime = false;
+    state.roundOvertime = false;
+    state.roundHitCountSnapshotBroadcast = true;
+
+    participantUserIds(state).forEach(function (userId): void {
+      state.roundHitCountByUser[userId] = 0;
+      const locked = createIdleCombatState(true);
+      locked.state = COMBAT_STATE_ROUND_LOCKED;
+      state.combatStateByUser[userId] = locked;
+    });
+
+    beginRoundBoundaryReconnectWait(state, tick);
+    startRoundBoundaryReconnectDeadlines(dispatcher, state, tick);
     return;
   }
 
@@ -1648,12 +1679,8 @@ function settleFriendRoomIfNeeded(
 function prepareRoundForDisconnectForfeit(
   state: AhogeRankedMatchState
 ): boolean {
-  // 直前Roundが完了済みなら、timeout対象は「次のRound」。
-  // Countdown / Round開始前の切断なら、現在roundNumberがそのまま対象Round。
-  if (state.roundFinished) {
-    state.roundNumber += 1;
-  }
-
+  // deadlineは対象Round開始側でのみ開始するため、
+  // timeout時点のroundNumberがそのまま不戦敗対象Round。
   if (state.roundNumber < 1 || state.roundNumber > MAX_ROUNDS) {
     return false;
   }
@@ -1724,7 +1751,7 @@ function resolveRoundBoundaryTimeout(
   }
 
   // 今回期限超過したdeadlineを消してから不戦敗Roundを確定する。
-  // Match未決着ならfinishRoundが次Round用の新しい15秒deadlineを作る。
+  // Match未決着ならResult hold完了後、startNextRound()が次Round用の新しい15秒deadlineを作る。
   delete state.reconnectDeadlineTickByUser[loserUserId];
   state.roundBoundaryPauseStartTick = -1;
 
@@ -1758,18 +1785,19 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   if (
     state.roundResetPending &&
     !state.matchFinished &&
-    allExpectedPlayersConnected(state) &&
-    state.roundBoundaryPauseStartTick < 0 &&
     tick >= state.roundResultHoldUntilTick
   ) {
     startNextRound(dispatcher, state, tick);
   }
 
   if (
+    !state.matchFinished &&
+    !state.roundFinished &&
+    !state.roundResetPending &&
     allExpectedPlayersConnected(state) &&
+    state.roundBoundaryPauseStartTick < 0 &&
     state.roundTimerStartTick < 0 &&
-    !state.roundCountdownActive &&
-    state.roundNumber === 1
+    !state.roundCountdownActive
   ) {
     beginRoundCountdown(dispatcher, state, tick);
   }

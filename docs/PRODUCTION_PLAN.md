@@ -316,8 +316,10 @@ Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件�
 
 - active Round中はdeadlineを開始しない
 - 同Round中は15秒を超えても復帰可能
-- Round終了時またはRound開始前に未接続playerがいる場合、そこから15秒待機
-- 15秒以内の復帰で次Round継続
+- Round終了後は前Round Result表示を完了してから次Round開始側へ切り替える
+- Result表示中は15秒を消費せず、次Round開始側で未接続playerがいる場合に15秒待機を開始する
+- 待機UIは `WAITING FOR OPPONENT...` と `15 → ... → 0` を表示する
+- 15秒以内のserver再接続受理で不戦敗を発生させず次Round継続
 - 15秒timeoutはその対象Roundの不戦敗とし、接続中playerへ1Round加算する
 - 不戦勝で2本先取なら通常BO3としてMatch終了し、未決着なら次Roundについて改めて15秒待機する
 - active Roundの通常結果で切断playerが2本先取した場合はその勝利を有効とする
