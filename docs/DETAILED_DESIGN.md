@@ -209,6 +209,8 @@ Nakama側のカスタムサーバーロジックはTypeScriptを使用する。
 
 ランクマッチ終了時は、サーバーで確定した勝者に対してプレイヤーランキングを更新し、同時に勝者が使用していたキャラクターの当月総勝利数へ1を加算する。
 
+AHOGE LEGEND集計では、`ahoge_season_rank` storageをキャラクター別の `total_match_wins / total_ranked_matches` の正本とする。Nakama leaderboardは勝数による順位付けの投影として使用し、RPCで返す `total_ranked_matches` はleaderboard metadataを正本にせずstorageから取得する。これにより、敗者のように勝数が変わらない対戦でも試合数更新を失わない。
+
 フレンドマッチはプレイヤーランキング・AHOGE LEGENDランキングのどちらにも反映しない。
 
 Rating方式は未決。
