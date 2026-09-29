@@ -1,6 +1,7 @@
 extends SceneTree
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _second_socket = null
 var _second_ticket: String = ""
@@ -199,6 +200,11 @@ func _run() -> void:
 		_second_socket.close()
 		_second_socket = null
 
+	# active Round中の切断だけでは敗北にしない。P1が5HitでRound 1を終えた後、
+	# Round境界15秒timeoutでMatch Resultを確定させる。
+	if not await _p1_finish_round(online_session):
+		return
+
 	var finish_deadline := Time.get_ticks_msec() + 18000
 	while Time.get_ticks_msec() < finish_deadline and (finished_result[0] as Dictionary).is_empty():
 		await create_timer(0.05).timeout
@@ -264,6 +270,25 @@ func _run() -> void:
 	online_session.clear_session()
 	print("AHOGE LEGEND saved match resume smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _p1_finish_round(online_session) -> bool:
+	for _hit_index in range(5):
+		var press: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+		if not bool(press.get("ok", false)):
+			_fail("P1 ATTACK_PRESSを送信できませんでした。")
+			return false
+		await create_timer(0.05).timeout
+		var release: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+		if not bool(release.get("ok", false)):
+			_fail("P1 ATTACK_RELEASEを送信できませんでした。")
+			return false
+		await create_timer(0.95).timeout
+	return true
 
 
 func _wait_active_match_state(
