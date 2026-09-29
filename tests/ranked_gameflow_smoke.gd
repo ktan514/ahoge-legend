@@ -2,6 +2,7 @@ extends SceneTree
 
 const AppRootScene := preload("res://scenes/app/AppRoot.tscn")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _second_socket = null
 var _second_ticket: String = ""
@@ -166,9 +167,12 @@ func _run() -> void:
 		_fail("強制復帰後のmatch IDが元のauthoritative matchと一致しません。", app)
 		return
 
-	# P2を切断し、既存15秒Reconnect契約でserver authoritativeに勝敗確定させる。
+	# P2切断後もactive Roundは進行する。P1がRound 1を終了させた時点から
+	# 15秒のRound境界復帰待機を開始し、timeoutでserver authoritativeに勝敗確定する。
 	_second_socket.close()
 	_second_socket = null
+	if not await _p1_finish_round(online_session, app):
+		return
 
 	if not await _wait_screen(app, "MatchResult", 25000):
 		_fail("authoritative Match ResultからUI-11へ遷移しません。", app)
@@ -225,6 +229,25 @@ func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
 			return true
 		await create_timer(0.05).timeout
 	return false
+
+
+func _p1_finish_round(online_session, app) -> bool:
+	for _hit_index in range(5):
+		var press: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+		if not bool(press.get("ok", false)):
+			_fail("P1 ATTACK_PRESSを送信できませんでした。", app)
+			return false
+		await create_timer(0.05).timeout
+		var release: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+		if not bool(release.get("ok", false)):
+			_fail("P1 ATTACK_RELEASEを送信できませんでした。", app)
+			return false
+		await create_timer(0.95).timeout
+	return true
 
 
 func _wait_no_active_match(online_session, timeout_ms: int) -> bool:

@@ -115,7 +115,7 @@ func _disconnect_after_round_start() -> void:
 		_socket.close()
 		_socket = null
 	print("AHOGE LEGEND Ranked HV opponent: DISCONNECTED")
-	print("P1実画面は約15秒後にserver authoritative Match Resultへ遷移します。")
+	print("active Round中はtimeoutしません。P1でRoundを終了させると、その時点から15秒後にserver authoritative Match Resultへ遷移します。")
 	quit(0)
 
 

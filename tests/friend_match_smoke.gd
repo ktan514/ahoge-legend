@@ -1,6 +1,7 @@
 extends SceneTree
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 var _second_socket = null
 
@@ -250,9 +251,12 @@ func _run() -> void:
 		_fail("Friend match Round 1が開始しませんでした。")
 		return
 
-	# P2を切断し、既存15秒Reconnect契約でFriend Match Resultを確定する。
+	# P2切断後もactive Roundを進行し、P1がRound 1を終了した時点から
+	# Round境界15秒timeoutでFriend Match Resultを確定する。
 	_second_socket.close()
 	_second_socket = null
+	if not await _p1_finish_friend_round(online_session):
+		return
 
 	var result_deadline := Time.get_ticks_msec() + 18000
 	while Time.get_ticks_msec() < result_deadline and (match_event[0] as Dictionary).is_empty():
@@ -373,6 +377,25 @@ func _run() -> void:
 		% [room_code, first_match_id, second_match_id]
 	)
 	quit(0)
+
+
+func _p1_finish_friend_round(online_session) -> bool:
+	for _hit_index in range(5):
+		var press: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+		if not bool(press.get("ok", false)):
+			_fail("Friend P1 ATTACK_PRESSを送信できませんでした。")
+			return false
+		await create_timer(0.05).timeout
+		var release: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+		if not bool(release.get("ok", false)):
+			_fail("Friend P1 ATTACK_RELEASEを送信できませんでした。")
+			return false
+		await create_timer(0.95).timeout
+	return true
 
 
 func _rpc_dict(client, session, rpc_id: String, payload: Dictionary) -> Dictionary:
