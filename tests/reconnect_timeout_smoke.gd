@@ -42,6 +42,8 @@ func _run() -> void:
 	var p1_joined := [""]
 	var round_one_started := [false]
 	var round_two_started := [false]
+	var p1_hit_count := [0]
+	var p1_states: Array[Dictionary] = []
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
@@ -51,6 +53,16 @@ func _run() -> void:
 				round_one_started[0] = true
 			elif round_number == 2:
 				round_two_started[0] = true
+	)
+	online_session.round_hit_count_changed.connect(
+		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
+			if user_id == p1_user_id:
+				p1_hit_count[0] = hit_count
+	)
+	online_session.combat_state_changed.connect(
+		func(user_id: String, state_name: String, _server_tick: int, _charge_ratio: float) -> void:
+			if user_id == p1_user_id:
+				p1_states.append({"state": state_name})
 	)
 
 	var second_client = nakama.create_client(
@@ -159,7 +171,11 @@ func _run() -> void:
 		return
 
 	# 切断側P1が1本リードした状態を作る。Round取得だけではまだmatch結果ではない。
-	if not await _p1_finish_opening_round(online_session):
+	if not await _p1_finish_opening_round(
+		online_session,
+		p1_hit_count,
+		p1_states
+	):
 		return
 	var round_two_deadline := Time.get_ticks_msec() + 8000
 	while Time.get_ticks_msec() < round_two_deadline and not round_two_started[0]:
@@ -506,22 +522,63 @@ func _on_second_match_state(match_state) -> void:
 			_second_match_result = event
 
 
-func _p1_finish_opening_round(online_session) -> bool:
-	for _hit_index in range(5):
+func _p1_finish_opening_round(
+	online_session,
+	p1_hit_count: Array,
+	p1_states: Array[Dictionary]
+) -> bool:
+	for hit_index in range(1, 6):
+		var state_start := p1_states.size()
 		var press: Dictionary = await online_session.send_combat_input(
 			CombatInputProtocolScript.ACTION_ATTACK_PRESS
 		)
 		if not bool(press.get("ok", false)):
 			_fail("Opening Round P1 ATTACK_PRESSを送信できませんでした。")
 			return false
-		await create_timer(0.05).timeout
+
+		var charging_deadline := Time.get_ticks_msec() + 3000
+		var charging_seen := false
+		while Time.get_ticks_msec() < charging_deadline:
+			for index in range(state_start, p1_states.size()):
+				if str(p1_states[index].get("state", "")) == "CHARGING":
+					charging_seen = true
+					break
+			if charging_seen:
+				break
+			await create_timer(0.02).timeout
+		if not charging_seen:
+			_fail("Opening Round P1 CHARGINGを確認できませんでした。")
+			return false
+
 		var release: Dictionary = await online_session.send_combat_input(
 			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
 		)
 		if not bool(release.get("ok", false)):
 			_fail("Opening Round P1 ATTACK_RELEASEを送信できませんでした。")
 			return false
-		await create_timer(0.95).timeout
+
+		var hit_deadline := Time.get_ticks_msec() + 4000
+		while Time.get_ticks_msec() < hit_deadline and int(p1_hit_count[0]) < hit_index:
+			await create_timer(0.02).timeout
+		if int(p1_hit_count[0]) < hit_index:
+			_fail("Opening Round P1 Hit count=%dを確認できませんでした。" % hit_index)
+			return false
+
+		if hit_index < 5:
+			var idle_deadline := Time.get_ticks_msec() + 4000
+			var idle_seen := false
+			while Time.get_ticks_msec() < idle_deadline:
+				for index in range(state_start, p1_states.size()):
+					if str(p1_states[index].get("state", "")) == "IDLE":
+						idle_seen = true
+						break
+				if idle_seen:
+					break
+				await create_timer(0.02).timeout
+			if not idle_seen:
+				_fail("Opening Round P1が次の攻撃前にIDLEへ復帰しませんでした。")
+				return false
+
 	return true
 
 

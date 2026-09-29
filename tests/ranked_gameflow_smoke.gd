@@ -63,6 +63,7 @@ func _run() -> void:
 	var p2_user_id := str(second_session.user_id)
 	var p1_hit_count := [0]
 	var p1_states: Array[Dictionary] = []
+	var round_one_started := [false]
 	var p1_user_id := str(online_session.session.user_id)
 	online_session.round_hit_count_changed.connect(
 		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
@@ -73,6 +74,11 @@ func _run() -> void:
 		func(user_id: String, state_name: String, _server_tick: int, _charge_ratio: float) -> void:
 			if user_id == p1_user_id:
 				p1_states.append({"state": state_name})
+	)
+	online_session.round_started.connect(
+		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
+			if round_number == 1:
+				round_one_started[0] = true
 	)
 
 	_second_socket = nakama.create_socket_from(second_client)
@@ -179,6 +185,14 @@ func _run() -> void:
 		return
 	if str(online_session.current_match_id) != original_match_id:
 		_fail("強制復帰後のmatch IDが元のauthoritative matchと一致しません。", app)
+		return
+
+	# UI表示だけではなく、server上でRound 1が入力可能になっていることを確認する。
+	var active_round_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < active_round_deadline and not bool(round_one_started[0]):
+		await create_timer(0.02).timeout
+	if not bool(round_one_started[0]):
+		_fail("server authoritative Round 1開始を確認できませんでした。", app)
 		return
 
 	# P2切断後もactive Roundは進行する。P1がRound 1を終了させた時点から
