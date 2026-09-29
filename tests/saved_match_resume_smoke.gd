@@ -133,9 +133,9 @@ func _run() -> void:
 		return
 
 	var original_match_id: String = str(p1_joined[0])
-	var saved_before: Dictionary = online_session.get_saved_match_for_current_user()
-	if str(saved_before.get("match_id", "")) != original_match_id:
-		_fail("対戦join時に未解決match情報が保存されていません。")
+	var active_before: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_before.get("ok", false)) 			or not bool(active_before.get("active", false)) 			or str(active_before.get("match_id", "")) != original_match_id 			or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
+		_fail("対戦join時にserver-side active matchが保存されていません。")
 		return
 
 	# アプリ再起動相当: runtime sessionだけ失い、未解決match情報は保持する。
@@ -161,7 +161,7 @@ func _run() -> void:
 		_fail("新規Ranked拒否理由がunresolved_matchではありません。")
 		return
 
-	var resumed: Dictionary = await online_session.resume_saved_match_after_login()
+	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) or not bool(resumed.get("resumed", false)):
 		_fail("保存済みmatchへ再ログイン復帰できませんでした。")
 		return
@@ -224,6 +224,15 @@ func _run() -> void:
 		_fail("保存済みmatch復帰試験のAHOGE settlementが完了しませんでした。")
 		return
 
+	var pending_context := await _wait_active_match_state(
+		online_session,
+		OnlineConfigScript.ACTIVE_MATCH_STATE_RESULT_PENDING,
+		5000
+	)
+	if pending_context.is_empty():
+		_fail("終了済みRankedがserver-side RESULT_PENDINGへ遷移しませんでした。")
+		return
+
 	# Result遷移確定前のlockを保持したまま再起動相当にし、
 	# serverの終了済みsnapshotからranked_resultへ復帰する。
 	online_session.clear_runtime_session_preserving_match()
@@ -243,16 +252,32 @@ func _run() -> void:
 		_fail("終了済みRanked snapshotのwinnerがserver結果と一致しません。")
 		return
 
-	if not online_session.acknowledge_saved_match_destination():
-		_fail("Ranked Result遷移確定後に未解決match lockを解除できませんでした。")
+	var ack_result: Dictionary = await online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		_fail("Ranked Result遷移確定後にserver-side active matchを解除できませんでした。")
 		return
-	if not online_session.can_start_new_online_match():
-		_fail("Ranked Result遷移確定後も新規対戦lockが残っています。")
+	var active_after_ack: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_after_ack.get("ok", false)) or bool(active_after_ack.get("active", false)):
+		_fail("Ranked Result遷移確定後もserver-side active matchが残っています。")
 		return
 
 	online_session.clear_session()
 	print("AHOGE LEGEND saved match resume smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _wait_active_match_state(
+	online_session,
+	state_name: String,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var active: Dictionary = await online_session.refresh_active_online_match()
+		if bool(active.get("ok", false)) 				and bool(active.get("active", false)) 				and str(active.get("state", "")) == state_name:
+			return active
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _read_ahoge_ranking(client, session, limit: int) -> Dictionary:
