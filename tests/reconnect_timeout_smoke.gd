@@ -41,6 +41,7 @@ func _run() -> void:
 
 	var p1_joined := [""]
 	var round_one_started := [false]
+	var round_two_started := [false]
 	online_session.ranked_match_joined.connect(func(match_id: String) -> void:
 		p1_joined[0] = match_id
 	)
@@ -48,6 +49,8 @@ func _run() -> void:
 		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
 			if round_number == 1:
 				round_one_started[0] = true
+			elif round_number == 2:
+				round_two_started[0] = true
 	)
 
 	var second_client = nakama.create_client(
@@ -155,13 +158,23 @@ func _run() -> void:
 		_fail("Round 1が開始しませんでした。")
 		return
 
+	# 切断側P1が1本リードした状態を作る。Round取得だけではまだmatch結果ではない。
+	if not await _p1_finish_opening_round(online_session):
+		return
+	var round_two_deadline := Time.get_ticks_msec() + 8000
+	while Time.get_ticks_msec() < round_two_deadline and not round_two_started[0]:
+		await create_timer(0.05).timeout
+	if not round_two_started[0]:
+		_fail("P1 1本先取後にRound 2が開始しませんでした。")
+		return
+
 	var original_match_id: String = str(p1_joined[0])
 	var active_before: Dictionary = await online_session.refresh_active_online_match()
 	if not bool(active_before.get("ok", false)) or not bool(active_before.get("active", false)) or str(active_before.get("match_id", "")) != original_match_id or str(active_before.get("state", "")) != OnlineConfigScript.ACTIVE_MATCH_STATE_ACTIVE:
 		_fail("P1のserver-side active matchが保存されていません。")
 		return
 
-	# P1のアプリ終了相当。active Round中なのでこの時点では15秒deadlineを開始しない。
+	# P1が1-0でリードしたRound 2中に切断。active Roundなのでこの時点では15秒deadlineを開始しない。
 	var disconnect_event_start := _second_connection_events.size()
 	online_session.clear_runtime_session_preserving_match()
 
@@ -205,10 +218,10 @@ func _run() -> void:
 	while Time.get_ticks_msec() < round_result_deadline and _second_round_result.is_empty():
 		await create_timer(0.05).timeout
 	if _second_round_result.is_empty():
-		_fail("P1切断中にRound 1を終了できませんでした。")
+		_fail("P1切断中にRound 2を終了できませんでした。")
 		return
-	if str(_second_round_result.get("winner_user_id", "")) != p2_user_id:
-		_fail("P1切断中のRound 1 winnerがP2ではありません。")
+	if int(_second_round_result.get("round_number", -1)) != 2 			or str(_second_round_result.get("winner_user_id", "")) != p2_user_id:
+		_fail("P1切断中のRound 2 winnerがP2ではありません。")
 		return
 
 	var boundary_disconnect := await _wait_second_boundary_deadline(
@@ -223,7 +236,7 @@ func _run() -> void:
 	# Round取得だけではRatingを更新しない。
 	var p2_rating_after_round := await _read_current_rating(second_client, second_session)
 	if not _same_rating_record(initial_p2_rating, p2_rating_after_round):
-		_fail("Round 1終了時点でPlayer Ratingが更新されました。")
+		_fail("Round 2終了時点でPlayer Ratingが更新されました。")
 		return
 
 	# Round境界15秒timeoutで初めてP2のMatch Win / P1のMatch Loseを確定する。
@@ -234,13 +247,13 @@ func _run() -> void:
 		_fail("Round境界15秒超過後のMatch ResultをP2が受信できませんでした。")
 		return
 
-	if str(_second_match_result.get("winner_user_id", "")) != p2_user_id 			or str(_second_match_result.get("loser_user_id", "")) != p1_user_id 			or str(_second_match_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT" 			or int(_second_match_result.get("final_round_number", -1)) != 1:
+	if str(_second_match_result.get("winner_user_id", "")) != p2_user_id 			or str(_second_match_result.get("loser_user_id", "")) != p1_user_id 			or str(_second_match_result.get("finish_cause", "")) != "DISCONNECT_TIMEOUT" 			or int(_second_match_result.get("final_round_number", -1)) != 2:
 		_fail("DISCONNECT_TIMEOUT Match Resultが期待値と一致しません。")
 		return
 
 	var scores: Dictionary = _second_match_result.get("round_wins_by_user", {})
-	if int(scores.get(p1_user_id, -1)) != 0 or int(scores.get(p2_user_id, -1)) != 1:
-		_fail("切断敗北時のRound scoreが通常Round Resultと一致しません。")
+	if int(scores.get(p1_user_id, -1)) != 1 or int(scores.get(p2_user_id, -1)) != 1:
+		_fail("切断側P1が1本先取済みでもRound scoreを改ざんせずP2 Match Winにできていません。")
 		return
 
 	# Round境界timeout後もResult確認までは元matchを未解決contextとして保持する。
@@ -488,6 +501,25 @@ func _on_second_match_state(match_state) -> void:
 		var event := CombatInputProtocolScript.parse_match_result_payload(str(match_state.data))
 		if not event.is_empty():
 			_second_match_result = event
+
+
+func _p1_finish_opening_round(online_session) -> bool:
+	for _hit_index in range(5):
+		var press: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_PRESS
+		)
+		if not bool(press.get("ok", false)):
+			_fail("Opening Round P1 ATTACK_PRESSを送信できませんでした。")
+			return false
+		await create_timer(0.05).timeout
+		var release: Dictionary = await online_session.send_combat_input(
+			CombatInputProtocolScript.ACTION_ATTACK_RELEASE
+		)
+		if not bool(release.get("ok", false)):
+			_fail("Opening Round P1 ATTACK_RELEASEを送信できませんでした。")
+			return false
+		await create_timer(0.95).timeout
+	return true
 
 
 func _second_attack_once(expected_hit_count: int) -> bool:
