@@ -1,4 +1,6 @@
 const AHOGE_SEASON_RANK_COLLECTION = "ahoge_season_rank";
+const AHOGE_PLAYER_CHARACTER_INFLUENCE_COLLECTION = "ahoge_player_character_influence";
+const AHOGE_OPPONENT_PAIR_COLLECTION = "ahoge_opponent_pair";
 const AHOGE_LEGEND_LEADERBOARD_PREFIX = "ahoge_legend_";
 const AHOGE_LEGEND_MAX_LIMIT = 100;
 const AHOGE_STORAGE_SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
@@ -22,6 +24,29 @@ interface AhogeSeasonRankRecord {
   exists: boolean;
 }
 
+interface AhogePlayerCharacterInfluenceValue {
+  season_id: string;
+  character_id: string;
+  absolute_influence_used: number;
+}
+
+interface AhogePlayerCharacterInfluenceRecord {
+  value: AhogePlayerCharacterInfluenceValue;
+  version: string;
+}
+
+interface AhogeOpponentPairValue {
+  season_id: string;
+  first_user_id: string;
+  second_user_id: string;
+  ranked_match_count: number;
+}
+
+interface AhogeOpponentPairRecord {
+  value: AhogeOpponentPairValue;
+  version: string;
+}
+
 interface AhogeRatingSettlementResult {
   writes: nkruntime.StorageWriteRequest[];
   mirror_match: boolean;
@@ -33,6 +58,15 @@ interface AhogeRatingSettlementResult {
   second_expected: number;
   first_delta: number;
   second_delta: number;
+  raw_delta: number;
+  trusted_delta: number;
+  trust_multiplier: number;
+  pair_match_count_before: number;
+  total_activity_count: number;
+  first_influence_used_before: number;
+  first_influence_used_after: number;
+  second_influence_used_before: number;
+  second_influence_used_after: number;
   weight: number;
   k_factor: number;
 }
@@ -46,6 +80,22 @@ function ahogeSeasonStorageKey(
   characterId: string
 ): string {
   return seasonId + ":" + characterId;
+}
+
+function influenceStorageKey(
+  seasonId: string,
+  characterId: string
+): string {
+  return seasonId + ":" + characterId;
+}
+
+function pairStorageKey(
+  seasonId: string,
+  firstUserId: string,
+  secondUserId: string
+): string {
+  const ids = [firstUserId, secondUserId].sort();
+  return seasonId + ":" + ids[0] + ":" + ids[1];
 }
 
 function defaultAhogeSeasonRank(
@@ -106,6 +156,80 @@ function readAhogeSeasonRank(
   };
 }
 
+function readAhogePlayerCharacterInfluence(
+  nk: nkruntime.Nakama,
+  userId: string,
+  characterId: string,
+  seasonId: string
+): AhogePlayerCharacterInfluenceRecord {
+  const objects = nk.storageRead([
+    {
+      collection: AHOGE_PLAYER_CHARACTER_INFLUENCE_COLLECTION,
+      key: influenceStorageKey(seasonId, characterId),
+      userId: userId
+    }
+  ]);
+  if (!objects || objects.length === 0) {
+    return {
+      value: {
+        season_id: seasonId,
+        character_id: characterId,
+        absolute_influence_used: 0
+      },
+      version: "*"
+    };
+  }
+  const raw = objects[0].value as any;
+  return {
+    value: {
+      season_id: String(raw.season_id || seasonId),
+      character_id: String(raw.character_id || characterId),
+      absolute_influence_used: Math.max(
+        0,
+        Number(raw.absolute_influence_used || 0)
+      )
+    },
+    version: objects[0].version
+  };
+}
+
+function readAhogeOpponentPair(
+  nk: nkruntime.Nakama,
+  firstUserId: string,
+  secondUserId: string,
+  seasonId: string
+): AhogeOpponentPairRecord {
+  const ids = [firstUserId, secondUserId].sort();
+  const objects = nk.storageRead([
+    {
+      collection: AHOGE_OPPONENT_PAIR_COLLECTION,
+      key: pairStorageKey(seasonId, firstUserId, secondUserId),
+      userId: AHOGE_STORAGE_SYSTEM_USER_ID
+    }
+  ]);
+  if (!objects || objects.length === 0) {
+    return {
+      value: {
+        season_id: seasonId,
+        first_user_id: ids[0],
+        second_user_id: ids[1],
+        ranked_match_count: 0
+      },
+      version: "*"
+    };
+  }
+  const raw = objects[0].value as any;
+  return {
+    value: {
+      season_id: String(raw.season_id || seasonId),
+      first_user_id: String(raw.first_user_id || ids[0]),
+      second_user_id: String(raw.second_user_id || ids[1]),
+      ranked_match_count: Math.max(0, Number(raw.ranked_match_count || 0))
+    },
+    version: objects[0].version
+  };
+}
+
 function ahogeEffectiveRating(
   playerRating: number,
   ahogeRating: number
@@ -123,8 +247,38 @@ function ahogeExpectedScore(
   return 1 / (1 + Math.pow(10, (opponentEffective - selfEffective) / 400));
 }
 
+function clampAhogeDeltaByInfluenceBudget(
+  delta: number,
+  firstInfluenceUsed: number,
+  secondInfluenceUsed: number
+): number {
+  const requestedMagnitude = Math.abs(delta);
+  if (requestedMagnitude === 0) {
+    return 0;
+  }
+  const firstRemaining = Math.max(
+    0,
+    AHOGE_PLAYER_CHARACTER_ABSOLUTE_INFLUENCE_CAP - firstInfluenceUsed
+  );
+  const secondRemaining = Math.max(
+    0,
+    AHOGE_PLAYER_CHARACTER_ABSOLUTE_INFLUENCE_CAP - secondInfluenceUsed
+  );
+  const allowedMagnitude = Math.min(
+    requestedMagnitude,
+    firstRemaining,
+    secondRemaining
+  );
+  if (allowedMagnitude <= 0) {
+    return 0;
+  }
+  return delta > 0 ? allowedMagnitude : -allowedMagnitude;
+}
+
 function buildAhogeSeasonRankSettlement(
   nk: nkruntime.Nakama,
+  firstUserId: string,
+  secondUserId: string,
   firstCharacterId: string,
   secondCharacterId: string,
   seasonId: string,
@@ -134,7 +288,8 @@ function buildAhogeSeasonRankSettlement(
   secondAhogeRatingSnapshot: number,
   firstAhogeMatchCountSnapshot: number,
   secondAhogeMatchCountSnapshot: number,
-  firstActualScore: number
+  firstActualScore: number,
+  totalAcceptedCombatInputCount: number
 ): AhogeRatingSettlementResult {
   const firstOwnerId = characterRankingOwnerId(firstCharacterId);
   const secondOwnerId = characterRankingOwnerId(secondCharacterId);
@@ -160,6 +315,33 @@ function buildAhogeSeasonRankSettlement(
     secondAhogeMatchCountSnapshot
   );
 
+  const pairRecord = readAhogeOpponentPair(
+    nk,
+    firstUserId,
+    secondUserId,
+    seasonId
+  );
+  const pairWeight = ahogeSamePairWeight(
+    pairRecord.value.ranked_match_count
+  );
+  const activityWeight =
+    totalAcceptedCombatInputCount > 0 ? 1.0 : AHOGE_NO_ACTIVITY_WEIGHT;
+  const trustMultiplier = pairWeight * activityWeight;
+  const pairWrite: nkruntime.StorageWriteRequest = {
+    collection: AHOGE_OPPONENT_PAIR_COLLECTION,
+    key: pairStorageKey(seasonId, firstUserId, secondUserId),
+    userId: AHOGE_STORAGE_SYSTEM_USER_ID,
+    value: {
+      season_id: seasonId,
+      first_user_id: pairRecord.value.first_user_id,
+      second_user_id: pairRecord.value.second_user_id,
+      ranked_match_count: pairRecord.value.ranked_match_count + 1
+    },
+    version: pairRecord.version,
+    permissionRead: 0,
+    permissionWrite: 0
+  };
+
   if (firstCharacterId === secondCharacterId) {
     const record = readAhogeSeasonRank(nk, firstCharacterId, seasonId);
     const winIncrement = firstActualScore === 0.5 ? 0 : 1;
@@ -179,7 +361,8 @@ function buildAhogeSeasonRankSettlement(
           version: record.version,
           permissionRead: 1,
           permissionWrite: 0
-        }
+        },
+        pairWrite
       ],
       mirror_match: true,
       first_rating_before: record.value.ahoge_rating,
@@ -190,6 +373,15 @@ function buildAhogeSeasonRankSettlement(
       second_expected: secondExpected,
       first_delta: 0,
       second_delta: 0,
+      raw_delta: 0,
+      trusted_delta: 0,
+      trust_multiplier: trustMultiplier,
+      pair_match_count_before: pairRecord.value.ranked_match_count,
+      total_activity_count: totalAcceptedCombatInputCount,
+      first_influence_used_before: 0,
+      first_influence_used_after: 0,
+      second_influence_used_before: 0,
+      second_influence_used_after: 0,
       weight: AHOGE_RATING_WEIGHT,
       k_factor: kFactor
     };
@@ -197,12 +389,36 @@ function buildAhogeSeasonRankSettlement(
 
   const firstRecord = readAhogeSeasonRank(nk, firstCharacterId, seasonId);
   const secondRecord = readAhogeSeasonRank(nk, secondCharacterId, seasonId);
-  const firstDelta = Math.round(kFactor * (firstActualScore - firstExpected));
+  const firstInfluence = readAhogePlayerCharacterInfluence(
+    nk,
+    firstUserId,
+    firstCharacterId,
+    seasonId
+  );
+  const secondInfluence = readAhogePlayerCharacterInfluence(
+    nk,
+    secondUserId,
+    secondCharacterId,
+    seasonId
+  );
+
+  const rawDelta = Math.round(kFactor * (firstActualScore - firstExpected));
+  const trustedDelta = Math.round(rawDelta * trustMultiplier);
+  const firstDelta = clampAhogeDeltaByInfluenceBudget(
+    trustedDelta,
+    firstInfluence.value.absolute_influence_used,
+    secondInfluence.value.absolute_influence_used
+  );
   const secondDelta = -firstDelta;
+  const deltaMagnitude = Math.abs(firstDelta);
   const firstAfter = firstRecord.value.ahoge_rating + firstDelta;
   const secondAfter = secondRecord.value.ahoge_rating + secondDelta;
   const firstWinIncrement = firstActualScore === 1 ? 1 : 0;
   const secondWinIncrement = firstActualScore === 0 ? 1 : 0;
+  const firstInfluenceAfter =
+    firstInfluence.value.absolute_influence_used + deltaMagnitude;
+  const secondInfluenceAfter =
+    secondInfluence.value.absolute_influence_used + deltaMagnitude;
 
   return {
     writes: [
@@ -239,7 +455,34 @@ function buildAhogeSeasonRankSettlement(
         version: secondRecord.version,
         permissionRead: 1,
         permissionWrite: 0
-      }
+      },
+      {
+        collection: AHOGE_PLAYER_CHARACTER_INFLUENCE_COLLECTION,
+        key: influenceStorageKey(seasonId, firstCharacterId),
+        userId: firstUserId,
+        value: {
+          season_id: seasonId,
+          character_id: firstCharacterId,
+          absolute_influence_used: firstInfluenceAfter
+        },
+        version: firstInfluence.version,
+        permissionRead: 0,
+        permissionWrite: 0
+      },
+      {
+        collection: AHOGE_PLAYER_CHARACTER_INFLUENCE_COLLECTION,
+        key: influenceStorageKey(seasonId, secondCharacterId),
+        userId: secondUserId,
+        value: {
+          season_id: seasonId,
+          character_id: secondCharacterId,
+          absolute_influence_used: secondInfluenceAfter
+        },
+        version: secondInfluence.version,
+        permissionRead: 0,
+        permissionWrite: 0
+      },
+      pairWrite
     ],
     mirror_match: false,
     first_rating_before: firstRecord.value.ahoge_rating,
@@ -250,6 +493,17 @@ function buildAhogeSeasonRankSettlement(
     second_expected: secondExpected,
     first_delta: firstDelta,
     second_delta: secondDelta,
+    raw_delta: rawDelta,
+    trusted_delta: trustedDelta,
+    trust_multiplier: trustMultiplier,
+    pair_match_count_before: pairRecord.value.ranked_match_count,
+    total_activity_count: totalAcceptedCombatInputCount,
+    first_influence_used_before:
+      firstInfluence.value.absolute_influence_used,
+    first_influence_used_after: firstInfluenceAfter,
+    second_influence_used_before:
+      secondInfluence.value.absolute_influence_used,
+    second_influence_used_after: secondInfluenceAfter,
     weight: AHOGE_RATING_WEIGHT,
     k_factor: kFactor
   };

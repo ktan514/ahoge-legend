@@ -88,6 +88,7 @@ interface AhogeRankedMatchState {
   presences: {[key: string]: nkruntime.Presence};
   lastInputSequenceByUser: {[key: string]: number};
   lastAcceptedTickByUser: {[key: string]: number};
+  acceptedCombatInputCountByUser: {[key: string]: number};
   combatStateByUser: {[key: string]: AuthoritativeCombatState};
   characterIdByUser: {[key: string]: string};
   matchStartedAtUnixMs: number;
@@ -222,6 +223,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       presences: {},
       lastInputSequenceByUser: {},
       lastAcceptedTickByUser: {},
+      acceptedCombatInputCountByUser: {},
       combatStateByUser: {},
       characterIdByUser: characterIdByUser,
       matchStartedAtUnixMs: matchStartedAtUnixMs,
@@ -332,6 +334,9 @@ const rankedMatchJoin: nkruntime.MatchJoinFunction<AhogeRankedMatchState> = func
     }
     if (state.lastAcceptedTickByUser[presence.userId] === undefined) {
       state.lastAcceptedTickByUser[presence.userId] = -1;
+    }
+    if (state.acceptedCombatInputCountByUser[presence.userId] === undefined) {
+      state.acceptedCombatInputCountByUser[presence.userId] = 0;
     }
     if (!state.combatStateByUser[presence.userId]) {
       state.combatStateByUser[presence.userId] = createIdleCombatState(true);
@@ -1641,6 +1646,7 @@ function settleRankedRatingIfNeeded(
     state.playerRatingSnapshotByUser,
     state.ahogeRatingSnapshotByCharacter,
     state.ahogeMatchCountSnapshotByCharacter,
+    state.acceptedCombatInputCountByUser,
     state.matchFinishCause,
     state.matchStartedAtUnixMs,
     state.matchFinishedAtUnixMs >= 0 ? state.matchFinishedAtUnixMs : Date.now()
@@ -1943,6 +1949,8 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
 
     state.lastInputSequenceByUser[userId] = sequence;
     state.lastAcceptedTickByUser[userId] = tick;
+    state.acceptedCombatInputCountByUser[userId] =
+      (state.acceptedCombatInputCountByUser[userId] || 0) + 1;
 
     dispatcher.broadcastMessage(
       INPUT_ACCEPTED_OPCODE,

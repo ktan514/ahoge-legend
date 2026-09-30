@@ -50,18 +50,14 @@ function calculateEloOutcome(
   }
   const firstExpected = eloExpectedScore(firstRating, secondRating);
   const secondExpected = eloExpectedScore(secondRating, firstRating);
-  const secondActualScore = 1 - firstActualScore;
-  const firstAfter = Math.round(
-    firstRating + ELO_K_FACTOR * (firstActualScore - firstExpected)
-  );
-  const secondAfter = Math.round(
-    secondRating + ELO_K_FACTOR * (secondActualScore - secondExpected)
+  const firstDelta = Math.round(
+    ELO_K_FACTOR * (firstActualScore - firstExpected)
   );
   return {
     firstExpected: firstExpected,
     secondExpected: secondExpected,
-    firstDelta: firstAfter - firstRating,
-    secondDelta: secondAfter - secondRating
+    firstDelta: firstDelta,
+    secondDelta: -firstDelta
   };
 }
 
@@ -238,6 +234,7 @@ function settleRankedMatchRating(
   playerRatingSnapshotByUser: {[key: string]: number},
   ahogeRatingSnapshotByCharacter: {[key: string]: number},
   ahogeMatchCountSnapshotByCharacter: {[key: string]: number},
+  acceptedCombatInputCountByUser: {[key: string]: number},
   finishCause: string,
   matchStartedAtUnixMilliseconds: number,
   matchFinishedAtUnixMilliseconds: number
@@ -382,8 +379,13 @@ function settleRankedMatchRating(
     draws: secondRecord.value.draws + (isDraw ? 1 : 0)
   };
 
+  const totalAcceptedCombatInputCount =
+    Math.max(0, Number(acceptedCombatInputCountByUser[firstUserId] || 0)) +
+    Math.max(0, Number(acceptedCombatInputCountByUser[secondUserId] || 0));
   const ahogeSettlement = buildAhogeSeasonRankSettlement(
     nk,
+    firstUserId,
+    secondUserId,
     firstCharacterId,
     secondCharacterId,
     seasonId,
@@ -393,7 +395,8 @@ function settleRankedMatchRating(
     secondSnapshotAhogeRating,
     firstSnapshotAhogeMatchCount,
     secondSnapshotAhogeMatchCount,
-    firstActualScore
+    firstActualScore,
+    totalAcceptedCombatInputCount
   );
 
   const winnerUserId = isDraw ? "" : matchWinnerUserId;
@@ -473,11 +476,31 @@ function settleRankedMatchRating(
           [firstUserId]: ahogeSettlement.first_delta,
           [secondUserId]: ahogeSettlement.second_delta
         },
+        ahoge_raw_delta_by_user: {
+          [firstUserId]: ahogeSettlement.raw_delta,
+          [secondUserId]: -ahogeSettlement.raw_delta
+        },
+        ahoge_trusted_delta_by_user: {
+          [firstUserId]: ahogeSettlement.trusted_delta,
+          [secondUserId]: -ahogeSettlement.trusted_delta
+        },
+        ahoge_influence_used_before_by_user: {
+          [firstUserId]: ahogeSettlement.first_influence_used_before,
+          [secondUserId]: ahogeSettlement.second_influence_used_before
+        },
+        ahoge_influence_used_after_by_user: {
+          [firstUserId]: ahogeSettlement.first_influence_used_after,
+          [secondUserId]: ahogeSettlement.second_influence_used_after
+        },
         ahoge_expected_by_user: {
           [firstUserId]: ahogeSettlement.first_expected,
           [secondUserId]: ahogeSettlement.second_expected
         },
         ahoge_mirror_match: ahogeSettlement.mirror_match,
+        ahoge_trust_multiplier: ahogeSettlement.trust_multiplier,
+        ahoge_pair_match_count_before:
+          ahogeSettlement.pair_match_count_before,
+        ahoge_total_activity_count: ahogeSettlement.total_activity_count,
         ahoge_weight: ahogeSettlement.weight,
         ahoge_k: ahogeSettlement.k_factor,
         match_started_at_unix_ms: matchStartedAtUnixMilliseconds,
@@ -626,6 +649,12 @@ const rankedMatchSettlementRpc: nkruntime.RpcFunction = function (
   const ahogeBefore = value.ahoge_rating_before_by_user || {};
   const ahogeAfter = value.ahoge_rating_after_by_user || {};
   const ahogeDelta = value.ahoge_rating_delta_by_user || {};
+  const ahogeRawDelta = value.ahoge_raw_delta_by_user || {};
+  const ahogeTrustedDelta = value.ahoge_trusted_delta_by_user || {};
+  const ahogeInfluenceBefore =
+    value.ahoge_influence_used_before_by_user || {};
+  const ahogeInfluenceAfter =
+    value.ahoge_influence_used_after_by_user || {};
   const ahogeExpected = value.ahoge_expected_by_user || {};
 
   const playerRatingAvailable =
@@ -661,8 +690,23 @@ const rankedMatchSettlementRpc: nkruntime.RpcFunction = function (
         : ahogeAfter[userId]
     ),
     ahoge_rating_delta: Number(ahogeDelta[userId] || 0),
+    ahoge_raw_delta: Number(ahogeRawDelta[userId] || 0),
+    ahoge_trusted_delta: Number(ahogeTrustedDelta[userId] || 0),
+    ahoge_influence_used_before: Number(
+      ahogeInfluenceBefore[userId] || 0
+    ),
+    ahoge_influence_used_after: Number(
+      ahogeInfluenceAfter[userId] || 0
+    ),
     ahoge_expected: Number(ahogeExpected[userId] || 0),
     ahoge_mirror_match: Boolean(value.ahoge_mirror_match),
+    ahoge_trust_multiplier: Number(value.ahoge_trust_multiplier || 0),
+    ahoge_pair_match_count_before: Number(
+      value.ahoge_pair_match_count_before || 0
+    ),
+    ahoge_total_activity_count: Number(
+      value.ahoge_total_activity_count || 0
+    ),
     ahoge_weight: Number(value.ahoge_weight || 0),
     ahoge_k: Number(value.ahoge_k || 0)
   });
