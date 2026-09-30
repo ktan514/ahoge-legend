@@ -78,7 +78,7 @@ func _build_ranked_result(root: VBoxContainer) -> void:
 
 	var ahoge_rating := Label.new()
 	var settlement: Dictionary = _summary.get("settlement", {})
-	if bool(settlement.get("found", false)):
+	if bool(settlement.get("found", false)) and bool(settlement.get("ahoge_rating_available", false)):
 		var ahoge_before := int(_summary.get("ahoge_rating_before", 1500))
 		var ahoge_after := int(_summary.get("ahoge_rating_after", ahoge_before))
 		var ahoge_delta := int(_summary.get("ahoge_rating_delta", ahoge_after - ahoge_before))

@@ -254,21 +254,23 @@ func _show_ranked_result(summary: Dictionary) -> void:
 	completed_summary["settlement"] = settlement
 
 	if bool(settlement.get("found", false)):
-		completed_summary["rating_before"] = {
-			"rating": int(settlement.get("player_rating_before", 1500)),
-		}
-		completed_summary["rating_after"] = {
-			"rating": int(settlement.get("player_rating_after", 1500)),
-		}
-		completed_summary["ahoge_rating_before"] = int(
-			settlement.get("ahoge_rating_before", 1500)
-		)
-		completed_summary["ahoge_rating_after"] = int(
-			settlement.get("ahoge_rating_after", 1500)
-		)
-		completed_summary["ahoge_rating_delta"] = int(
-			settlement.get("ahoge_rating_delta", 0)
-		)
+		if bool(settlement.get("player_rating_available", false)):
+			completed_summary["rating_before"] = {
+				"rating": int(settlement.get("player_rating_before", 1500)),
+			}
+			completed_summary["rating_after"] = {
+				"rating": int(settlement.get("player_rating_after", 1500)),
+			}
+		if bool(settlement.get("ahoge_rating_available", false)):
+			completed_summary["ahoge_rating_before"] = int(
+				settlement.get("ahoge_rating_before", 1500)
+			)
+			completed_summary["ahoge_rating_after"] = int(
+				settlement.get("ahoge_rating_after", 1500)
+			)
+			completed_summary["ahoge_rating_delta"] = int(
+				settlement.get("ahoge_rating_delta", 0)
+			)
 
 	var screen = MATCH_RESULT_SCENE.instantiate()
 	screen.call("configure", completed_summary)
@@ -277,10 +279,14 @@ func _show_ranked_result(summary: Dictionary) -> void:
 	screen.connect("character_select_requested", Callable(self, "_show_ranked_character_select"))
 	screen.connect("top_requested", Callable(self, "_show_top_menu"))
 
-	# Result画面への遷移が確定した後だけserver-side active contextを解除する。
-	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
-	if not bool(ack_result.get("ok", false)):
-		printerr("Ranked Result active match ack failed: %s" % str(ack_result.get("message", "")))
+	# server settlementまで取得できたResultだけ遷移先確定済みとしてactive contextを解除する。
+	# settlement未取得ならlockを保持し、次操作時に同じserver Resultへ復帰可能にする。
+	if bool(settlement.get("found", false)):
+		var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+		if not bool(ack_result.get("ok", false)):
+			printerr("Ranked Result active match ack failed: %s" % str(ack_result.get("message", "")))
+	else:
+		printerr("Ranked settlement未取得のためactive match lockを保持します。")
 
 
 func _wait_for_ranked_settlement(match_id: String) -> Dictionary:

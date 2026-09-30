@@ -203,13 +203,6 @@ function readRankedMatchSettlement(
   };
 }
 
-function rankedMatchSettlementExists(
-  nk: nkruntime.Nakama,
-  matchId: string
-): boolean {
-  return readRankedMatchSettlement(nk, matchId) !== null;
-}
-
 function shouldUpdateRatingForFinishCause(finishCause: string): boolean {
   // Round境界timeoutはDISCONNECT_FORFEITというRound ResultとしてBO3へ集約する。
   // Ratingは最終的に2本先取したMatch Resultに対して1回だけ更新する。
@@ -408,22 +401,33 @@ function settleRankedMatchRating(
     );
     return true;
   } catch (error) {
-    // 同一matchの並行settlementで他方が先に成功した場合は完了扱い。
-    if (rankedMatchSettlementExists(nk, matchId)) {
-      return (
-        syncRankedMatchLeaderboardProjection(
-          nk,
-          winnerUserId,
-          loserUserId,
-          seasonId
-        ) &&
-        syncAhogeLegendProjection(
-          nk,
-          winnerCharacterId,
-          loserCharacterId,
-          seasonId
-        )
+    // 同一matchの並行settlementで他方が先に成功した場合は、
+    // settlement正本に記録されたseason / characterでprojectionだけ再試行する。
+    const concurrentSettlement = readRankedMatchSettlement(nk, matchId);
+    if (concurrentSettlement) {
+      const settledSeasonId = String(concurrentSettlement.value.season_id || "");
+      const settledWinnerCharacterId = String(
+        concurrentSettlement.value.winner_character_id || winnerCharacterId
       );
+      const settledLoserCharacterId = String(
+        concurrentSettlement.value.loser_character_id || loserCharacterId
+      );
+      if (settledSeasonId) {
+        return (
+          syncRankedMatchLeaderboardProjection(
+            nk,
+            winnerUserId,
+            loserUserId,
+            settledSeasonId
+          ) &&
+          syncAhogeLegendProjection(
+            nk,
+            settledWinnerCharacterId,
+            settledLoserCharacterId,
+            settledSeasonId
+          )
+        );
+      }
     }
     logger.warn(
       "ahoge ranked rating settlement will retry. match_id=%s error=%s",
@@ -472,8 +476,16 @@ const rankedMatchSettlementRpc: nkruntime.RpcFunction = function (
 
   const isWinner = userId === winnerUserId;
   const prefix = isWinner ? "winner_" : "loser_";
+  const playerRatingAvailable =
+    value[prefix + "player_rating_before"] !== undefined &&
+    value[prefix + "player_rating_after"] !== undefined;
+  const ahogeRatingAvailable =
+    value[prefix + "ahoge_rating_before"] !== undefined &&
+    value[prefix + "ahoge_rating_after"] !== undefined;
   return JSON.stringify({
     found: true,
+    player_rating_available: playerRatingAvailable,
+    ahoge_rating_available: ahogeRatingAvailable,
     match_id: matchId,
     season_id: String(value.season_id || ""),
     user_id: userId,
