@@ -59,3 +59,13 @@ function ahogeSamePairWeight(matchCountBefore: number): number {
   }
   return AHOGE_SAME_PAIR_MIN_WEIGHT;
 }
+
+function roundSymmetricRatingDelta(value: number): number {
+  if (!isFinite(value)) {
+    throw new Error("invalid rating delta");
+  }
+  if (value < 0) {
+    return -Math.round(Math.abs(value));
+  }
+  return Math.round(value);
+}

@@ -316,7 +316,17 @@ jobs:
 
       - name: Godot authoritative Match Result smoke
         if: matrix.group == 'match'
+        env:
+          AHOGE_DEVICE_ID_OVERRIDE: ahoge-pr-draw-p1
+          AHOGE_TEST_SECOND_DEVICE_ID: ahoge-pr-draw-p2
         run: ./scripts/client-match-result-smoke.sh
+
+      - name: Godot Rating anti-abuse Draw smoke
+        if: matrix.group == 'match'
+        env:
+          AHOGE_DEVICE_ID_OVERRIDE: ahoge-pr-draw-p1
+          AHOGE_TEST_SECOND_DEVICE_ID: ahoge-pr-draw-p2
+        run: ./scripts/client-timeout-draw-smoke.sh
 
       - name: Godot Ranked major GameFlow smoke
         if: matrix.group == 'match'

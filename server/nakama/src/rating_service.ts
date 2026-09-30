@@ -50,7 +50,7 @@ function calculateEloOutcome(
   }
   const firstExpected = eloExpectedScore(firstRating, secondRating);
   const secondExpected = eloExpectedScore(secondRating, firstRating);
-  const firstDelta = Math.round(
+  const firstDelta = roundSymmetricRatingDelta(
     ELO_K_FACTOR * (firstActualScore - firstExpected)
   );
   return {

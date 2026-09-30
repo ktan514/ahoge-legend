@@ -186,7 +186,7 @@ function readAhogePlayerCharacterInfluence(
       character_id: String(raw.character_id || characterId),
       absolute_influence_used: Math.max(
         0,
-        Number(raw.absolute_influence_used || 0)
+        Math.floor(Number(raw.absolute_influence_used || 0))
       )
     },
     version: objects[0].version
@@ -224,7 +224,10 @@ function readAhogeOpponentPair(
       season_id: String(raw.season_id || seasonId),
       first_user_id: String(raw.first_user_id || ids[0]),
       second_user_id: String(raw.second_user_id || ids[1]),
-      ranked_match_count: Math.max(0, Number(raw.ranked_match_count || 0))
+      ranked_match_count: Math.max(
+        0,
+        Math.floor(Number(raw.ranked_match_count || 0))
+      )
     },
     version: objects[0].version
   };
@@ -402,8 +405,12 @@ function buildAhogeSeasonRankSettlement(
     seasonId
   );
 
-  const rawDelta = Math.round(kFactor * (firstActualScore - firstExpected));
-  const trustedDelta = Math.round(rawDelta * trustMultiplier);
+  const rawDelta = roundSymmetricRatingDelta(
+    kFactor * (firstActualScore - firstExpected)
+  );
+  const trustedDelta = roundSymmetricRatingDelta(
+    rawDelta * trustMultiplier
+  );
   const firstDelta = clampAhogeDeltaByInfluenceBudget(
     trustedDelta,
     firstInfluence.value.absolute_influence_used,

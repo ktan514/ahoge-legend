@@ -29,6 +29,8 @@ const draw = evaluate("calculateEloOutcome(1700, 1500, 0.5)");
 assert(draw.firstDelta + draw.secondDelta === 0, "Player Rating must be zero-sum");
 assert(draw.firstDelta < 0, "Higher-rated player must lose Rating on draw");
 assert(draw.secondDelta > 0, "Lower-rated player must gain Rating on draw");
+assert(evaluate("roundSymmetricRatingDelta(2.5)") === 3, "positive half rounding");
+assert(evaluate("roundSymmetricRatingDelta(-2.5)") === -3, "negative half rounding");
 
 const win = evaluate("calculateEloOutcome(1500, 1500, 1)");
 assert(win.firstDelta === 16, "Equal-rating winner delta must be +16");
