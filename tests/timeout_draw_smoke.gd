@@ -211,7 +211,12 @@ func _run() -> void:
 		1.0 + pow(10.0, float(p2_rating - p1_rating) / 400.0)
 	)
 	var p2_expected := 1.0 - p1_expected
-	var expected_p1_delta := int(round(32.0 * (0.5 - p1_expected)))
+	var raw_p1_delta := 32.0 * (0.5 - p1_expected)
+	var expected_p1_delta := (
+		-int(round(absf(raw_p1_delta)))
+		if raw_p1_delta < 0.0
+		else int(round(raw_p1_delta))
+	)
 	var expected_p2_delta := -expected_p1_delta
 	if int(settlement.get("player_rating_delta", 999)) != expected_p1_delta:
 		_fail("P1 DrawのPlayer Rating deltaがElo期待値と一致しません。")
@@ -376,12 +381,27 @@ func _on_second_match_state(match_state) -> void:
 func _wait_round_started_pair(round_number: int, timeout_ms: int) -> bool:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		var first := _find_round_started(_p1_round_started, round_number)
-		var second := _find_round_started(_p2_round_started, round_number)
-		if not first.is_empty() and not second.is_empty():
-			return first == second
+		for first in _p1_round_started:
+			if int(first.get("round_number", -1)) != round_number:
+				continue
+			for second in _p2_round_started:
+				if int(second.get("round_number", -1)) != round_number:
+					continue
+				if _same_round_started_event(first, second):
+					return true
 		await create_timer(0.02).timeout
 	return false
+
+
+func _same_round_started_event(first: Dictionary, second: Dictionary) -> bool:
+	if int(first.get("round_number", -1)) != int(second.get("round_number", -2)):
+		return false
+	if int(first.get("server_tick", -1)) != int(second.get("server_tick", -2)):
+		return false
+	return _same_score_map(
+		first.get("round_wins_by_user", {}),
+		second.get("round_wins_by_user", {})
+	)
 
 
 func _wait_round_draw_pair(round_number: int, timeout_ms: int) -> bool:
@@ -416,52 +436,100 @@ func _wait_score_pair(
 ) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		var first := _find_score(_p1_scores, round_number)
-		var second := _find_score(_p2_scores, round_number)
-		if not first.is_empty() and not second.is_empty():
-			if first != second:
-				return {}
-			var scores: Dictionary = first.get("round_wins_by_user", {})
-			if not str(first.get("round_winner_user_id", "")).is_empty():
-				return {}
-			if int(scores.get(p1_user_id, -1)) != p1_score \
-					or int(scores.get(p2_user_id, -1)) != p2_score:
-				return {}
-			if bool(first.get("match_finished", false)) != match_finished:
-				return {}
-			return first
+		for first in _p1_scores:
+			if int(first.get("completed_round_number", -1)) != round_number:
+				continue
+			for second in _p2_scores:
+				if int(second.get("completed_round_number", -1)) != round_number:
+					continue
+				if not _same_score_event(first, second):
+					continue
+				var scores: Dictionary = first.get("round_wins_by_user", {})
+				if not str(first.get("round_winner_user_id", "")).is_empty():
+					return {}
+				if int(scores.get(p1_user_id, -1)) != p1_score \
+						or int(scores.get(p2_user_id, -1)) != p2_score:
+					return {}
+				if bool(first.get("match_finished", false)) != match_finished:
+					return {}
+				return first
 		await create_timer(0.02).timeout
 	return {}
+
+
+func _same_score_event(first: Dictionary, second: Dictionary) -> bool:
+	if int(first.get("completed_round_number", -1)) != int(second.get("completed_round_number", -2)):
+		return false
+	if str(first.get("round_winner_user_id", "")) != str(second.get("round_winner_user_id", "__missing__")):
+		return false
+	if bool(first.get("match_finished", false)) != bool(second.get("match_finished", true)):
+		return false
+	if int(first.get("server_tick", -1)) != int(second.get("server_tick", -2)):
+		return false
+	return _same_score_map(
+		first.get("round_wins_by_user", {}),
+		second.get("round_wins_by_user", {})
+	)
 
 
 func _wait_match_draw_pair(
 	final_round: int,
-	_p1_user_id: String,
-	_p2_user_id: String,
+	p1_user_id: String,
+	p2_user_id: String,
 	timeout_ms: int
 ) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		if not _p1_match_results.is_empty() and not _p2_match_results.is_empty():
-			var first := _p1_match_results[0]
-			var second := _p2_match_results[0]
-			if first != second:
-				_fail("P1/P2のMatch Draw Resultが一致しません。")
-				return {}
-			if str(first.get("finish_cause", "")) != "BO3_DRAW" \
-					or not str(first.get("winner_user_id", "")).is_empty() \
-					or not str(first.get("loser_user_id", "")).is_empty() \
-					or int(first.get("final_round_number", -1)) != final_round:
-				_fail("BO3_DRAW Resultが期待値と一致しません。")
-				return {}
-			var values = (first.get("round_wins_by_user", {}) as Dictionary).values()
-			if values.size() != 2 or int(values[0]) != 2 or int(values[1]) != 2:
-				_fail("Match Draw scoreが2-2ではありません。")
-				return {}
-			return first
+		for first in _p1_match_results:
+			for second in _p2_match_results:
+				if not _same_match_result_event(first, second):
+					continue
+				if str(first.get("finish_cause", "")) != "BO3_DRAW" \
+						or not str(first.get("winner_user_id", "")).is_empty() \
+						or not str(first.get("loser_user_id", "")).is_empty() \
+						or int(first.get("final_round_number", -1)) != final_round:
+					_fail("BO3_DRAW Resultが期待値と一致しません。")
+					return {}
+				var scores: Dictionary = first.get("round_wins_by_user", {})
+				if int(scores.get(p1_user_id, -1)) != 2 \
+						or int(scores.get(p2_user_id, -1)) != 2:
+					_fail("Match Draw scoreが2-2ではありません。")
+					return {}
+				return first
 		await create_timer(0.02).timeout
 	_fail("BO3_DRAW Resultを受信できませんでした。")
 	return {}
+
+
+func _same_match_result_event(first: Dictionary, second: Dictionary) -> bool:
+	for key in [
+		"winner_user_id",
+		"loser_user_id",
+		"final_round_number",
+		"finish_cause",
+		"server_tick",
+	]:
+		if first.get(key) != second.get(key):
+			return false
+	return _same_score_map(
+		first.get("round_wins_by_user", {}),
+		second.get("round_wins_by_user", {})
+	)
+
+
+func _same_score_map(first_value, second_value) -> bool:
+	if not first_value is Dictionary or not second_value is Dictionary:
+		return false
+	var first: Dictionary = first_value
+	var second: Dictionary = second_value
+	if first.size() != second.size():
+		return false
+	for user_id in first.keys():
+		if not second.has(user_id):
+			return false
+		if int(first[user_id]) != int(second[user_id]):
+			return false
+	return true
 
 
 func _read_current_rating(client, session) -> Dictionary:
