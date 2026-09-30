@@ -129,7 +129,11 @@ function buildAhogeSeasonRankSettlement(
   loserCharacterId: string,
   seasonId: string,
   winnerPlayerRatingBefore: number,
-  loserPlayerRatingBefore: number
+  loserPlayerRatingBefore: number,
+  winnerAhogeRatingBefore: number,
+  loserAhogeRatingBefore: number,
+  winnerAhogeMatchCountBefore: number,
+  loserAhogeMatchCountBefore: number
 ): AhogeRatingSettlementResult {
   const winnerOwnerId = characterRankingOwnerId(winnerCharacterId);
   const loserOwnerId = characterRankingOwnerId(loserCharacterId);
@@ -142,11 +146,11 @@ function buildAhogeSeasonRankSettlement(
     const expected = ahogeExpectedScore(
       ahogeEffectiveRating(
         winnerPlayerRatingBefore,
-        record.value.ahoge_rating
+        winnerAhogeRatingBefore
       ),
       ahogeEffectiveRating(
         loserPlayerRatingBefore,
-        record.value.ahoge_rating
+        loserAhogeRatingBefore
       )
     );
     return {
@@ -168,18 +172,18 @@ function buildAhogeSeasonRankSettlement(
         }
       ],
       mirror_match: true,
-      winner_rating_before: record.value.ahoge_rating,
-      winner_rating_after: record.value.ahoge_rating,
-      loser_rating_before: record.value.ahoge_rating,
-      loser_rating_after: record.value.ahoge_rating,
+      winner_rating_before: winnerAhogeRatingBefore,
+      winner_rating_after: winnerAhogeRatingBefore,
+      loser_rating_before: loserAhogeRatingBefore,
+      loser_rating_after: loserAhogeRatingBefore,
       winner_expected: expected,
       loser_expected: 1 - expected,
       winner_delta: 0,
       loser_delta: 0,
       weight: AHOGE_RATING_WEIGHT,
       k_factor: ahogeKForMatchCounts(
-        record.value.total_ranked_matches,
-        record.value.total_ranked_matches
+        winnerAhogeMatchCountBefore,
+        loserAhogeMatchCountBefore
       )
     };
   }
@@ -188,20 +192,24 @@ function buildAhogeSeasonRankSettlement(
   const loserRecord = readAhogeSeasonRank(nk, loserCharacterId, seasonId);
   const winnerEffective = ahogeEffectiveRating(
     winnerPlayerRatingBefore,
-    winnerRecord.value.ahoge_rating
+    winnerAhogeRatingBefore
   );
   const loserEffective = ahogeEffectiveRating(
     loserPlayerRatingBefore,
-    loserRecord.value.ahoge_rating
+    loserAhogeRatingBefore
   );
   const winnerExpected = ahogeExpectedScore(winnerEffective, loserEffective);
   const kFactor = ahogeKForMatchCounts(
-    winnerRecord.value.total_ranked_matches,
-    loserRecord.value.total_ranked_matches
+    winnerAhogeMatchCountBefore,
+    loserAhogeMatchCountBefore
   );
   const delta = Math.round(kFactor * (1 - winnerExpected));
-  const winnerAfter = winnerRecord.value.ahoge_rating + delta;
-  const loserAfter = loserRecord.value.ahoge_rating - delta;
+  const winnerSettlementAfter = winnerAhogeRatingBefore + delta;
+  const loserSettlementAfter = loserAhogeRatingBefore - delta;
+  // 別matchのsettlementが対戦中に同characterへ反映されても失わないよう、
+  // storage正本にはsettlement時点のcurrent値へ今回deltaだけを加減する。
+  const winnerStorageAfter = winnerRecord.value.ahoge_rating + delta;
+  const loserStorageAfter = loserRecord.value.ahoge_rating - delta;
 
   return {
     writes: [
@@ -212,7 +220,7 @@ function buildAhogeSeasonRankSettlement(
         value: {
           season_id: seasonId,
           character_id: winnerCharacterId,
-          ahoge_rating: winnerAfter,
+          ahoge_rating: winnerStorageAfter,
           total_match_wins: winnerRecord.value.total_match_wins + 1,
           total_ranked_matches: winnerRecord.value.total_ranked_matches + 1
         },
@@ -227,7 +235,7 @@ function buildAhogeSeasonRankSettlement(
         value: {
           season_id: seasonId,
           character_id: loserCharacterId,
-          ahoge_rating: loserAfter,
+          ahoge_rating: loserStorageAfter,
           total_match_wins: loserRecord.value.total_match_wins,
           total_ranked_matches: loserRecord.value.total_ranked_matches + 1
         },
@@ -237,10 +245,10 @@ function buildAhogeSeasonRankSettlement(
       }
     ],
     mirror_match: false,
-    winner_rating_before: winnerRecord.value.ahoge_rating,
-    winner_rating_after: winnerAfter,
-    loser_rating_before: loserRecord.value.ahoge_rating,
-    loser_rating_after: loserAfter,
+    winner_rating_before: winnerAhogeRatingBefore,
+    winner_rating_after: winnerSettlementAfter,
+    loser_rating_before: loserAhogeRatingBefore,
+    loser_rating_after: loserSettlementAfter,
     winner_expected: winnerExpected,
     loser_expected: 1 - winnerExpected,
     winner_delta: delta,

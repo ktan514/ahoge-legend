@@ -90,6 +90,10 @@ interface AhogeRankedMatchState {
   lastAcceptedTickByUser: {[key: string]: number};
   combatStateByUser: {[key: string]: AuthoritativeCombatState};
   characterIdByUser: {[key: string]: string};
+  ratingSeasonId: string;
+  playerRatingBeforeByUser: {[key: string]: number};
+  ahogeRatingBeforeByCharacter: {[key: string]: number};
+  ahogeMatchCountBeforeByCharacter: {[key: string]: number};
   roundHitCountByUser: {[key: string]: number};
   roundHitCountSnapshotBroadcast: boolean;
   roundTimerStartTick: number;
@@ -172,6 +176,29 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
     Date.now()
   );
 
+  let ratingSeasonId = "";
+  const playerRatingBeforeByUser: {[key: string]: number} = {};
+  const ahogeRatingBeforeByCharacter: {[key: string]: number} = {};
+  const ahogeMatchCountBeforeByCharacter: {[key: string]: number} = {};
+  if (matchMode === "ranked") {
+    ratingSeasonId = currentSeasonIdJst(Date.now());
+    ensureSeasonMetadata(nk, ratingSeasonId);
+    participantIds.forEach(function (userId): void {
+      const characterId = String(characterIdByUser[userId] || "");
+      if (!characterId) {
+        throw new Error("missing ranked character snapshot");
+      }
+      const playerRecord = readPlayerSeasonRank(nk, userId, ratingSeasonId);
+      playerRatingBeforeByUser[userId] = playerRecord.value.rating;
+      if (ahogeRatingBeforeByCharacter[characterId] === undefined) {
+        const ahogeRecord = readAhogeSeasonRank(nk, characterId, ratingSeasonId);
+        ahogeRatingBeforeByCharacter[characterId] = ahogeRecord.value.ahoge_rating;
+        ahogeMatchCountBeforeByCharacter[characterId] =
+          ahogeRecord.value.total_ranked_matches;
+      }
+    });
+  }
+
   logger.info("ahoge_ranked authoritative match initialized.");
 
   return {
@@ -188,6 +215,10 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       lastAcceptedTickByUser: {},
       combatStateByUser: {},
       characterIdByUser: characterIdByUser,
+      ratingSeasonId: ratingSeasonId,
+      playerRatingBeforeByUser: playerRatingBeforeByUser,
+      ahogeRatingBeforeByCharacter: ahogeRatingBeforeByCharacter,
+      ahogeMatchCountBeforeByCharacter: ahogeMatchCountBeforeByCharacter,
       roundHitCountByUser: {},
       roundHitCountSnapshotBroadcast: false,
       roundTimerStartTick: -1,
@@ -1582,6 +1613,10 @@ function settleRankedRatingIfNeeded(
     state.matchWinnerUserId,
     loserUserId,
     state.characterIdByUser,
+    state.ratingSeasonId,
+    state.playerRatingBeforeByUser,
+    state.ahogeRatingBeforeByCharacter,
+    state.ahogeMatchCountBeforeByCharacter,
     state.matchFinishCause,
     state.matchFinishedAtUnixMs >= 0 ? state.matchFinishedAtUnixMs : Date.now()
   );

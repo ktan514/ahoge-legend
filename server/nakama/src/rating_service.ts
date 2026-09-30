@@ -217,6 +217,10 @@ function settleRankedMatchRating(
   winnerUserId: string,
   loserUserId: string,
   characterIdByUser: {[key: string]: string},
+  ratingSeasonId: string,
+  playerRatingBeforeByUser: {[key: string]: number},
+  ahogeRatingBeforeByCharacter: {[key: string]: number},
+  ahogeMatchCountBeforeByCharacter: {[key: string]: number},
   finishCause: string,
   unixMilliseconds: number
 ): boolean {
@@ -267,13 +271,37 @@ function settleRankedMatchRating(
     );
   }
 
-  const seasonId = currentSeasonIdJst(unixMilliseconds);
+  const seasonId = ratingSeasonId || currentSeasonIdJst(unixMilliseconds);
   ensureSeasonMetadata(nk, seasonId);
   const winnerRecord = readPlayerSeasonRank(nk, winnerUserId, seasonId);
   const loserRecord = readPlayerSeasonRank(nk, loserUserId, seasonId);
+  const winnerPlayerRatingBefore =
+    playerRatingBeforeByUser[winnerUserId] === undefined
+      ? winnerRecord.value.rating
+      : playerRatingBeforeByUser[winnerUserId];
+  const loserPlayerRatingBefore =
+    playerRatingBeforeByUser[loserUserId] === undefined
+      ? loserRecord.value.rating
+      : playerRatingBeforeByUser[loserUserId];
+  const winnerAhogeRatingBefore =
+    ahogeRatingBeforeByCharacter[winnerCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, winnerCharacterId, seasonId).value.ahoge_rating
+      : ahogeRatingBeforeByCharacter[winnerCharacterId];
+  const loserAhogeRatingBefore =
+    ahogeRatingBeforeByCharacter[loserCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, loserCharacterId, seasonId).value.ahoge_rating
+      : ahogeRatingBeforeByCharacter[loserCharacterId];
+  const winnerAhogeMatchCountBefore =
+    ahogeMatchCountBeforeByCharacter[winnerCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, winnerCharacterId, seasonId).value.total_ranked_matches
+      : ahogeMatchCountBeforeByCharacter[winnerCharacterId];
+  const loserAhogeMatchCountBefore =
+    ahogeMatchCountBeforeByCharacter[loserCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, loserCharacterId, seasonId).value.total_ranked_matches
+      : ahogeMatchCountBeforeByCharacter[loserCharacterId];
   const elo = calculateEloUpdate(
-    winnerRecord.value.rating,
-    loserRecord.value.rating
+    winnerPlayerRatingBefore,
+    loserPlayerRatingBefore
   );
 
   const winnerValue: PlayerSeasonRankValue = {
@@ -294,8 +322,12 @@ function settleRankedMatchRating(
     winnerCharacterId,
     loserCharacterId,
     seasonId,
-    winnerRecord.value.rating,
-    loserRecord.value.rating
+    winnerPlayerRatingBefore,
+    loserPlayerRatingBefore,
+    winnerAhogeRatingBefore,
+    loserAhogeRatingBefore,
+    winnerAhogeMatchCountBefore,
+    loserAhogeMatchCountBefore
   );
 
   const writes: nkruntime.StorageWriteRequest[] = [
@@ -330,13 +362,13 @@ function settleRankedMatchRating(
         winner_character_id: winnerCharacterId,
         loser_character_id: loserCharacterId,
         finish_cause: finishCause,
-        winner_player_rating_before: winnerRecord.value.rating,
+        winner_player_rating_before: winnerPlayerRatingBefore,
         winner_player_rating_after: elo.winnerRating,
-        winner_player_rating_delta: elo.winnerRating - winnerRecord.value.rating,
+        winner_player_rating_delta: elo.winnerRating - winnerPlayerRatingBefore,
         winner_player_expected: elo.winnerExpected,
-        loser_player_rating_before: loserRecord.value.rating,
+        loser_player_rating_before: loserPlayerRatingBefore,
         loser_player_rating_after: elo.loserRating,
-        loser_player_rating_delta: elo.loserRating - loserRecord.value.rating,
+        loser_player_rating_delta: elo.loserRating - loserPlayerRatingBefore,
         loser_player_expected: elo.loserExpected,
         winner_ahoge_rating_before: ahogeSettlement.winner_rating_before,
         winner_ahoge_rating_after: ahogeSettlement.winner_rating_after,
