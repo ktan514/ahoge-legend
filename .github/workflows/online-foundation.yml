@@ -332,10 +332,16 @@ jobs:
 
       - name: Seed unequal Player Rating for Draw smoke
         if: matrix.group == 'long'
+        env:
+          AHOGE_DEVICE_ID_OVERRIDE: ahoge-draw-seed-p1
+          AHOGE_TEST_SECOND_DEVICE_ID: ahoge-draw-seed-p2
         run: ./scripts/client-match-result-smoke.sh
 
       - name: Godot authoritative timeout Draw smoke
         if: matrix.group == 'long'
+        env:
+          AHOGE_DEVICE_ID_OVERRIDE: ahoge-draw-seed-p1
+          AHOGE_TEST_SECOND_DEVICE_ID: ahoge-draw-seed-p2
         run: ./scripts/client-timeout-draw-smoke.sh
 
       - name: Shutdown

@@ -62,7 +62,9 @@ func _run() -> void:
 		OnlineConfigScript.CLIENT_TIMEOUT_SECONDS,
 		OnlineConfigScript.CLIENT_LOG_LEVEL
 	)
-	var second_device_id := Crypto.new().generate_random_bytes(32).hex_encode()
+	var second_device_id := OS.get_environment("AHOGE_TEST_SECOND_DEVICE_ID").strip_edges()
+	if second_device_id.is_empty():
+		second_device_id = Crypto.new().generate_random_bytes(32).hex_encode()
 	var second_session = await second_client.authenticate_device_async(second_device_id, null, true)
 	if second_session == null or second_session.is_exception():
 		_fail("P2 Device認証に失敗しました。")
@@ -444,6 +446,14 @@ func _run() -> void:
 	var ack_result: Dictionary = await online_session.acknowledge_active_match_destination()
 	if not bool(ack_result.get("ok", false)):
 		_fail("Match Result検証後にP1 active matchをackできませんでした。")
+		return
+	var p2_ack = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_ACK,
+		JSON.stringify({"match_id": str(p1_joined[0])})
+	)
+	if p2_ack == null or p2_ack.is_exception():
+		_fail("Match Result検証後にP2 active matchをackできませんでした。")
 		return
 
 	await online_session.realtime_socket.leave_match_async(p1_joined[0])

@@ -57,7 +57,9 @@ func _run() -> void:
 		OnlineConfigScript.CLIENT_TIMEOUT_SECONDS,
 		OnlineConfigScript.CLIENT_LOG_LEVEL
 	)
-	var second_device_id := Crypto.new().generate_random_bytes(32).hex_encode()
+	var second_device_id := OS.get_environment("AHOGE_TEST_SECOND_DEVICE_ID").strip_edges()
+	if second_device_id.is_empty():
+		second_device_id = Crypto.new().generate_random_bytes(32).hex_encode()
 	var second_session = await second_client.authenticate_device_async(second_device_id, null, true)
 	if second_session == null or second_session.is_exception():
 		_fail("P2 Device認証に失敗しました。")
