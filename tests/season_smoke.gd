@@ -75,7 +75,7 @@ func _run() -> void:
 		return
 
 	var hide_start_ms := current_start - 60 * 60 * 1000
-	var hidden_until_ms := current_start + 10 * 60 * 1000
+	var hidden_until_ms := current_start + 8 * 60 * 60 * 1000
 	var just_before_hide := await _rpc_dict(
 		client,
 		session,
@@ -98,7 +98,7 @@ func _run() -> void:
 		_fail("月末23:00で旧Season Rankingが非公開になりません。")
 		return
 	if int(at_hide_start.get("ranking_hidden_until_unix_ms", -1)) != hidden_until_ms:
-		_fail("旧Season Rankingの再公開時刻が翌月00:10ではありません。")
+		_fail("旧Season Rankingの再公開時刻が翌朝08:00ではありません。")
 		return
 	if not bool(at_boundary.get("ranking_public", false)):
 		_fail("翌月00:00から新Season Rankingが公開されていません。")

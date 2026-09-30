@@ -56,3 +56,36 @@ assert(
 );
 
 console.log("AHOGE LEGEND rating model smoke: PASS");
+
+
+const seasonBoundary = Date.UTC(2026, 9, 1, 0, 0, 0, 0) - 9 * 60 * 60 * 1000;
+const previousSeason = "2026-09";
+const currentSeason = "2026-10";
+
+const hiddenBeforeEight = evaluate(
+  'seasonRankingVisibility("2026-09", ' + (seasonBoundary + 8 * 60 * 60 * 1000 - 1) + ')'
+);
+assert(hiddenBeforeEight.ranking_public === false, "old season must stay hidden until 08:00 JST");
+assert(
+  hiddenBeforeEight.ranking_hidden_until_unix_ms === seasonBoundary + 8 * 60 * 60 * 1000,
+  "old season hidden-until must be 08:00 JST"
+);
+
+const visibleAtEight = evaluate(
+  'seasonRankingVisibility("2026-09", ' + (seasonBoundary + 8 * 60 * 60 * 1000) + ')'
+);
+assert(visibleAtEight.ranking_public === true, "old season must publish at 08:00 JST");
+
+const newSeasonAtMidnight = evaluate(
+  'seasonRankingVisibility("2026-10", ' + seasonBoundary + ')'
+);
+assert(newSeasonAtMidnight.ranking_public === true, "new season must be public at 00:00 JST");
+
+assert(
+  evaluate('resolveRankedSettlementSeasonId(' + (seasonBoundary - 1) + ', ' + (seasonBoundary + 9 * 60 * 60 * 1000) + ')') === previousSeason,
+  "pre-midnight match must stay in old season regardless of finish time"
+);
+assert(
+  evaluate('resolveRankedSettlementSeasonId(' + seasonBoundary + ', ' + (seasonBoundary + 1000) + ')') === currentSeason,
+  "match starting exactly at 00:00 must belong to new season"
+);
