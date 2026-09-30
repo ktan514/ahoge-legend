@@ -294,13 +294,17 @@ func _run() -> void:
 		_fail("通常BO3後のRatingがElo期待値へ更新されませんでした。")
 		return
 
-	var ranking := await _read_player_ranking(
+	var ranking := await _wait_player_ranking_pair(
 		online_session.client,
 		online_session.session,
-		100
+		p1_user_id,
+		expected_after_match["p1"],
+		p2_user_id,
+		expected_after_match["p2"],
+		5000
 	)
 	if ranking.is_empty():
-		_fail("PLAYER Rankingを取得できませんでした。")
+		_fail("PLAYER Rankingへ対戦playerのsettlementが反映されませんでした。")
 		return
 	if not _assert_player_ranking(
 		ranking,
@@ -543,6 +547,36 @@ func _read_player_ranking(client, session, limit: int) -> Dictionary:
 	if not parsed is Dictionary:
 		return {}
 	return parsed
+
+
+func _wait_player_ranking_pair(
+	client,
+	session,
+	p1_user_id: String,
+	expected_p1: Dictionary,
+	p2_user_id: String,
+	expected_p2: Dictionary,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var ranking := await _read_player_ranking(client, session, 100)
+		if not ranking.is_empty():
+			var records_value = ranking.get("records", [])
+			if records_value is Array:
+				var records: Array = records_value
+				var p1_record := _find_player_ranking_record(records, p1_user_id)
+				var p2_record := _find_player_ranking_record(records, p2_user_id)
+				if not p1_record.is_empty() and not p2_record.is_empty():
+					if int(p1_record.get("rating", -1)) == int(expected_p1.get("rating", -2)) \
+							and int(p1_record.get("wins", -1)) == int(expected_p1.get("wins", -2)) \
+							and int(p1_record.get("losses", -1)) == int(expected_p1.get("losses", -2)) \
+							and int(p2_record.get("rating", -1)) == int(expected_p2.get("rating", -2)) \
+							and int(p2_record.get("wins", -1)) == int(expected_p2.get("wins", -2)) \
+							and int(p2_record.get("losses", -1)) == int(expected_p2.get("losses", -2)):
+						return ranking
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _rank_tier_for_rating(rating: int) -> String:
