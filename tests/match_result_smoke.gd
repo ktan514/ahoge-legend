@@ -374,6 +374,20 @@ func _run() -> void:
 		_fail("Ranked settlementのPlayer Rating before/afterが不正です。")
 		return
 
+	var second_settlement := await _wait_ranked_settlement(
+		second_client,
+		second_session,
+		str(p1_joined[0]),
+		5000
+	)
+	if second_settlement.is_empty():
+		_fail("P2 Ranked settlementを取得できませんでした。")
+		return
+	if int(settlement.get("player_rating_delta", 0)) \
+			+ int(second_settlement.get("player_rating_delta", 0)) != 0:
+		_fail("Player Rating delta合計が0ではありません。")
+		return
+
 	var ahoge_season_id := str(ahoge_after.get("season_id", ""))
 	if ahoge_season_id.is_empty():
 		_fail("AHOGE LEGEND Rankingにseason_idがありません。")
@@ -689,17 +703,17 @@ func _expected_elo_pair(
 	var p1_rating := int(p1_before.get("rating", 1500))
 	var p2_rating := int(p2_before.get("rating", 1500))
 	var p1_expected := 1.0 / (1.0 + pow(10.0, float(p2_rating - p1_rating) / 400.0))
-	var p2_expected := 1.0 / (1.0 + pow(10.0, float(p1_rating - p2_rating) / 400.0))
 	var p1_score := 1.0 if p1_wins else 0.0
-	var p2_score := 0.0 if p1_wins else 1.0
+	var p1_delta := int(round(32.0 * (p1_score - p1_expected)))
+	var p2_delta := -p1_delta
 	return {
 		"p1": {
-			"rating": int(round(p1_rating + 32.0 * (p1_score - p1_expected))),
+			"rating": p1_rating + p1_delta,
 			"wins": int(p1_before.get("wins", 0)) + (1 if p1_wins else 0),
 			"losses": int(p1_before.get("losses", 0)) + (0 if p1_wins else 1),
 		},
 		"p2": {
-			"rating": int(round(p2_rating + 32.0 * (p2_score - p2_expected))),
+			"rating": p2_rating + p2_delta,
 			"wins": int(p2_before.get("wins", 0)) + (0 if p1_wins else 1),
 			"losses": int(p2_before.get("losses", 0)) + (1 if p1_wins else 0),
 		},

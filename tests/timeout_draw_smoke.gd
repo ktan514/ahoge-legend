@@ -106,7 +106,7 @@ func _run() -> void:
 		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
 		{
 			"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
-			"character_id": OnlineConfigScript.RANKED_CHARACTER_LONG_TEST,
+			"character_id": OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST,
 		},
 		{"rating": 1500.0}
 	)
@@ -173,11 +173,23 @@ func _run() -> void:
 	if not bool(settlement.get("is_draw", false)):
 		_fail("Draw settlementがis_draw=trueではありません。")
 		return
-	if not bool(settlement.get("ahoge_mirror_match", false)):
-		_fail("同一character Drawがmirror settlementではありません。")
+	if bool(settlement.get("ahoge_mirror_match", true)):
+		_fail("異character Drawがmirror settlementになっています。")
+		return
+	if int(settlement.get("ahoge_total_activity_count", -1)) != 0:
+		_fail("完全無操作Drawのactivity countが0ではありません。")
+		return
+	if int(settlement.get("ahoge_pair_match_count_before", -1)) != 1:
+		_fail("同一player pairの前回対戦数が1として記録されていません。")
+		return
+	if absf(float(settlement.get("ahoge_trust_multiplier", -1.0))) > 0.000001:
+		_fail("完全無操作DrawのAhoge trustが0ではありません。")
+		return
+	if int(settlement.get("ahoge_raw_delta", 0)) == 0:
+		_fail("Rating差ありDrawのraw Ahoge deltaが0で、trust抑制を検証できません。")
 		return
 	if int(settlement.get("ahoge_rating_delta", 999)) != 0:
-		_fail("同一character DrawでAhoge Ratingが変動しました。")
+		_fail("完全無操作DrawでAhoge Ratingが変動しました。")
 		return
 
 	var second_settlement := await _wait_settlement(
@@ -190,7 +202,7 @@ func _run() -> void:
 		_fail("P2 Draw settlementを取得できませんでした。")
 		return
 	if int(second_settlement.get("ahoge_rating_delta", 999)) != 0:
-		_fail("同一character DrawでP2 Ahoge Ratingが変動しました。")
+		_fail("完全無操作DrawでP2 Ahoge Ratingが変動しました。")
 		return
 
 	var p1_rating := int(p1_rating_before.get("rating", 1500))
@@ -200,12 +212,16 @@ func _run() -> void:
 	)
 	var p2_expected := 1.0 - p1_expected
 	var expected_p1_delta := int(round(32.0 * (0.5 - p1_expected)))
-	var expected_p2_delta := int(round(32.0 * (0.5 - p2_expected)))
+	var expected_p2_delta := -expected_p1_delta
 	if int(settlement.get("player_rating_delta", 999)) != expected_p1_delta:
 		_fail("P1 DrawのPlayer Rating deltaがElo期待値と一致しません。")
 		return
 	if int(second_settlement.get("player_rating_delta", 999)) != expected_p2_delta:
 		_fail("P2 DrawのPlayer Rating deltaがElo期待値と一致しません。")
+		return
+	if int(settlement.get("player_rating_delta", 0)) \
+			+ int(second_settlement.get("player_rating_delta", 0)) != 0:
+		_fail("DrawのPlayer Rating delta合計が0ではありません。")
 		return
 
 	if p1_rating != p2_rating:
