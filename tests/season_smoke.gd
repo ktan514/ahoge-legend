@@ -1,5 +1,7 @@
 extends SceneTree
 
+const OnlineConfigScript := preload("res://src/config/online_config.gd")
+
 
 func _init() -> void:
 	call_deferred("_run")
