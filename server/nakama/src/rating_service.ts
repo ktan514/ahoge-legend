@@ -11,6 +11,7 @@ interface PlayerSeasonRankValue {
   rating: number;
   wins: number;
   losses: number;
+  draws: number;
 }
 
 interface PlayerSeasonRankRecord {
@@ -19,11 +20,11 @@ interface PlayerSeasonRankRecord {
   exists: boolean;
 }
 
-interface EloUpdateResult {
-  winnerRating: number;
-  loserRating: number;
-  winnerExpected: number;
-  loserExpected: number;
+interface EloOutcomeResult {
+  firstExpected: number;
+  secondExpected: number;
+  firstDelta: number;
+  secondDelta: number;
 }
 
 interface RankedMatchSettlementRecord {
@@ -35,22 +36,32 @@ function eloExpectedScore(selfRating: number, opponentRating: number): number {
   return 1 / (1 + Math.pow(10, (opponentRating - selfRating) / 400));
 }
 
-function calculateEloUpdate(
-  winnerRating: number,
-  loserRating: number
-): EloUpdateResult {
-  const winnerExpected = eloExpectedScore(winnerRating, loserRating);
-  const loserExpected = eloExpectedScore(loserRating, winnerRating);
-
+function calculateEloOutcome(
+  firstRating: number,
+  secondRating: number,
+  firstActualScore: number
+): EloOutcomeResult {
+  if (
+    firstActualScore !== 0 &&
+    firstActualScore !== 0.5 &&
+    firstActualScore !== 1
+  ) {
+    throw new Error("invalid Elo actual score");
+  }
+  const firstExpected = eloExpectedScore(firstRating, secondRating);
+  const secondExpected = eloExpectedScore(secondRating, firstRating);
+  const secondActualScore = 1 - firstActualScore;
+  const firstAfter = Math.round(
+    firstRating + ELO_K_FACTOR * (firstActualScore - firstExpected)
+  );
+  const secondAfter = Math.round(
+    secondRating + ELO_K_FACTOR * (secondActualScore - secondExpected)
+  );
   return {
-    winnerRating: Math.round(
-      winnerRating + ELO_K_FACTOR * (1 - winnerExpected)
-    ),
-    loserRating: Math.round(
-      loserRating + ELO_K_FACTOR * (0 - loserExpected)
-    ),
-    winnerExpected: winnerExpected,
-    loserExpected: loserExpected
+    firstExpected: firstExpected,
+    secondExpected: secondExpected,
+    firstDelta: firstAfter - firstRating,
+    secondDelta: secondAfter - secondRating
   };
 }
 
@@ -59,7 +70,8 @@ function defaultPlayerSeasonRank(seasonId: string): PlayerSeasonRankValue {
     season_id: seasonId,
     rating: ELO_INITIAL_RATING,
     wins: 0,
-    losses: 0
+    losses: 0,
+    draws: 0
   };
 }
 
@@ -89,9 +101,12 @@ function readPlayerSeasonRank(
   return {
     value: {
       season_id: String(rawValue.season_id || seasonId),
-      rating: Number(rawValue.rating === undefined ? ELO_INITIAL_RATING : rawValue.rating),
+      rating: Number(
+        rawValue.rating === undefined ? ELO_INITIAL_RATING : rawValue.rating
+      ),
       wins: Number(rawValue.wins || 0),
-      losses: Number(rawValue.losses || 0)
+      losses: Number(rawValue.losses || 0),
+      draws: Number(rawValue.draws || 0)
     },
     version: object.version,
     exists: true
@@ -163,6 +178,7 @@ function syncPlayerRankingRecord(
       season_id: seasonId,
       wins: record.value.wins,
       losses: record.value.losses,
+      draws: record.value.draws,
       rank_tier: rankTierForRating(record.value.rating)
     }
   );
@@ -170,13 +186,13 @@ function syncPlayerRankingRecord(
 
 function syncRankedMatchLeaderboardProjection(
   nk: nkruntime.Nakama,
-  winnerUserId: string,
-  loserUserId: string,
+  userIds: string[],
   seasonId: string
 ): boolean {
   try {
-    syncPlayerRankingRecord(nk, winnerUserId, seasonId);
-    syncPlayerRankingRecord(nk, loserUserId, seasonId);
+    userIds.forEach(function (userId): void {
+      syncPlayerRankingRecord(nk, userId, seasonId);
+    });
     return true;
   } catch (_error) {
     return false;
@@ -204,9 +220,10 @@ function readRankedMatchSettlement(
 }
 
 function shouldUpdateRatingForFinishCause(finishCause: string): boolean {
-  // Round境界timeoutはDISCONNECT_FORFEITというRound ResultとしてBO3へ集約する。
-  // Ratingは最終的に2本先取したMatch Resultに対して1回だけ更新する。
-  return finishCause === MATCH_FINISH_CAUSE_BO3;
+  return (
+    finishCause === MATCH_FINISH_CAUSE_BO3 ||
+    finishCause === MATCH_FINISH_CAUSE_BO3_DRAW
+  );
 }
 
 function settleRankedMatchRating(
@@ -214,15 +231,16 @@ function settleRankedMatchRating(
   logger: nkruntime.Logger,
   matchId: string,
   matchMode: string,
-  winnerUserId: string,
-  loserUserId: string,
+  participantUserIds: string[],
+  matchWinnerUserId: string,
   characterIdByUser: {[key: string]: string},
-  ratingSeasonId: string,
-  playerRatingBeforeByUser: {[key: string]: number},
-  ahogeRatingBeforeByCharacter: {[key: string]: number},
-  ahogeMatchCountBeforeByCharacter: {[key: string]: number},
+  ratingSnapshotSeasonId: string,
+  playerRatingSnapshotByUser: {[key: string]: number},
+  ahogeRatingSnapshotByCharacter: {[key: string]: number},
+  ahogeMatchCountSnapshotByCharacter: {[key: string]: number},
   finishCause: string,
-  unixMilliseconds: number
+  matchStartedAtUnixMilliseconds: number,
+  matchFinishedAtUnixMilliseconds: number
 ): boolean {
   if (matchMode !== "ranked") {
     return true;
@@ -230,122 +248,177 @@ function settleRankedMatchRating(
   if (!shouldUpdateRatingForFinishCause(finishCause)) {
     return true;
   }
-  if (!matchId || !winnerUserId || !loserUserId || winnerUserId === loserUserId) {
-    logger.error("ahoge rating settlement rejected invalid match result.");
+  if (!matchId || participantUserIds.length !== 2) {
+    logger.error("ranked rating settlement rejected invalid participants.");
     return false;
   }
 
-  const winnerCharacterId = String(characterIdByUser[winnerUserId] || "");
-  const loserCharacterId = String(characterIdByUser[loserUserId] || "");
-  if (!winnerCharacterId || !loserCharacterId) {
+  const firstUserId = String(participantUserIds[0] || "");
+  const secondUserId = String(participantUserIds[1] || "");
+  if (!firstUserId || !secondUserId || firstUserId === secondUserId) {
+    logger.error("ranked rating settlement rejected invalid user IDs.");
+    return false;
+  }
+
+  const isDraw = finishCause === MATCH_FINISH_CAUSE_BO3_DRAW;
+  if (
+    !isDraw &&
+    matchWinnerUserId !== firstUserId &&
+    matchWinnerUserId !== secondUserId
+  ) {
+    logger.error("ranked rating settlement rejected invalid winner.");
+    return false;
+  }
+
+  const firstCharacterId = String(characterIdByUser[firstUserId] || "");
+  const secondCharacterId = String(characterIdByUser[secondUserId] || "");
+  if (!firstCharacterId || !secondCharacterId) {
     logger.error("ahoge ranking settlement rejected missing character IDs.");
     return false;
   }
 
   const existingSettlement = readRankedMatchSettlement(nk, matchId);
   if (existingSettlement) {
-    const existingSeasonId = String(existingSettlement.value.season_id || "");
-    const existingWinnerCharacterId = String(
-      existingSettlement.value.winner_character_id || winnerCharacterId
-    );
-    const existingLoserCharacterId = String(
-      existingSettlement.value.loser_character_id || loserCharacterId
-    );
-    if (!existingSeasonId) {
-      logger.error("ahoge settlement exists without season_id. match_id=%s", matchId);
+    const value = existingSettlement.value;
+    const existingSeasonId = String(value.season_id || "");
+    const existingParticipants = value.participant_user_ids;
+    const existingCharacters = value.character_id_by_user;
+    if (
+      !existingSeasonId ||
+      !Array.isArray(existingParticipants) ||
+      !existingCharacters ||
+      typeof existingCharacters !== "object"
+    ) {
+      logger.error("ranked settlement exists with invalid projection data. match_id=%s", matchId);
       return false;
     }
+    const projectionUsers = existingParticipants.map(function (userId: any): string {
+      return String(userId);
+    });
+    const projectionCharacters = projectionUsers.map(function (userId): string {
+      return String((existingCharacters as any)[userId] || "");
+    });
     return (
       syncRankedMatchLeaderboardProjection(
         nk,
-        winnerUserId,
-        loserUserId,
+        projectionUsers,
         existingSeasonId
       ) &&
       syncAhogeLegendProjection(
         nk,
-        existingWinnerCharacterId,
-        existingLoserCharacterId,
+        projectionCharacters,
         existingSeasonId
       )
     );
   }
 
-  const seasonId = ratingSeasonId || currentSeasonIdJst(unixMilliseconds);
+  const seasonId = resolveRankedSettlementSeasonId(
+    matchStartedAtUnixMilliseconds,
+    matchFinishedAtUnixMilliseconds
+  );
   ensureSeasonMetadata(nk, seasonId);
-  const winnerRecord = readPlayerSeasonRank(nk, winnerUserId, seasonId);
-  const loserRecord = readPlayerSeasonRank(nk, loserUserId, seasonId);
-  const winnerPlayerRatingBefore =
-    playerRatingBeforeByUser[winnerUserId] === undefined
-      ? winnerRecord.value.rating
-      : playerRatingBeforeByUser[winnerUserId];
-  const loserPlayerRatingBefore =
-    playerRatingBeforeByUser[loserUserId] === undefined
-      ? loserRecord.value.rating
-      : playerRatingBeforeByUser[loserUserId];
-  const winnerAhogeRatingBefore =
-    ahogeRatingBeforeByCharacter[winnerCharacterId] === undefined
-      ? readAhogeSeasonRank(nk, winnerCharacterId, seasonId).value.ahoge_rating
-      : ahogeRatingBeforeByCharacter[winnerCharacterId];
-  const loserAhogeRatingBefore =
-    ahogeRatingBeforeByCharacter[loserCharacterId] === undefined
-      ? readAhogeSeasonRank(nk, loserCharacterId, seasonId).value.ahoge_rating
-      : ahogeRatingBeforeByCharacter[loserCharacterId];
-  const winnerAhogeMatchCountBefore =
-    ahogeMatchCountBeforeByCharacter[winnerCharacterId] === undefined
-      ? readAhogeSeasonRank(nk, winnerCharacterId, seasonId).value.total_ranked_matches
-      : ahogeMatchCountBeforeByCharacter[winnerCharacterId];
-  const loserAhogeMatchCountBefore =
-    ahogeMatchCountBeforeByCharacter[loserCharacterId] === undefined
-      ? readAhogeSeasonRank(nk, loserCharacterId, seasonId).value.total_ranked_matches
-      : ahogeMatchCountBeforeByCharacter[loserCharacterId];
-  const elo = calculateEloUpdate(
-    winnerPlayerRatingBefore,
-    loserPlayerRatingBefore
+
+  const snapshotSeasonId =
+    ratingSnapshotSeasonId ||
+    currentSeasonIdJst(matchStartedAtUnixMilliseconds);
+  const firstSnapshotPlayerRating =
+    playerRatingSnapshotByUser[firstUserId] === undefined
+      ? readPlayerSeasonRank(nk, firstUserId, snapshotSeasonId).value.rating
+      : playerRatingSnapshotByUser[firstUserId];
+  const secondSnapshotPlayerRating =
+    playerRatingSnapshotByUser[secondUserId] === undefined
+      ? readPlayerSeasonRank(nk, secondUserId, snapshotSeasonId).value.rating
+      : playerRatingSnapshotByUser[secondUserId];
+  const firstSnapshotAhogeRating =
+    ahogeRatingSnapshotByCharacter[firstCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, firstCharacterId, snapshotSeasonId).value.ahoge_rating
+      : ahogeRatingSnapshotByCharacter[firstCharacterId];
+  const secondSnapshotAhogeRating =
+    ahogeRatingSnapshotByCharacter[secondCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, secondCharacterId, snapshotSeasonId).value.ahoge_rating
+      : ahogeRatingSnapshotByCharacter[secondCharacterId];
+  const firstSnapshotAhogeMatchCount =
+    ahogeMatchCountSnapshotByCharacter[firstCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, firstCharacterId, snapshotSeasonId).value.total_ranked_matches
+      : ahogeMatchCountSnapshotByCharacter[firstCharacterId];
+  const secondSnapshotAhogeMatchCount =
+    ahogeMatchCountSnapshotByCharacter[secondCharacterId] === undefined
+      ? readAhogeSeasonRank(nk, secondCharacterId, snapshotSeasonId).value.total_ranked_matches
+      : ahogeMatchCountSnapshotByCharacter[secondCharacterId];
+
+  const firstActualScore = isDraw
+    ? 0.5
+    : matchWinnerUserId === firstUserId
+      ? 1
+      : 0;
+  const elo = calculateEloOutcome(
+    firstSnapshotPlayerRating,
+    secondSnapshotPlayerRating,
+    firstActualScore
   );
 
-  const winnerValue: PlayerSeasonRankValue = {
+  const firstRecord = readPlayerSeasonRank(nk, firstUserId, seasonId);
+  const secondRecord = readPlayerSeasonRank(nk, secondUserId, seasonId);
+  const firstValue: PlayerSeasonRankValue = {
     season_id: seasonId,
-    rating: elo.winnerRating,
-    wins: winnerRecord.value.wins + 1,
-    losses: winnerRecord.value.losses
+    rating: firstRecord.value.rating + elo.firstDelta,
+    wins:
+      firstRecord.value.wins +
+      (!isDraw && matchWinnerUserId === firstUserId ? 1 : 0),
+    losses:
+      firstRecord.value.losses +
+      (!isDraw && matchWinnerUserId === secondUserId ? 1 : 0),
+    draws: firstRecord.value.draws + (isDraw ? 1 : 0)
   };
-  const loserValue: PlayerSeasonRankValue = {
+  const secondValue: PlayerSeasonRankValue = {
     season_id: seasonId,
-    rating: elo.loserRating,
-    wins: loserRecord.value.wins,
-    losses: loserRecord.value.losses + 1
+    rating: secondRecord.value.rating + elo.secondDelta,
+    wins:
+      secondRecord.value.wins +
+      (!isDraw && matchWinnerUserId === secondUserId ? 1 : 0),
+    losses:
+      secondRecord.value.losses +
+      (!isDraw && matchWinnerUserId === firstUserId ? 1 : 0),
+    draws: secondRecord.value.draws + (isDraw ? 1 : 0)
   };
 
   const ahogeSettlement = buildAhogeSeasonRankSettlement(
     nk,
-    winnerCharacterId,
-    loserCharacterId,
+    firstCharacterId,
+    secondCharacterId,
     seasonId,
-    winnerPlayerRatingBefore,
-    loserPlayerRatingBefore,
-    winnerAhogeRatingBefore,
-    loserAhogeRatingBefore,
-    winnerAhogeMatchCountBefore,
-    loserAhogeMatchCountBefore
+    firstSnapshotPlayerRating,
+    secondSnapshotPlayerRating,
+    firstSnapshotAhogeRating,
+    secondSnapshotAhogeRating,
+    firstSnapshotAhogeMatchCount,
+    secondSnapshotAhogeMatchCount,
+    firstActualScore
   );
+
+  const winnerUserId = isDraw ? "" : matchWinnerUserId;
+  const loserUserId = isDraw
+    ? ""
+    : matchWinnerUserId === firstUserId
+      ? secondUserId
+      : firstUserId;
 
   const writes: nkruntime.StorageWriteRequest[] = [
     {
       collection: PLAYER_SEASON_RANK_COLLECTION,
       key: seasonId,
-      userId: winnerUserId,
-      value: winnerValue,
-      version: winnerRecord.version,
+      userId: firstUserId,
+      value: firstValue,
+      version: firstRecord.version,
       permissionRead: 1,
       permissionWrite: 0
     },
     {
       collection: PLAYER_SEASON_RANK_COLLECTION,
       key: seasonId,
-      userId: loserUserId,
-      value: loserValue,
-      version: loserRecord.version,
+      userId: secondUserId,
+      value: secondValue,
+      version: secondRecord.version,
       permissionRead: 1,
       permissionWrite: 0
     },
@@ -357,31 +430,59 @@ function settleRankedMatchRating(
       value: {
         match_id: matchId,
         season_id: seasonId,
+        rating_snapshot_season_id: snapshotSeasonId,
+        outcome: isDraw ? "DRAW" : "WIN",
+        participant_user_ids: [firstUserId, secondUserId],
         winner_user_id: winnerUserId,
         loser_user_id: loserUserId,
-        winner_character_id: winnerCharacterId,
-        loser_character_id: loserCharacterId,
+        character_id_by_user: characterIdByUser,
         finish_cause: finishCause,
-        winner_player_rating_before: winnerPlayerRatingBefore,
-        winner_player_rating_after: elo.winnerRating,
-        winner_player_rating_delta: elo.winnerRating - winnerPlayerRatingBefore,
-        winner_player_expected: elo.winnerExpected,
-        loser_player_rating_before: loserPlayerRatingBefore,
-        loser_player_rating_after: elo.loserRating,
-        loser_player_rating_delta: elo.loserRating - loserPlayerRatingBefore,
-        loser_player_expected: elo.loserExpected,
-        winner_ahoge_rating_before: ahogeSettlement.winner_rating_before,
-        winner_ahoge_rating_after: ahogeSettlement.winner_rating_after,
-        winner_ahoge_rating_delta: ahogeSettlement.winner_delta,
-        winner_ahoge_expected: ahogeSettlement.winner_expected,
-        loser_ahoge_rating_before: ahogeSettlement.loser_rating_before,
-        loser_ahoge_rating_after: ahogeSettlement.loser_rating_after,
-        loser_ahoge_rating_delta: ahogeSettlement.loser_delta,
-        loser_ahoge_expected: ahogeSettlement.loser_expected,
+        player_rating_calculation_snapshot_by_user: {
+          [firstUserId]: firstSnapshotPlayerRating,
+          [secondUserId]: secondSnapshotPlayerRating
+        },
+        player_rating_before_by_user: {
+          [firstUserId]: firstRecord.value.rating,
+          [secondUserId]: secondRecord.value.rating
+        },
+        player_rating_after_by_user: {
+          [firstUserId]: firstValue.rating,
+          [secondUserId]: secondValue.rating
+        },
+        player_rating_delta_by_user: {
+          [firstUserId]: elo.firstDelta,
+          [secondUserId]: elo.secondDelta
+        },
+        player_expected_by_user: {
+          [firstUserId]: elo.firstExpected,
+          [secondUserId]: elo.secondExpected
+        },
+        ahoge_rating_calculation_snapshot_by_character: {
+          [firstCharacterId]: firstSnapshotAhogeRating,
+          [secondCharacterId]: secondSnapshotAhogeRating
+        },
+        ahoge_rating_before_by_user: {
+          [firstUserId]: ahogeSettlement.first_rating_before,
+          [secondUserId]: ahogeSettlement.second_rating_before
+        },
+        ahoge_rating_after_by_user: {
+          [firstUserId]: ahogeSettlement.first_rating_after,
+          [secondUserId]: ahogeSettlement.second_rating_after
+        },
+        ahoge_rating_delta_by_user: {
+          [firstUserId]: ahogeSettlement.first_delta,
+          [secondUserId]: ahogeSettlement.second_delta
+        },
+        ahoge_expected_by_user: {
+          [firstUserId]: ahogeSettlement.first_expected,
+          [secondUserId]: ahogeSettlement.second_expected
+        },
         ahoge_mirror_match: ahogeSettlement.mirror_match,
         ahoge_weight: ahogeSettlement.weight,
         ahoge_k: ahogeSettlement.k_factor,
-        settled_at_unix_ms: unixMilliseconds
+        match_started_at_unix_ms: matchStartedAtUnixMilliseconds,
+        match_finished_at_unix_ms: matchFinishedAtUnixMilliseconds,
+        settled_at_unix_ms: Date.now()
       },
       version: "*",
       permissionRead: 0,
@@ -394,12 +495,11 @@ function settleRankedMatchRating(
 
     if (!syncRankedMatchLeaderboardProjection(
       nk,
-      winnerUserId,
-      loserUserId,
+      [firstUserId, secondUserId],
       seasonId
     )) {
       logger.warn(
-        "ahoge player ranking projection will retry. match_id=%s season=%s",
+        "player ranking projection will retry. match_id=%s season=%s",
         matchId,
         seasonId
       );
@@ -408,8 +508,7 @@ function settleRankedMatchRating(
 
     if (!syncAhogeLegendProjection(
       nk,
-      winnerCharacterId,
-      loserCharacterId,
+      [firstCharacterId, secondCharacterId],
       seasonId
     )) {
       logger.warn(
@@ -421,48 +520,51 @@ function settleRankedMatchRating(
     }
 
     logger.info(
-      "ahoge ranked rating settled. match_id=%s season=%s winner=%s loser=%s player_winner_rating=%d player_loser_rating=%d ahoge_winner_rating=%d ahoge_loser_rating=%d",
+      "ranked rating settled. match_id=%s season=%s outcome=%s p1_rating=%d p2_rating=%d p1_ahoge=%d p2_ahoge=%d",
       matchId,
       seasonId,
-      winnerUserId,
-      loserUserId,
-      elo.winnerRating,
-      elo.loserRating,
-      ahogeSettlement.winner_rating_after,
-      ahogeSettlement.loser_rating_after
+      isDraw ? "DRAW" : "WIN",
+      firstValue.rating,
+      secondValue.rating,
+      ahogeSettlement.first_rating_after,
+      ahogeSettlement.second_rating_after
     );
     return true;
   } catch (error) {
-    // 同一matchの並行settlementで他方が先に成功した場合は、
-    // settlement正本に記録されたseason / characterでprojectionだけ再試行する。
     const concurrentSettlement = readRankedMatchSettlement(nk, matchId);
     if (concurrentSettlement) {
-      const settledSeasonId = String(concurrentSettlement.value.season_id || "");
-      const settledWinnerCharacterId = String(
-        concurrentSettlement.value.winner_character_id || winnerCharacterId
-      );
-      const settledLoserCharacterId = String(
-        concurrentSettlement.value.loser_character_id || loserCharacterId
-      );
-      if (settledSeasonId) {
+      const value = concurrentSettlement.value;
+      const settledSeasonId = String(value.season_id || "");
+      const settledParticipants = value.participant_user_ids;
+      const settledCharacters = value.character_id_by_user;
+      if (
+        settledSeasonId &&
+        Array.isArray(settledParticipants) &&
+        settledCharacters &&
+        typeof settledCharacters === "object"
+      ) {
+        const projectionUsers = settledParticipants.map(function (userId: any): string {
+          return String(userId);
+        });
+        const projectionCharacters = projectionUsers.map(function (userId): string {
+          return String((settledCharacters as any)[userId] || "");
+        });
         return (
           syncRankedMatchLeaderboardProjection(
             nk,
-            winnerUserId,
-            loserUserId,
+            projectionUsers,
             settledSeasonId
           ) &&
           syncAhogeLegendProjection(
             nk,
-            settledWinnerCharacterId,
-            settledLoserCharacterId,
+            projectionCharacters,
             settledSeasonId
           )
         );
       }
     }
     logger.warn(
-      "ahoge ranked rating settlement will retry. match_id=%s error=%s",
+      "ranked rating settlement will retry. match_id=%s error=%s",
       matchId,
       String(error)
     );
@@ -500,41 +602,66 @@ const rankedMatchSettlementRpc: nkruntime.RpcFunction = function (
 
   const value = record.value;
   const userId = String(ctx.userId);
-  const winnerUserId = String(value.winner_user_id || "");
-  const loserUserId = String(value.loser_user_id || "");
-  if (userId !== winnerUserId && userId !== loserUserId) {
+  const participants = Array.isArray(value.participant_user_ids)
+    ? value.participant_user_ids.map(function (id: any): string {
+        return String(id);
+      })
+    : [
+        String(value.winner_user_id || ""),
+        String(value.loser_user_id || "")
+      ];
+  if (participants.indexOf(userId) < 0) {
     throw new Error("settlement participant required");
   }
 
-  const isWinner = userId === winnerUserId;
-  const prefix = isWinner ? "winner_" : "loser_";
+  const characterMap =
+    value.character_id_by_user &&
+    typeof value.character_id_by_user === "object"
+      ? value.character_id_by_user
+      : {};
+  const playerBefore = value.player_rating_before_by_user || {};
+  const playerAfter = value.player_rating_after_by_user || {};
+  const playerDelta = value.player_rating_delta_by_user || {};
+  const playerExpected = value.player_expected_by_user || {};
+  const ahogeBefore = value.ahoge_rating_before_by_user || {};
+  const ahogeAfter = value.ahoge_rating_after_by_user || {};
+  const ahogeDelta = value.ahoge_rating_delta_by_user || {};
+  const ahogeExpected = value.ahoge_expected_by_user || {};
+
   const playerRatingAvailable =
-    value[prefix + "player_rating_before"] !== undefined &&
-    value[prefix + "player_rating_after"] !== undefined;
+    playerBefore[userId] !== undefined && playerAfter[userId] !== undefined;
   const ahogeRatingAvailable =
-    value[prefix + "ahoge_rating_before"] !== undefined &&
-    value[prefix + "ahoge_rating_after"] !== undefined;
+    ahogeBefore[userId] !== undefined && ahogeAfter[userId] !== undefined;
+  const isDraw = String(value.outcome || "") === "DRAW";
+  const winnerUserId = String(value.winner_user_id || "");
+
   return JSON.stringify({
     found: true,
     player_rating_available: playerRatingAvailable,
     ahoge_rating_available: ahogeRatingAvailable,
     match_id: matchId,
     season_id: String(value.season_id || ""),
+    rating_snapshot_season_id: String(value.rating_snapshot_season_id || ""),
     user_id: userId,
-    character_id: String(
-      isWinner
-        ? value.winner_character_id || ""
-        : value.loser_character_id || ""
+    character_id: String((characterMap as any)[userId] || ""),
+    is_winner: !isDraw && winnerUserId === userId,
+    is_draw: isDraw,
+    player_rating_before: Number(playerBefore[userId] || 0),
+    player_rating_after: Number(playerAfter[userId] || 0),
+    player_rating_delta: Number(playerDelta[userId] || 0),
+    player_expected: Number(playerExpected[userId] || 0),
+    ahoge_rating_before: Number(
+      ahogeBefore[userId] === undefined
+        ? AHOGE_BASE_RATING
+        : ahogeBefore[userId]
     ),
-    is_winner: isWinner,
-    player_rating_before: Number(value[prefix + "player_rating_before"] || 0),
-    player_rating_after: Number(value[prefix + "player_rating_after"] || 0),
-    player_rating_delta: Number(value[prefix + "player_rating_delta"] || 0),
-    player_expected: Number(value[prefix + "player_expected"] || 0),
-    ahoge_rating_before: Number(value[prefix + "ahoge_rating_before"] || AHOGE_BASE_RATING),
-    ahoge_rating_after: Number(value[prefix + "ahoge_rating_after"] || AHOGE_BASE_RATING),
-    ahoge_rating_delta: Number(value[prefix + "ahoge_rating_delta"] || 0),
-    ahoge_expected: Number(value[prefix + "ahoge_expected"] || 0),
+    ahoge_rating_after: Number(
+      ahogeAfter[userId] === undefined
+        ? AHOGE_BASE_RATING
+        : ahogeAfter[userId]
+    ),
+    ahoge_rating_delta: Number(ahogeDelta[userId] || 0),
+    ahoge_expected: Number(ahogeExpected[userId] || 0),
     ahoge_mirror_match: Boolean(value.ahoge_mirror_match),
     ahoge_weight: Number(value.ahoge_weight || 0),
     ahoge_k: Number(value.ahoge_k || 0)
@@ -596,6 +723,18 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
   const now = Date.now();
   const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
   ensureSeasonMetadata(nk, seasonId);
+  const visibility = seasonRankingVisibility(seasonId, now);
+  if (!visibility.ranking_public) {
+    return JSON.stringify({
+      season_id: seasonId,
+      records: [],
+      rank_count: 0,
+      ranking_public: false,
+      ranking_hidden_until_unix_ms:
+        visibility.ranking_hidden_until_unix_ms
+    });
+  }
+
   const leaderboardId = ensurePlayerRatingLeaderboard(nk, seasonId);
   const result = nk.leaderboardRecordsList(
     leaderboardId,
@@ -624,9 +763,12 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
     const raw = object.value as any;
     rankValueByUser[object.userId] = {
       season_id: String(raw.season_id || seasonId),
-      rating: Number(raw.rating === undefined ? ELO_INITIAL_RATING : raw.rating),
+      rating: Number(
+        raw.rating === undefined ? ELO_INITIAL_RATING : raw.rating
+      ),
       wins: Number(raw.wins || 0),
-      losses: Number(raw.losses || 0)
+      losses: Number(raw.losses || 0),
+      draws: Number(raw.draws || 0)
     };
   });
 
@@ -650,13 +792,16 @@ const playerRankingRpc: nkruntime.RpcFunction = function (
       rating: rating,
       rank_tier: rankTierForRating(rating),
       wins: value.wins,
-      losses: value.losses
+      losses: value.losses,
+      draws: value.draws
     };
   });
 
   return JSON.stringify({
     season_id: seasonId,
     records: records,
-    rank_count: result.rankCount || rawRecords.length
+    rank_count: result.rankCount || rawRecords.length,
+    ranking_public: true,
+    ranking_hidden_until_unix_ms: 0
   });
 };

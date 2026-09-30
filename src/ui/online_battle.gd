@@ -295,7 +295,10 @@ func _on_round_result(
 		var generation := _opponent_boundary_wait_generation
 		hud.show_opponent_wait_countdown(0)
 		call_deferred("_clear_forfeit_wait_overlay_after_delay", generation)
-	hud.flash_message("ROUND %d WINNER: %s" % [round_number, _player_label(winner_user_id)])
+	if finish_cause == "TIMEOUT_DRAW":
+		hud.flash_message("ROUND %d DRAW" % round_number)
+	else:
+		hud.flash_message("ROUND %d WINNER: %s" % [round_number, _player_label(winner_user_id)])
 
 
 func _on_bo3_score_changed(
@@ -309,7 +312,7 @@ func _on_bo3_score_changed(
 	_snapshot["match_finished"] = match_finished
 	if not match_finished:
 		hud.show_round_result(
-			_player_label(round_winner_user_id),
+			"DRAW" if round_winner_user_id.is_empty() else _player_label(round_winner_user_id),
 			completed_round_number,
 			int(_snapshot["player_one_rounds"]),
 			int(_snapshot["player_two_rounds"])
@@ -387,22 +390,28 @@ func _on_match_result(
 		"round_wins_by_user": round_wins_by_user.duplicate(true),
 		"final_round_number": final_round_number,
 		"finish_cause": finish_cause,
+		"is_draw": finish_cause == "BO3_DRAW",
 	})
 
 
 func _emit_result_from_snapshot(snapshot: Dictionary) -> void:
 	if _completion_emitted:
 		return
+	var finish_cause := str(snapshot.get("match_finish_cause", ""))
+	var is_draw := finish_cause == "BO3_DRAW" or bool(snapshot.get("match_draw", false))
 	var winner_user_id := str(snapshot.get("match_winner_user_id", ""))
-	if winner_user_id.is_empty():
+	if not is_draw and winner_user_id.is_empty():
 		return
-	var loser_user_id := _opponent_user_id if winner_user_id == _local_user_id else _local_user_id
+	var loser_user_id := ""
+	if not is_draw:
+		loser_user_id = _opponent_user_id if winner_user_id == _local_user_id else _local_user_id
 	_emit_ranked_result({
 		"winner_user_id": winner_user_id,
 		"loser_user_id": loser_user_id,
 		"round_wins_by_user": snapshot.get("round_wins_by_user", {}).duplicate(true),
 		"final_round_number": int(snapshot.get("round_number", 1)),
-		"finish_cause": str(snapshot.get("match_finish_cause", "")),
+		"finish_cause": finish_cause,
+		"is_draw": is_draw,
 	})
 
 
@@ -411,13 +420,16 @@ func _emit_ranked_result(authoritative_result: Dictionary) -> void:
 		return
 	_completion_emitted = true
 	var winner_user_id := str(authoritative_result.get("winner_user_id", ""))
+	var is_draw := bool(authoritative_result.get("is_draw", false)) \
+		or str(authoritative_result.get("finish_cause", "")) == "BO3_DRAW"
 	var summary := {
 		"mode": "ranked",
 		"match_id": str(_online_session.current_match_id),
 		"winner_user_id": winner_user_id,
 		"loser_user_id": str(authoritative_result.get("loser_user_id", "")),
 		"local_user_id": _local_user_id,
-		"local_won": winner_user_id == _local_user_id,
+		"local_won": not is_draw and winner_user_id == _local_user_id,
+		"is_draw": is_draw,
 		"local_character_id": _local_character_id,
 		"opponent_character_id": _opponent_character_id,
 		"round_wins_by_user": authoritative_result.get("round_wins_by_user", {}).duplicate(true),

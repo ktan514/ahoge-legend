@@ -206,16 +206,28 @@ static func parse_round_result_payload(payload: String) -> Dictionary:
 	var winner_user_id := str(parsed["winner_user_id"])
 	var loser_user_id := str(parsed["loser_user_id"])
 	var finish_cause := str(parsed["finish_cause"])
+	var is_draw := bool(parsed.get("is_draw", finish_cause == "TIMEOUT_DRAW"))
 	if round_number < 1:
 		return {}
-	if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
+	if finish_cause not in ["HIT_LIMIT", "TIMEOUT", "TIMEOUT_DRAW", "DISCONNECT_FORFEIT"]:
 		return {}
-	if finish_cause not in ["HIT_LIMIT", "TIMEOUT", "OVERTIME_HIT", "DISCONNECT_FORFEIT"]:
-		return {}
+	if is_draw:
+		if finish_cause != "TIMEOUT_DRAW":
+			return {}
+		if not winner_user_id.is_empty() or not loser_user_id.is_empty():
+			return {}
+		if int(parsed["winner_hits"]) != int(parsed["loser_hits"]):
+			return {}
+	else:
+		if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
+			return {}
+		if finish_cause == "TIMEOUT_DRAW":
+			return {}
 	if int(parsed["winner_hits"]) < 0 or int(parsed["loser_hits"]) < 0:
 		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
+	parsed["is_draw"] = is_draw
 	return parsed
 
 
@@ -246,12 +258,18 @@ static func parse_bo3_score_changed_payload(payload: String) -> Dictionary:
 			return {}
 	if int(parsed["completed_round_number"]) < 1 or int(parsed["completed_round_number"]) > 3:
 		return {}
-	if str(parsed["round_winner_user_id"]).is_empty():
+	var round_draw := bool(parsed.get("round_draw", false))
+	var round_winner_user_id := str(parsed["round_winner_user_id"])
+	if round_draw:
+		if not round_winner_user_id.is_empty():
+			return {}
+	elif round_winner_user_id.is_empty():
 		return {}
 	if not _valid_round_wins(parsed["round_wins_by_user"]):
 		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
+	parsed["round_draw"] = round_draw
 	return parsed
 
 
@@ -288,23 +306,36 @@ static func parse_match_result_payload(payload: String) -> Dictionary:
 	var winner_user_id := str(parsed["winner_user_id"])
 	var loser_user_id := str(parsed["loser_user_id"])
 	var finish_cause := str(parsed["finish_cause"])
-	if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
-		return {}
-	if finish_cause != "BO3":
+	var is_draw := bool(parsed.get("is_draw", finish_cause == "BO3_DRAW"))
+	if finish_cause not in ["BO3", "BO3_DRAW"]:
 		return {}
 	if not _valid_round_wins(parsed["round_wins_by_user"]):
 		return {}
 	var scores: Dictionary = parsed["round_wins_by_user"]
 	var final_round_number := int(parsed["final_round_number"])
-	if int(scores.get(winner_user_id, -1)) != 2:
-		return {}
-	var loser_rounds := int(scores.get(loser_user_id, -1))
-	if loser_rounds < 0 or loser_rounds > 1:
-		return {}
+	if is_draw:
+		if finish_cause != "BO3_DRAW":
+			return {}
+		if not winner_user_id.is_empty() or not loser_user_id.is_empty():
+			return {}
+		var score_values := scores.values()
+		if score_values.size() != 2 or int(score_values[0]) != 2 or int(score_values[1]) != 2:
+			return {}
+	else:
+		if finish_cause != "BO3":
+			return {}
+		if winner_user_id.is_empty() or loser_user_id.is_empty() or winner_user_id == loser_user_id:
+			return {}
+		if int(scores.get(winner_user_id, -1)) != 2:
+			return {}
+		var loser_rounds := int(scores.get(loser_user_id, -1))
+		if loser_rounds < 0 or loser_rounds > 1:
+			return {}
 	if final_round_number < 2 or final_round_number > 3:
 		return {}
 	if int(parsed["server_tick"]) < 0:
 		return {}
+	parsed["is_draw"] = is_draw
 	return parsed
 
 
@@ -385,13 +416,28 @@ static func parse_match_snapshot_payload(payload: String) -> Dictionary:
 	for user_id in parsed["character_id_by_user"].keys():
 		if str(user_id).is_empty() or str(parsed["character_id_by_user"][user_id]).is_empty():
 			return {}
+	var round_draw := bool(parsed.get("round_draw", false))
+	var match_draw := bool(parsed.get("match_draw", false))
+	if bool(parsed["round_awaiting_overtime"]) or bool(parsed["round_overtime"]):
+		return {}
+	var round_finish_cause := str(parsed["round_finish_cause"])
+	if round_draw:
+		if round_finish_cause != "TIMEOUT_DRAW" or not str(parsed["round_winner_user_id"]).is_empty():
+			return {}
+	elif round_finish_cause == "TIMEOUT_DRAW":
+		return {}
 	var match_finish_cause := str(parsed["match_finish_cause"])
 	if bool(parsed["match_finished"]):
-		if match_finish_cause != "BO3":
+		if match_draw:
+			if match_finish_cause != "BO3_DRAW" or not str(parsed["match_winner_user_id"]).is_empty():
+				return {}
+		elif match_finish_cause != "BO3" or str(parsed["match_winner_user_id"]).is_empty():
 			return {}
 	else:
-		if match_finish_cause != "NONE":
+		if match_finish_cause != "NONE" or match_draw:
 			return {}
+	parsed["round_draw"] = round_draw
+	parsed["match_draw"] = match_draw
 	if not parsed["combat_state_by_user"] is Dictionary:
 		return {}
 	for user_id in parsed["combat_state_by_user"].keys():

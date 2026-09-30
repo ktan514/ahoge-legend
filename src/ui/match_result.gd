@@ -32,7 +32,10 @@ func _ready() -> void:
 
 func _build_ranked_result(root: VBoxContainer) -> void:
 	var title := Label.new()
-	title.text = "YOU WIN" if bool(_summary.get("local_won", false)) else "YOU LOSE"
+	if bool(_summary.get("is_draw", false)):
+		title.text = "DRAW"
+	else:
+		title.text = "YOU WIN" if bool(_summary.get("local_won", false)) else "YOU LOSE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 36)
 	root.add_child(title)

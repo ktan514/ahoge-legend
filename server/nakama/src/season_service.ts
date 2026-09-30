@@ -1,11 +1,18 @@
 const RANKING_SEASON_COLLECTION = "ranking_season";
 const SEASON_SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 const SEASON_JST_OFFSET_MILLISECONDS = 9 * 60 * 60 * 1000;
+const SEASON_RANKING_HIDE_BEFORE_END_MILLISECONDS = 60 * 60 * 1000;
+const SEASON_FINALIZATION_GRACE_MILLISECONDS = 10 * 60 * 1000;
 
 interface RankingSeasonMetadata {
   season_id: string;
   starts_at_unix_ms: number;
   ends_at_unix_ms: number;
+}
+
+interface RankingSeasonVisibility {
+  ranking_public: boolean;
+  ranking_hidden_until_unix_ms: number;
 }
 
 function currentSeasonIdJst(unixMilliseconds: number): string {
@@ -55,11 +62,58 @@ function seasonBoundsJst(seasonId: string): RankingSeasonMetadata {
 
 function seasonState(
   seasonId: string,
-  nowUnixMilliseconds: number
+  referenceUnixMilliseconds: number
 ): string {
-  return seasonId === currentSeasonIdJst(nowUnixMilliseconds)
+  return seasonId === currentSeasonIdJst(referenceUnixMilliseconds)
     ? "CURRENT"
     : "HISTORICAL";
+}
+
+function seasonRankingVisibility(
+  seasonId: string,
+  referenceUnixMilliseconds: number
+): RankingSeasonVisibility {
+  const bounds = seasonBoundsJst(seasonId);
+  const hiddenFrom =
+    bounds.ends_at_unix_ms - SEASON_RANKING_HIDE_BEFORE_END_MILLISECONDS;
+  const hiddenUntil =
+    bounds.ends_at_unix_ms + SEASON_FINALIZATION_GRACE_MILLISECONDS;
+  const hidden =
+    referenceUnixMilliseconds >= hiddenFrom &&
+    referenceUnixMilliseconds < hiddenUntil;
+
+  return {
+    ranking_public: !hidden,
+    ranking_hidden_until_unix_ms: hidden ? hiddenUntil : 0
+  };
+}
+
+function resolveRankedSettlementSeasonId(
+  matchStartedAtUnixMilliseconds: number,
+  matchFinishedAtUnixMilliseconds: number
+): string {
+  if (
+    !isFinite(matchStartedAtUnixMilliseconds) ||
+    !isFinite(matchFinishedAtUnixMilliseconds) ||
+    matchStartedAtUnixMilliseconds < 0 ||
+    matchFinishedAtUnixMilliseconds < matchStartedAtUnixMilliseconds
+  ) {
+    throw new Error("invalid ranked settlement time");
+  }
+
+  const startSeasonId = currentSeasonIdJst(matchStartedAtUnixMilliseconds);
+  const startBounds = seasonBoundsJst(startSeasonId);
+  const finalizationDeadline =
+    startBounds.ends_at_unix_ms + SEASON_FINALIZATION_GRACE_MILLISECONDS;
+
+  if (
+    matchStartedAtUnixMilliseconds < startBounds.ends_at_unix_ms &&
+    matchFinishedAtUnixMilliseconds <= finalizationDeadline
+  ) {
+    return startSeasonId;
+  }
+
+  return currentSeasonIdJst(matchFinishedAtUnixMilliseconds);
 }
 
 function ensureSeasonMetadata(
@@ -177,16 +231,23 @@ const seasonMetadataRpc: nkruntime.RpcFunction = function (
     throw new Error("future at_unix_ms is not allowed");
   }
 
+  const referenceTime =
+    requestedAtUnixMilliseconds !== null
+      ? requestedAtUnixMilliseconds
+      : now;
   const seasonId = requestedAtUnixMilliseconds !== null
     ? currentSeasonIdJst(requestedAtUnixMilliseconds)
     : resolveRequestedSeasonId(requestedSeasonId, now);
   const metadata = ensureSeasonMetadata(nk, seasonId);
+  const visibility = seasonRankingVisibility(seasonId, referenceTime);
 
   return JSON.stringify({
     season_id: metadata.season_id,
     starts_at_unix_ms: metadata.starts_at_unix_ms,
     ends_at_unix_ms: metadata.ends_at_unix_ms,
     state: seasonState(seasonId, now),
-    current_season_id: currentSeasonIdJst(now)
+    current_season_id: currentSeasonIdJst(now),
+    ranking_public: visibility.ranking_public,
+    ranking_hidden_until_unix_ms: visibility.ranking_hidden_until_unix_ms
   });
 };

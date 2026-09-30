@@ -42,11 +42,13 @@ const COMBAT_STATE_ROUND_LOCKED = "ROUND_LOCKED";
 const ROUND_FINISH_CAUSE_NONE = "NONE";
 const ROUND_FINISH_CAUSE_HIT_LIMIT = "HIT_LIMIT";
 const ROUND_FINISH_CAUSE_TIMEOUT = "TIMEOUT";
+const ROUND_FINISH_CAUSE_TIMEOUT_DRAW = "TIMEOUT_DRAW";
 const ROUND_FINISH_CAUSE_OVERTIME_HIT = "OVERTIME_HIT";
 const ROUND_FINISH_CAUSE_DISCONNECT_FORFEIT = "DISCONNECT_FORFEIT";
 
 const MATCH_FINISH_CAUSE_NONE = "NONE";
 const MATCH_FINISH_CAUSE_BO3 = "BO3";
+const MATCH_FINISH_CAUSE_BO3_DRAW = "BO3_DRAW";
 
 const CHARACTER_LONG_TEST = "LONG_TEST";
 const CHARACTER_SHORT_TEST = "SHORT_TEST";
@@ -90,10 +92,11 @@ interface AhogeRankedMatchState {
   lastAcceptedTickByUser: {[key: string]: number};
   combatStateByUser: {[key: string]: AuthoritativeCombatState};
   characterIdByUser: {[key: string]: string};
-  ratingSeasonId: string;
-  playerRatingBeforeByUser: {[key: string]: number};
-  ahogeRatingBeforeByCharacter: {[key: string]: number};
-  ahogeMatchCountBeforeByCharacter: {[key: string]: number};
+  matchStartedAtUnixMs: number;
+  ratingSnapshotSeasonId: string;
+  playerRatingSnapshotByUser: {[key: string]: number};
+  ahogeRatingSnapshotByCharacter: {[key: string]: number};
+  ahogeMatchCountSnapshotByCharacter: {[key: string]: number};
   roundHitCountByUser: {[key: string]: number};
   roundHitCountSnapshotBroadcast: boolean;
   roundTimerStartTick: number;
@@ -102,6 +105,7 @@ interface AhogeRankedMatchState {
   roundFinished: boolean;
   roundWinnerUserId: string;
   roundFinishCause: string;
+  roundDraw: boolean;
   roundAwaitingOvertime: boolean;
   roundOvertime: boolean;
   roundNumber: number;
@@ -117,6 +121,7 @@ interface AhogeRankedMatchState {
   matchFinished: boolean;
   matchWinnerUserId: string;
   matchFinishCause: string;
+  matchDraw: boolean;
   matchFinishedAtUnixMs: number;
   ratingSettlementDone: boolean;
   ratingSettlementRetryTick: number;
@@ -168,36 +173,42 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
   if (!matchId || participantIds.length !== 2) {
     throw new Error("invalid authoritative match participants");
   }
-  createActiveOnlineMatchForUsers(
-    nk,
-    participantIds,
-    matchId,
-    matchMode,
-    Date.now()
-  );
-
-  let ratingSeasonId = "";
-  const playerRatingBeforeByUser: {[key: string]: number} = {};
-  const ahogeRatingBeforeByCharacter: {[key: string]: number} = {};
-  const ahogeMatchCountBeforeByCharacter: {[key: string]: number} = {};
+  const matchStartedAtUnixMs = Date.now();
+  let ratingSnapshotSeasonId = "";
+  const playerRatingSnapshotByUser: {[key: string]: number} = {};
+  const ahogeRatingSnapshotByCharacter: {[key: string]: number} = {};
+  const ahogeMatchCountSnapshotByCharacter: {[key: string]: number} = {};
   if (matchMode === "ranked") {
-    ratingSeasonId = currentSeasonIdJst(Date.now());
-    ensureSeasonMetadata(nk, ratingSeasonId);
+    ratingSnapshotSeasonId = currentSeasonIdJst(matchStartedAtUnixMs);
+    ensureSeasonMetadata(nk, ratingSnapshotSeasonId);
     participantIds.forEach(function (userId): void {
       const characterId = String(characterIdByUser[userId] || "");
       if (!characterId) {
         throw new Error("missing ranked character snapshot");
       }
-      const playerRecord = readPlayerSeasonRank(nk, userId, ratingSeasonId);
-      playerRatingBeforeByUser[userId] = playerRecord.value.rating;
-      if (ahogeRatingBeforeByCharacter[characterId] === undefined) {
-        const ahogeRecord = readAhogeSeasonRank(nk, characterId, ratingSeasonId);
-        ahogeRatingBeforeByCharacter[characterId] = ahogeRecord.value.ahoge_rating;
-        ahogeMatchCountBeforeByCharacter[characterId] =
+      const playerRecord = readPlayerSeasonRank(nk, userId, ratingSnapshotSeasonId);
+      playerRatingSnapshotByUser[userId] = playerRecord.value.rating;
+      if (ahogeRatingSnapshotByCharacter[characterId] === undefined) {
+        const ahogeRecord = readAhogeSeasonRank(
+          nk,
+          characterId,
+          ratingSnapshotSeasonId
+        );
+        ahogeRatingSnapshotByCharacter[characterId] =
+          ahogeRecord.value.ahoge_rating;
+        ahogeMatchCountSnapshotByCharacter[characterId] =
           ahogeRecord.value.total_ranked_matches;
       }
     });
   }
+
+  createActiveOnlineMatchForUsers(
+    nk,
+    participantIds,
+    matchId,
+    matchMode,
+    matchStartedAtUnixMs
+  );
 
   logger.info("ahoge_ranked authoritative match initialized.");
 
@@ -215,10 +226,11 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       lastAcceptedTickByUser: {},
       combatStateByUser: {},
       characterIdByUser: characterIdByUser,
-      ratingSeasonId: ratingSeasonId,
-      playerRatingBeforeByUser: playerRatingBeforeByUser,
-      ahogeRatingBeforeByCharacter: ahogeRatingBeforeByCharacter,
-      ahogeMatchCountBeforeByCharacter: ahogeMatchCountBeforeByCharacter,
+      matchStartedAtUnixMs: matchStartedAtUnixMs,
+      ratingSnapshotSeasonId: ratingSnapshotSeasonId,
+      playerRatingSnapshotByUser: playerRatingSnapshotByUser,
+      ahogeRatingSnapshotByCharacter: ahogeRatingSnapshotByCharacter,
+      ahogeMatchCountSnapshotByCharacter: ahogeMatchCountSnapshotByCharacter,
       roundHitCountByUser: {},
       roundHitCountSnapshotBroadcast: false,
       roundTimerStartTick: -1,
@@ -227,6 +239,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       roundFinished: false,
       roundWinnerUserId: "",
       roundFinishCause: ROUND_FINISH_CAUSE_NONE,
+      roundDraw: false,
       roundAwaitingOvertime: false,
       roundOvertime: false,
       roundNumber: 1,
@@ -242,6 +255,7 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       matchFinished: false,
       matchWinnerUserId: "",
       matchFinishCause: MATCH_FINISH_CAUSE_NONE,
+      matchDraw: false,
       matchFinishedAtUnixMs: -1,
       ratingSettlementDone: false,
       ratingSettlementRetryTick: 0,
@@ -549,6 +563,7 @@ function broadcastMatchSnapshot(
       round_finished: state.roundFinished,
       round_winner_user_id: state.roundWinnerUserId,
       round_finish_cause: state.roundFinishCause,
+      round_draw: state.roundDraw,
       round_awaiting_overtime: state.roundAwaitingOvertime,
       round_overtime: state.roundOvertime,
       round_countdown_active: state.roundCountdownActive,
@@ -556,6 +571,7 @@ function broadcastMatchSnapshot(
       match_finished: state.matchFinished,
       match_winner_user_id: state.matchWinnerUserId,
       match_finish_cause: state.matchFinishCause,
+      match_draw: state.matchDraw,
       character_id_by_user: state.characterIdByUser,
       last_input_sequence: state.lastInputSequenceByUser[presence.userId] || 0,
       combat_state_by_user: combatStateSnapshot(state)
@@ -692,20 +708,37 @@ function broadcastRoundResult(
   finishCause: string,
   tick: number
 ): void {
-  const loserUserId = findOpponentUserId(state, winnerUserId);
-  if (!loserUserId) {
+  const isDraw = finishCause === ROUND_FINISH_CAUSE_TIMEOUT_DRAW;
+  const userIds = participantUserIds(state);
+  if (userIds.length !== 2) {
     return;
+  }
+
+  let loserUserId = "";
+  let winnerHits = 0;
+  let loserHits = 0;
+  if (isDraw) {
+    winnerHits = state.roundHitCountByUser[userIds[0]] || 0;
+    loserHits = state.roundHitCountByUser[userIds[1]] || 0;
+  } else {
+    loserUserId = findOpponentUserId(state, winnerUserId);
+    if (!loserUserId) {
+      return;
+    }
+    winnerHits = state.roundHitCountByUser[winnerUserId] || 0;
+    loserHits = state.roundHitCountByUser[loserUserId] || 0;
   }
 
   dispatcher.broadcastMessage(
     ROUND_RESULT_OPCODE,
     JSON.stringify({
       round_number: state.roundNumber,
-      winner_user_id: winnerUserId,
-      loser_user_id: loserUserId,
+      winner_user_id: isDraw ? "" : winnerUserId,
+      loser_user_id: isDraw ? "" : loserUserId,
       finish_cause: finishCause,
-      winner_hits: state.roundHitCountByUser[winnerUserId] || 0,
-      loser_hits: state.roundHitCountByUser[loserUserId] || 0,
+      winner_hits: winnerHits,
+      loser_hits: loserHits,
+      is_draw: isDraw,
       server_tick: tick
     }),
     null,
@@ -734,6 +767,7 @@ function broadcastBo3ScoreChanged(
     JSON.stringify({
       completed_round_number: completedRoundNumber,
       round_winner_user_id: roundWinnerUserId,
+      round_draw: state.roundDraw,
       round_wins_by_user: roundWinsSnapshot(state),
       match_finished: state.matchFinished,
       server_tick: tick
@@ -749,22 +783,27 @@ function broadcastMatchResult(
   state: AhogeRankedMatchState,
   tick: number
 ): void {
-  if (!state.matchFinished || !state.matchWinnerUserId) {
+  if (!state.matchFinished) {
     return;
   }
-  const loserUserId = findOpponentUserId(state, state.matchWinnerUserId);
-  if (!loserUserId) {
-    return;
+
+  let loserUserId = "";
+  if (!state.matchDraw) {
+    loserUserId = findOpponentUserId(state, state.matchWinnerUserId);
+    if (!loserUserId) {
+      return;
+    }
   }
 
   dispatcher.broadcastMessage(
     MATCH_RESULT_OPCODE,
     JSON.stringify({
-      winner_user_id: state.matchWinnerUserId,
-      loser_user_id: loserUserId,
+      winner_user_id: state.matchDraw ? "" : state.matchWinnerUserId,
+      loser_user_id: state.matchDraw ? "" : loserUserId,
       round_wins_by_user: roundWinsSnapshot(state),
       final_round_number: state.roundNumber,
       finish_cause: state.matchFinishCause,
+      is_draw: state.matchDraw,
       server_tick: tick
     }),
     null,
@@ -824,6 +863,7 @@ function beginRoundCountdown(
   state.roundFinished = false;
   state.roundWinnerUserId = "";
   state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
+  state.roundDraw = false;
   state.roundAwaitingOvertime = false;
   state.roundOvertime = false;
   state.roundHitCountSnapshotBroadcast = true;
@@ -915,21 +955,56 @@ function finishRound(
   finishCause: string,
   tick: number
 ): void {
-  if (state.roundFinished || state.roundAwaitingOvertime || state.matchFinished) {
+  if (state.roundFinished || state.matchFinished) {
     return;
   }
+
+  const isDraw = finishCause === ROUND_FINISH_CAUSE_TIMEOUT_DRAW;
+  const userIds = participantUserIds(state);
+  if (userIds.length !== 2) {
+    return;
+  }
+  if (!isDraw && userIds.indexOf(winnerUserId) < 0) {
+    return;
+  }
+
   state.roundFinished = true;
-  state.roundWinnerUserId = winnerUserId;
+  state.roundWinnerUserId = isDraw ? "" : winnerUserId;
   state.roundFinishCause = finishCause;
+  state.roundDraw = isDraw;
+  state.roundAwaitingOvertime = false;
   state.roundOvertime = false;
   lockRoundCombat(dispatcher, state, tick);
   broadcastRoundResult(dispatcher, state, winnerUserId, finishCause, tick);
 
-  state.roundWinsByUser[winnerUserId] = (state.roundWinsByUser[winnerUserId] || 0) + 1;
-  if (state.roundWinsByUser[winnerUserId] >= ROUNDS_TO_WIN_MATCH) {
+  if (isDraw) {
+    userIds.forEach(function (userId): void {
+      state.roundWinsByUser[userId] =
+        (state.roundWinsByUser[userId] || 0) + 1;
+    });
+  } else {
+    state.roundWinsByUser[winnerUserId] =
+      (state.roundWinsByUser[winnerUserId] || 0) + 1;
+  }
+
+  const firstReached =
+    (state.roundWinsByUser[userIds[0]] || 0) >= ROUNDS_TO_WIN_MATCH;
+  const secondReached =
+    (state.roundWinsByUser[userIds[1]] || 0) >= ROUNDS_TO_WIN_MATCH;
+
+  if (firstReached && secondReached) {
     state.matchFinished = true;
-    state.matchWinnerUserId = winnerUserId;
+    state.matchWinnerUserId = "";
+    state.matchFinishCause = MATCH_FINISH_CAUSE_BO3_DRAW;
+    state.matchDraw = true;
+    state.matchFinishedAtUnixMs = Date.now();
+    state.roundResetPending = false;
+    state.roundResultHoldUntilTick = -1;
+  } else if (firstReached || secondReached) {
+    state.matchFinished = true;
+    state.matchWinnerUserId = firstReached ? userIds[0] : userIds[1];
     state.matchFinishCause = MATCH_FINISH_CAUSE_BO3;
+    state.matchDraw = false;
     state.matchFinishedAtUnixMs = Date.now();
     state.roundResetPending = false;
     state.roundResultHoldUntilTick = -1;
@@ -942,7 +1017,7 @@ function finishRound(
     dispatcher,
     state,
     state.roundNumber,
-    winnerUserId,
+    isDraw ? "" : winnerUserId,
     tick
   );
   if (state.matchFinished) {
@@ -1006,10 +1081,13 @@ function resolveRoundTimeout(
     return;
   }
 
-  state.roundAwaitingOvertime = true;
-  state.roundWinnerUserId = "";
-  state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
-  lockRoundCombat(dispatcher, state, tick);
+  finishRound(
+    dispatcher,
+    state,
+    "",
+    ROUND_FINISH_CAUSE_TIMEOUT_DRAW,
+    tick
+  );
 }
 
 function startRoundOvertime(
@@ -1064,6 +1142,7 @@ function startNextRound(
     state.roundFinished = false;
     state.roundWinnerUserId = "";
     state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
+    state.roundDraw = false;
     state.roundAwaitingOvertime = false;
     state.roundOvertime = false;
     state.roundHitCountSnapshotBroadcast = true;
@@ -1095,17 +1174,6 @@ function incrementRoundHitCount(
   }
   state.roundHitCountByUser[userId] = (state.roundHitCountByUser[userId] || 0) + 1;
   broadcastRoundHitCount(dispatcher, state, userId, tick, inputSequence);
-
-  if (state.roundOvertime) {
-    finishRound(
-      dispatcher,
-      state,
-      userId,
-      ROUND_FINISH_CAUSE_OVERTIME_HIT,
-      tick
-    );
-    return;
-  }
 
   if (roundReachedHitLimit(state.roundHitCountByUser[userId])) {
     finishRoundByHitLimit(dispatcher, state, userId, tick);
@@ -1599,25 +1667,20 @@ function settleRankedRatingIfNeeded(
     return;
   }
 
-  const loserUserId = findOpponentUserId(state, state.matchWinnerUserId);
-  if (!loserUserId) {
-    state.ratingSettlementRetryTick = tick + AUTHORITATIVE_MATCH_TICK_RATE;
-    return;
-  }
-
   const settled = settleRankedMatchRating(
     nk,
     logger,
     state.matchId,
     state.matchMode,
+    participantUserIds(state),
     state.matchWinnerUserId,
-    loserUserId,
     state.characterIdByUser,
-    state.ratingSeasonId,
-    state.playerRatingBeforeByUser,
-    state.ahogeRatingBeforeByCharacter,
-    state.ahogeMatchCountBeforeByCharacter,
+    state.ratingSnapshotSeasonId,
+    state.playerRatingSnapshotByUser,
+    state.ahogeRatingSnapshotByCharacter,
+    state.ahogeMatchCountSnapshotByCharacter,
     state.matchFinishCause,
+    state.matchStartedAtUnixMs,
     state.matchFinishedAtUnixMs >= 0 ? state.matchFinishedAtUnixMs : Date.now()
   );
 
@@ -1652,6 +1715,7 @@ function persistActiveMatchResultIfNeeded(
     round_finished: state.roundFinished,
     round_winner_user_id: state.roundWinnerUserId,
     round_finish_cause: state.roundFinishCause,
+    round_draw: state.roundDraw,
     round_awaiting_overtime: state.roundAwaitingOvertime,
     round_overtime: state.roundOvertime,
     round_countdown_active: state.roundCountdownActive,
@@ -1659,6 +1723,7 @@ function persistActiveMatchResultIfNeeded(
     match_finished: true,
     match_winner_user_id: state.matchWinnerUserId,
     match_finish_cause: state.matchFinishCause,
+    match_draw: state.matchDraw,
     character_id_by_user: state.characterIdByUser
   };
 
@@ -1731,6 +1796,7 @@ function prepareRoundForDisconnectForfeit(
   state.roundFinished = false;
   state.roundWinnerUserId = "";
   state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
+  state.roundDraw = false;
   state.roundAwaitingOvertime = false;
   state.roundOvertime = false;
   state.roundHitCountSnapshotBroadcast = true;
@@ -1839,10 +1905,6 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
 
   if (state.roundCountdownActive && allExpectedPlayersConnected(state)) {
     advanceRoundCountdown(dispatcher, state, tick);
-  }
-
-  if (state.roundAwaitingOvertime) {
-    startRoundOvertime(dispatcher, state, tick);
   }
 
   if (

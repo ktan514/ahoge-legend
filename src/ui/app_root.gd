@@ -229,14 +229,19 @@ func _ranked_summary_from_snapshot(snapshot: Dictionary) -> Dictionary:
 			opponent_user_id = str(user_id)
 			break
 	var winner_user_id := str(snapshot.get("match_winner_user_id", ""))
-	var loser_user_id := opponent_user_id if winner_user_id == local_user_id else local_user_id
+	var is_draw := bool(snapshot.get("match_draw", false)) \
+		or str(snapshot.get("match_finish_cause", "")) == "BO3_DRAW"
+	var loser_user_id := ""
+	if not is_draw:
+		loser_user_id = opponent_user_id if winner_user_id == local_user_id else local_user_id
 	return {
 		"mode": "ranked",
 		"match_id": str(_online_session.current_match_id),
 		"winner_user_id": winner_user_id,
 		"loser_user_id": loser_user_id,
 		"local_user_id": local_user_id,
-		"local_won": winner_user_id == local_user_id,
+		"local_won": not is_draw and winner_user_id == local_user_id,
+		"is_draw": is_draw,
 		"local_character_id": str(character_map.get(local_user_id, _ranked_character_id)),
 		"opponent_character_id": str(character_map.get(opponent_user_id, "")),
 		"round_wins_by_user": snapshot.get("round_wins_by_user", {}).duplicate(true),
