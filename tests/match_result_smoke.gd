@@ -338,8 +338,34 @@ func _run() -> void:
 		ahoge_after,
 		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
 	)
-	if int(long_after.get("wins", -1)) != int(long_before.get("wins", 0)) + 1 			or int(long_after.get("matches", -1)) != int(long_before.get("matches", 0)) + 2:
+	if int(long_after.get("wins", -1)) != int(long_before.get("wins", 0)) + 1 \
+			or int(long_after.get("matches", -1)) != int(long_before.get("matches", 0)) + 2:
 		_fail("同character対戦のAHOGE集計が wins+1 / matches+2 ではありません。")
+		return
+	if int(long_after.get("rating", -1)) != int(long_before.get("rating", 1500)):
+		_fail("同character対戦でAhoge Ratingが変化しました。")
+		return
+	if not _assert_ahoge_ranking_order(ahoge_after):
+		return
+
+	var settlement := await _wait_ranked_settlement(
+		online_session.client,
+		online_session.session,
+		str(p1_joined[0]),
+		5000
+	)
+	if settlement.is_empty():
+		_fail("mirror matchのRanked settlementを取得できませんでした。")
+		return
+	if not bool(settlement.get("ahoge_mirror_match", false)) \
+			or int(settlement.get("ahoge_rating_delta", 999)) != 0 \
+			or int(settlement.get("ahoge_rating_before", -1)) != int(long_before.get("rating", 1500)) \
+			or int(settlement.get("ahoge_rating_after", -1)) != int(long_before.get("rating", 1500)):
+		_fail("mirror matchのAhoge settlementが±0ではありません。")
+		return
+	if int(settlement.get("player_rating_before", -1)) != int(initial_p1_rating.get("rating", -2)) \
+			or int(settlement.get("player_rating_after", -1)) != int(expected_after_match["p1"].get("rating", -2)):
+		_fail("Ranked settlementのPlayer Rating before/afterが不正です。")
 		return
 
 	var ahoge_season_id := str(ahoge_after.get("season_id", ""))
@@ -447,11 +473,62 @@ func _find_ahoge_record(ranking: Dictionary, character_id: String) -> Dictionary
 func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
 	var record := _find_ahoge_record(ranking, character_id)
 	if record.is_empty():
-		return {"wins": 0, "matches": 0}
+		return {"wins": 0, "matches": 0, "rating": 1500}
 	return {
 		"wins": int(record.get("total_match_wins", 0)),
 		"matches": int(record.get("total_ranked_matches", 0)),
+		"rating": int(record.get("ahoge_rating", 1500)),
 	}
+
+
+func _assert_ahoge_ranking_order(ranking: Dictionary) -> bool:
+	var records = ranking.get("records", [])
+	if not records is Array:
+		_fail("AHOGE LEGEND recordsが配列ではありません。")
+		return false
+	var previous_rating := 2147483647
+	var previous_display_rank := 0
+	for index in range(records.size()):
+		var record = records[index]
+		if not record is Dictionary:
+			_fail("AHOGE LEGEND recordがDictionaryではありません。")
+			return false
+		var rating := int(record.get("ahoge_rating", -1))
+		var display_rank := int(record.get("display_rank", -1))
+		if rating > previous_rating:
+			_fail("AHOGE LEGENDがAhoge Rating降順ではありません。")
+			return false
+		if index > 0 and rating == previous_rating:
+			if display_rank != previous_display_rank:
+				_fail("同Ahoge Ratingが同順位ではありません。")
+				return false
+		elif display_rank != index + 1:
+			_fail("AHOGE LEGEND display_rankがcompetition rankingではありません。")
+			return false
+		previous_rating = rating
+		previous_display_rank = display_rank
+	return true
+
+
+func _wait_ranked_settlement(
+	client,
+	session,
+	match_id: String,
+	timeout_ms: int
+) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var rpc_result = await client.rpc_async(
+			session,
+			"ahoge_ranked_settlement",
+			JSON.stringify({"match_id": match_id})
+		)
+		if rpc_result != null and not rpc_result.is_exception():
+			var parsed = JSON.parse_string(str(rpc_result.payload))
+			if parsed is Dictionary and bool((parsed as Dictionary).get("found", false)):
+				return parsed
+		await create_timer(0.05).timeout
+	return {}
 
 
 func _read_player_ranking(client, session, limit: int) -> Dictionary:

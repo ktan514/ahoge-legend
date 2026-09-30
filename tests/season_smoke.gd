@@ -96,6 +96,39 @@ func _run() -> void:
 		_fail("未作成の過去Season Rating初期値が1500ではありません。")
 		return
 
+	var current_ahoge_rating := await _rpc_dict(
+		client,
+		session,
+		"ahoge_character_rating",
+		JSON.stringify({
+			"character_id": OnlineConfigScript.RANKED_CHARACTER_LONG_TEST,
+			"season_id": current_id,
+		})
+	)
+	var previous_ahoge_rating := await _rpc_dict(
+		client,
+		session,
+		"ahoge_character_rating",
+		JSON.stringify({
+			"character_id": OnlineConfigScript.RANKED_CHARACTER_LONG_TEST,
+			"season_id": previous_id,
+		})
+	)
+	if not _assert_default_ahoge_rating(
+		current_ahoge_rating,
+		current_id,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	):
+		_fail("新Season Ahoge Rating初期値が1500ではありません。")
+		return
+	if not _assert_default_ahoge_rating(
+		previous_ahoge_rating,
+		previous_id,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	):
+		_fail("未作成の過去Season Ahoge Rating初期値が1500ではありません。")
+		return
+
 	var previous_player_ranking := await _rpc_dict(
 		client,
 		session,
@@ -201,6 +234,19 @@ func _is_jst_month_boundary(unix_ms: int) -> bool:
 
 func _assert_default_rating(value: Dictionary, season_id: String) -> bool:
 	return not value.is_empty() 		and str(value.get("season_id", "")) == season_id 		and int(value.get("rating", -1)) == 1500 		and int(value.get("wins", -1)) == 0 		and int(value.get("losses", -1)) == 0
+
+
+func _assert_default_ahoge_rating(
+	value: Dictionary,
+	season_id: String,
+	character_id: String
+) -> bool:
+	return not value.is_empty() \
+		and str(value.get("season_id", "")) == season_id \
+		and str(value.get("character_id", "")) == character_id \
+		and int(value.get("ahoge_rating", -1)) == 1500 \
+		and int(value.get("total_match_wins", -1)) == 0 \
+		and int(value.get("total_ranked_matches", -1)) == 0
 
 
 func _records_empty(value: Dictionary) -> bool:
