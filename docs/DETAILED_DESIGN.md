@@ -368,7 +368,7 @@ ahoge_match_count_before_by_character
 
 一方、Ahoge RatingのStorage更新では他matchの更新を上書きしない。今回matchのdeltaを試合開始時snapshotから計算したうえで、settlement時に読み直した現在のStorage Ratingへそのdeltaだけを加減し、Storage versionによる楽観的排他で競合時は再読込・再試行する。
 
-match単位settlementは、期待値計算用の開始時snapshotと、実際の集計先Seasonでのbefore / after / deltaを分けて保持する。AHOGE LEGEND Rankingの現在値は、並行して完了した他matchの寄与も含むStorage正本を投影する。
+match単位settlementは、期待値計算用の開始時snapshotと、Match開始時刻が属するSeasonでのbefore / after / deltaを保持する。AHOGE LEGEND Rankingの現在値は、並行して完了した他matchの寄与も含むStorage正本を投影する。
 
 #### 3.10.5 同一アホ毛対戦
 
@@ -2018,7 +2018,7 @@ value:
 
 #### 16.1.1 月末締めと公開制御
 
-旧Seasonランキングは最終日の23:00 JSTから翌月0:10 JSTまで非公開とする。
+旧Seasonランキングは最終日の23:00 JSTから翌月8:00 JSTまで非公開とする。
 
 ```text
 月末 23:00
@@ -2029,27 +2029,30 @@ value:
   → 新Season Rankingは通常公開
   → 旧Seasonだけ引き続き非公開
 
-翌月 00:10
-  → 旧Season最終結果を確定
-  → 旧Season Rankingを再公開
+00:00〜08:00
+  → 00:00より前に開始した旧Season対象Matchの終了・settlement猶予
+
+翌月 08:00
+  → 旧Season最終Rankingを公開
 ```
 
 PLAYER RankingとAHOGE LEGEND Rankingの両方へ同じ公開制御を適用する。非公開期間の旧Season Ranking RPCはrecordsを返さず、`ranking_public=false` と `ranking_hidden_until_unix_ms` を返す。新Seasonは0:00以降通常取得できる。
 
-Matchの集計先Seasonは、Match開始時刻と終了時刻からserverだけが決定する。
+Matchの集計先Seasonは、**Match開始時刻だけ** からserverが決定する。
 
-- 0:00より前に開始し、旧Season終了から10分以内（00:10まで）に終了 → 旧Season
-- 0:00以降に開始 → 新Season
-- 0:00より前に開始しても、00:10を超えて終了 → 新Season
+- 0:00より前に開始 → 終了時刻に関係なく旧Season
+- 0:00ちょうど以降に開始 → 新Season
+- 旧Season対象Matchが0:00を跨いで終了しても旧Seasonへsettlementする
+- Match終了時刻によるSeason振り替えは行わない
 
-期待勝率の計算入力と集計先Seasonは分離する。
+期待勝率の計算入力と集計先SeasonはともにMatch開始時点を基準とする。
 
 - 計算入力: Match開始時に固定したPlayer Rating / Ahoge Rating snapshot
-- 集計先: 上記締めルールで決定したSeason
-- 集計先が新Seasonの場合、新Seasonの現在Rating（未作成なら1500）へ今回Matchのdeltaだけを適用する
-- 旧Seasonの絶対Rating値を新Seasonへ持ち越さない
+- 集計先: Match開始時刻が属するSeason
+- settlement時は対象Seasonの現在Storage Ratingへ今回Matchのdeltaだけを適用する
+- 新Season開始後も、0:00前開始Matchのdeltaは旧Seasonへ反映する
 
-settlement objectは計算snapshotのSeasonと実際の集計先Seasonを両方保持する。
+settlement objectはMatch開始時snapshotのSeasonと実際の集計先Seasonを保持する。通常は同一Seasonとなる。
 
 PLAYER Ranking / AHOGE LEGEND Ranking取得RPCはpayloadの `season_id` を任意指定できる。
 

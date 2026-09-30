@@ -825,7 +825,7 @@ PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし�
 
 Ranking responseの順位値はserver確定Ahoge Ratingのみとし、総勝利数・総対戦数は補助統計として受け取る。clientは勝数から順位を再計算しない。
 
-旧Seasonは月末最終日23:00〜翌月0:10だけ非公開とする。翌月0:00以降は新Season Rankingを通常表示し、旧Seasonのみ `FINALIZING...` 等の非公開状態を表示する。0:10に旧Season最終結果を再公開する。
+旧Seasonは月末最終日23:00〜翌月8:00まで非公開とする。翌月0:00以降は新Season Rankingを通常表示し、旧Seasonのみ `FINALIZING...` 等の非公開状態を表示する。旧Season最終結果は翌朝8:00に公開する。
 
 補助表示候補:
 

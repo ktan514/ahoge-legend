@@ -197,8 +197,8 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - 順当勝ちの変動は小さく、番狂わせの変動は大きくする
 - Draw時はPlayer Rating / 異character Ahoge Ratingを実績値0.5で更新する
 - clientはRatingを計算せずserver settlement結果だけを表示する
-- 旧Season Rankingは月末23:00〜翌月0:10非公開、新Season Rankingは0:00から公開する
-- 0:00前開始かつ0:10まで終了したMatchだけ旧Seasonへ含め、それ以外は新Seasonへ集計する
+- 旧Season Rankingは月末23:00〜翌月8:00非公開、新Season Rankingは0:00から公開する
+- 0:00より前に開始したMatchは終了時刻に関係なく旧Seasonへ含め、0:00ちょうど以降に開始したMatchだけ新Seasonへ集計する
 - 勝数 / 対戦数 / 勝率は参考統計として保持できるが順位には使わない
 - Player Ratingは各matchでdelta合計0を保証する
 - Ahoge Ratingはplayer-character-season単位の総絶対影響上限を持つ
