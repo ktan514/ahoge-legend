@@ -208,6 +208,10 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - UI-12はTop Menuから遷移でき、PLAYER / AHOGE LEGENDを別タブでserver Rankingへ接続する
 - UI-12はserverのdisplay_rank / Rating / ranking_publicを正本として表示し、client再計算しない
 - UI-12初期実装はcurrent Seasonのみ。旧Season非公開時はFINALIZING、公開中0件はNO RANKING DATAを表示する
+- UI-06〜08を既存Friend room backendへ接続し、Create / Join / Lobby / Character / Ready / Leaveを実画面化する
+- Friend MatchはUI-09 / UI-10をRankedと共用し、match_mode=friendではRating settlementを表示しない
+- Friend ResultのREMATCHは同room Lobbyへ戻し、両者が再度Readyした時だけ新matchを生成する
+- Friend authoritative snapshotへroom codeを含め、再ログイン復帰でも元roomを復元する
 
 ## 8. 工程5: 正式キャラクター・演出・素材
 

@@ -490,7 +490,7 @@ AHOGE LEGEND #3
 └──────────────────────────────────────────────────────────────┘
 ```
 
-無効コード、期限切れ、満員等の理由を識別して表示できる構造とする。
+無効コード、期限切れ、満員等のserver errorをメッセージ領域へ表示する。入力は大文字化し、6文字codeの正当性は最終的にserverで検証する。
 
 ## 13. UI-08 フレンドルームロビー
 
@@ -528,7 +528,11 @@ AHOGE LEGEND #3
 └──────────────────────────────────────────────────────────────┘
 ```
 
-両者がReadyになった場合のみ対戦開始へ進む。
+両者がReadyになった場合のみ対戦開始へ進む。clientは両者Readyを見て独自にmatchを生成せず、server room stateが `IN_MATCH` になった時だけserver確定 `current_match_id` へjoinする。
+
+Lobbyはserver room statusを定期pollしてhost / guest / character / readyを更新する。Character Selectは共通UI-04をFriend modeで再利用する。COPYはroom codeをOS clipboardへコピーする。
+
+Match終了後は同じroomを維持してPOST_MATCHへ戻り、REMATCH時は両者のReadyを解除した状態から再度Readyを要求する。
 
 ## 14. UI-09 対戦前掛け合い
 

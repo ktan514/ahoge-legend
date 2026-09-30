@@ -1953,6 +1953,67 @@ ahoge_friend_room_leave
 
 RPCはすべて認証済みuserのみ利用可能とし、room membership / room state / character ID / code形式をserverで検証する。
 
+#### 15.2.9 UI-06〜08 client契約
+
+Friend UIはserver room responseだけを状態正本とする。
+
+```text
+UI-03 Battle Mode
+→ UI-06 Friend Match Menu
+   ├─ CREATE ROOM
+   │   → ahoge_friend_room_create
+   │   → UI-08 Lobby
+   └─ JOIN ROOM
+       → UI-07 Room Code
+       → ahoge_friend_room_join
+       → UI-08 Lobby
+```
+
+UI-08は500ms間隔を目安に `ahoge_friend_room_status` をpollし、次を表示する。
+
+- `room_code`
+- `role`
+- host / guest user
+- host / guest character
+- host / guest ready
+- room `state`
+
+Lobbyのclient操作:
+
+- CHARACTER SELECT → 共通UI-04をFriend modeで開く → `ahoge_friend_room_character`
+- READY / CANCEL READY → `ahoge_friend_room_ready`
+- LEAVE ROOM → `ahoge_friend_room_leave`
+- COPY → OS clipboardへroom codeをコピーするだけでserver状態は変更しない
+
+clientは「両者Readyだから開始」と独自判定しない。server responseが `state=IN_MATCH` かつ `current_match_id` を持った時だけ `join_friend_match_from_room` を実行する。
+
+Friend matchの `MATCH_SNAPSHOT` とserver-side result snapshotには次を追加する。
+
+```text
+friend_room_code
+friend_match_generation
+```
+
+これによりclient再起動 / reconnect後も、server authoritative snapshotから元Friend roomを復元できる。
+
+Friend matchのUI-09 / UI-10はRankedと同じSceneを再利用するが、`match_mode` を表示・遷移の正本とする。
+
+- `ranked` → 従来のRating settlement付きUI-11
+- `friend` → Friend Result。Player/Ahoge Ratingを表示しない
+
+Friend Result:
+
+- WIN / LOSE / DRAW
+- 最終BO3 score
+- `NO RATING CHANGE (FRIEND MATCH)`
+- REMATCH
+- CHANGE CHARACTER
+- LEAVE ROOM
+
+Match終了後は `active_online_match` のRESULT_PENDINGをackした後、同じroomの `POST_MATCH` / `LOBBY` へ戻る。REMATCHは即match生成ではなくLobbyへ戻る操作であり、両者が再度Readyした時だけserverが新matchを生成する。
+
+終了済みFriend matchから再ログインした場合も、snapshotの `friend_room_code` から元roomを取得し、active resultをackした後にFriend Character Select / Lobbyへ戻す。
+
 ## 16. ランキング
 
 ### 16.1 月次シーズン
