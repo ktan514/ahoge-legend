@@ -414,6 +414,77 @@ clientはmatch IDを指定して専用RPCから自分自身のsettlement結果�
 
 フレンドマッチはPlayer Rating・Ahoge Rating・PLAYER Ranking・AHOGE LEGEND Rankingのいずれにも影響しない。
 
+#### 3.10.7 Rating耐不正設計
+
+Rating総量のインフレと、少人数によるAHOGE LEGEND操作を防ぐため、server settlementへ耐不正制約を入れる。
+
+Player Rating:
+
+- Elo期待値計算は従来どおり行う
+- 片側deltaを整数化した後、相手deltaは必ずその符号反転値とする
+- 1matchのPlayer Rating変動は常に `delta_A + delta_B = 0`
+- 同一character対戦でも通常どおりPlayer Ratingを更新する
+- Drawも `actual=0.5` として同じゼロサム制約を適用する
+
+Ahoge Rating:
+
+- 異character対戦の生deltaは従来の期待勝率式から算出し、相手deltaは必ず符号反転値とする
+- 同一character対戦は勝敗・Drawともdelta 0
+- `1 player × 1 character × 1 season` ごとに、そのplayerがそのcharacterへ与えた **絶対deltaの累積値** をserver Storageへ保持する
+- 累積絶対影響量が上限へ達したplayer-characterは、そのSeason中それ以上Ahoge Ratingを動かさない
+- 両participantの残り影響枠の小さい方を採用し、Ahoge Ratingのゼロサム性を維持する
+- 同一player pairのSeason内対戦回数をserver Storageへ保持し、反復対戦ほどAhoge Rating影響を減衰する
+- 両playerのaccepted combat input合計が0のMatchは完全無操作とみなし、Ahoge Rating deltaを0にする
+- 勝数・対戦数等の参考統計はRating信頼度0でも実Match結果として更新してよい
+
+耐不正Storage:
+
+```text
+collection: ahoge_player_character_influence
+user_id: <player_id>
+key: <season_id>:<character_id>
+value:
+- season_id
+- character_id
+- absolute_influence_used
+
+collection: ahoge_opponent_pair
+user_id: system
+key: <season_id>:<small_user_id>:<large_user_id>
+value:
+- season_id
+- first_user_id
+- second_user_id
+- ranked_match_count
+```
+
+初期実装の調整用default:
+
+```text
+player_character_absolute_cap = 100
+same_pair_full_weight_matches = 5
+same_pair_reduced_weight_matches = 10
+same_pair_reduced_weight = 0.5
+same_pair_min_weight = 0.25
+no_activity_weight = 0.0
+```
+
+これらは本番balance確定値ではない。`ahoge_rating_config.ts` を単一正本とし、シミュレーション・実運用データ・abuse検証で調整する。
+
+Ahoge Rating適用順:
+
+```text
+raw_delta
+→ same-pair trust multiplier
+→ no-activity判定
+→ 両player-characterの残りabsolute influence枠でclamp
+→ effective_delta
+→ character Aへ +effective_delta
+→ character Bへ -effective_delta
+```
+
+`ranked_match_settlement` には raw / trust / cap適用後delta、pair対戦回数、activity countを保存し、後から不正パターンを監査できるようにする。
+
 
 ## 4. 画面状態遷移
 

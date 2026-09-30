@@ -396,6 +396,12 @@ Hit数が同点の場合は延長戦へ移行せず、**両者へラウンドポ
 - Drawでは期待勝率に対する実績値を0.5として扱う
 - フレンドマッチはPlayer Rating / Ahoge Ratingとも更新しない
 - 1位のアホ毛を、その月の「伝説のアホ毛」として扱える表示・演出を行う
+- 1人または少人数の意図的な連戦・故意敗北でAhoge Rating全体を大きく操作できないよう、server側で耐不正補正を行う
+- 1 player × 1 character × 1 season のAhoge Rating総影響量には上限を設ける
+- 同一player pairの反復対戦はAhoge Ratingへの影響を段階的に減衰する
+- 両者が完全無操作のMatchはAhoge Ratingへ影響させない
+- Player RatingはAhoge Ratingとは別計算とし、1matchのdelta合計を必ず0にする
+- これらの閾値・係数はbalance / abuse検証で調整可能なserver設定とする
 
 前月以前のランキング結果は履歴として保持し、当月ランキングとは分離する。
 

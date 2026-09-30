@@ -200,6 +200,11 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - 旧Season Rankingは月末23:00〜翌月0:10非公開、新Season Rankingは0:00から公開する
 - 0:00前開始かつ0:10まで終了したMatchだけ旧Seasonへ含め、それ以外は新Seasonへ集計する
 - 勝数 / 対戦数 / 勝率は参考統計として保持できるが順位には使わない
+- Player Ratingは各matchでdelta合計0を保証する
+- Ahoge Ratingはplayer-character-season単位の総絶対影響上限を持つ
+- 完全無操作MatchはAhoge Ratingへ影響させない
+- 同一player pair反復対戦はAhoge Rating影響を段階減衰する
+- 耐不正の閾値・係数は設定分離し、abuse検証で調整する
 
 ## 8. 工程5: 正式キャラクター・演出・素材
 
