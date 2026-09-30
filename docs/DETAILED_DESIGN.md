@@ -348,6 +348,21 @@ Player Ratingは「その人が強かったから勝った部分」を補正す�
 
 Player Ratingの更新は既存PLAYER Ranking用Eloとして独立して行い、Ahoge Ratingの計算には **試合開始前のPlayer Rating** を使用する。
 
+authoritative match生成時に、Rankedだけ次をmatch stateへ固定する。
+
+```text
+rating_season_id
+player_rating_before_by_user
+ahoge_rating_before_by_character
+ahoge_match_count_before_by_character
+```
+
+期待勝率とK係数は、Match終了時の最新値ではなくこの**試合開始時snapshot**だけを入力とする。これにより同じcharacterが別matchで同時使用され、その別matchが先にsettlementしても、当該matchの期待勝率は開始時点の条件から変化しない。
+
+一方、Ahoge RatingのStorage更新では他matchの更新を上書きしない。今回matchのdeltaを試合開始時snapshotから計算したうえで、settlement時に読み直した現在のStorage Ratingへそのdeltaだけを加減し、Storage versionによる楽観的排他で競合時は再読込・再試行する。
+
+match単位settlementの `ahoge_rating_before / after / delta` は「そのmatch開始時Ratingと、そのmatch単独の寄与」を表す。AHOGE LEGEND Rankingの現在値は、並行して完了した他matchの寄与も含むStorage正本を投影する。
+
 #### 3.10.5 同一アホ毛対戦
 
 同じ `character_id` 同士の対戦では、どちらが勝っても「そのアホ毛が別のアホ毛より強い」という情報を得られない。
