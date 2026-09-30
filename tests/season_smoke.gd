@@ -287,7 +287,12 @@ func _is_jst_month_boundary(unix_ms: int) -> bool:
 
 
 func _assert_default_rating(value: Dictionary, season_id: String) -> bool:
-	return not value.is_empty() 		and str(value.get("season_id", "")) == season_id 		and int(value.get("rating", -1)) == 1500 		and int(value.get("wins", -1)) == 0 		and int(value.get("losses", -1)) == 0
+	return not value.is_empty() \
+		and str(value.get("season_id", "")) == season_id \
+		and int(value.get("rating", -1)) == 1500 \
+		and int(value.get("wins", -1)) == 0 \
+		and int(value.get("losses", -1)) == 0 \
+		and int(value.get("draws", -1)) == 0
 
 
 func _assert_default_ahoge_rating(

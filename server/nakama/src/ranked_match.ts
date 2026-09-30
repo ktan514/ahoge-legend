@@ -7,7 +7,6 @@ const HIT_CONFIRMED_OPCODE = 105;
 const ATTACK_CLASH_OPCODE = 106;
 const ROUND_HIT_COUNT_CHANGED_OPCODE = 107;
 const ROUND_TIMER_CHANGED_OPCODE = 108;
-const ROUND_OVERTIME_STARTED_OPCODE = 109;
 const ROUND_RESULT_OPCODE = 110;
 const BO3_SCORE_CHANGED_OPCODE = 111;
 const ROUND_STARTED_OPCODE = 112;
@@ -43,7 +42,6 @@ const ROUND_FINISH_CAUSE_NONE = "NONE";
 const ROUND_FINISH_CAUSE_HIT_LIMIT = "HIT_LIMIT";
 const ROUND_FINISH_CAUSE_TIMEOUT = "TIMEOUT";
 const ROUND_FINISH_CAUSE_TIMEOUT_DRAW = "TIMEOUT_DRAW";
-const ROUND_FINISH_CAUSE_OVERTIME_HIT = "OVERTIME_HIT";
 const ROUND_FINISH_CAUSE_DISCONNECT_FORFEIT = "DISCONNECT_FORFEIT";
 
 const MATCH_FINISH_CAUSE_NONE = "NONE";
@@ -688,19 +686,6 @@ function broadcastRoundTimer(
   );
 }
 
-function broadcastRoundOvertimeStarted(
-  dispatcher: nkruntime.MatchDispatcher,
-  tick: number
-): void {
-  dispatcher.broadcastMessage(
-    ROUND_OVERTIME_STARTED_OPCODE,
-    JSON.stringify({server_tick: tick}),
-    null,
-    null,
-    true
-  );
-}
-
 function broadcastRoundResult(
   dispatcher: nkruntime.MatchDispatcher,
   state: AhogeRankedMatchState,
@@ -1088,29 +1073,6 @@ function resolveRoundTimeout(
     ROUND_FINISH_CAUSE_TIMEOUT_DRAW,
     tick
   );
-}
-
-function startRoundOvertime(
-  dispatcher: nkruntime.MatchDispatcher,
-  state: AhogeRankedMatchState,
-  tick: number
-): void {
-  if (!state.roundAwaitingOvertime || state.roundFinished) {
-    return;
-  }
-
-  state.roundAwaitingOvertime = false;
-  state.roundOvertime = true;
-  state.roundWinnerUserId = "";
-  state.roundFinishCause = ROUND_FINISH_CAUSE_NONE;
-
-  broadcastRoundOvertimeStarted(dispatcher, tick);
-
-  Object.keys(state.combatStateByUser).forEach(function (userId): void {
-    const idle = createIdleCombatState(true);
-    state.combatStateByUser[userId] = idle;
-    broadcastCombatState(dispatcher, userId, idle, tick);
-  });
 }
 
 function startNextRound(
