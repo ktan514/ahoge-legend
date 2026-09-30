@@ -2105,6 +2105,14 @@ records[]
 - rank_tier
 - wins
 - losses
+- draws
+
+response:
+- season_id
+- records
+- rank_count
+- ranking_public
+- ranking_hidden_until_unix_ms
 ```
 
 Nakama内部の同score record順序は表示順位に使用せず、response生成時に同Ratingを同じ `display_rank` へ正規化する。
@@ -2131,11 +2139,16 @@ PlayerSeasonRank
 
 ### 16.3 AHOGE LEGENDランキング
 
-キャラクター単位の月次ランキングとする。
+キャラクター単位の月次Ahoge Ratingランキングとする。
 
-AHOGE LEGEND Rankingはcharacter / ahoge単位で集計し、順位決定値は `total_match_wins` のみとする。
+AHOGE LEGEND Rankingは個別 `character_id` 単位で集計し、順位決定値は **Ahoge Ratingのみ** とする。
 
-同じ `total_match_wins` は同じ表示順位とし、`total_ranked_matches` や使用率をsecondary tie-breakへ使用しない。
+- LONG / NORMAL / SHORTは戦闘タイプでありランキング単位ではない
+- タイプ別ランキングは作らない
+- 同Ahoge Ratingは同じ `display_rank`
+- `total_match_wins / total_ranked_matches` は参考統計でありtie-breakへ使用しない
+- mirror matchはAhoge Rating ±0
+- 異character matchはserver authoritativeなAhoge Rating settlementを使用する
 
 server保存はseason単位のauthoritative Nakama leaderboardを使用する。
 
@@ -2145,10 +2158,12 @@ authoritative  = true
 sort           = desc
 operator       = set
 owner_id       = stable character owner UUID
-score          = total_match_wins
+score          = ahoge_rating
 subscore       = 0
 metadata:
+- season_id
 - character_id
+- total_match_wins
 - total_ranked_matches
 ```
 
@@ -2160,70 +2175,72 @@ AHOGE集計のStorage object自体はcharacter owner UUIDをuser_idへ流用せ�
 collection = ahoge_season_rank
 user_id    = system
 key        = <season_id>:<character_id>
-```
-
-leaderboard owner UUIDはランキングrecordの安定owner識別だけに使用する。
-
-集計単位はMatch Result確定時のauthoritative match settlementとする。
-
-- winner character: `total_match_wins + 1`
-- winner character: `total_ranked_matches + 1`
-- loser character: `total_ranked_matches + 1`
-- 同character同士の場合: そのcharacterの `total_ranked_matches + 2`
-- Round Resultでは加算しない
-- Friend Matchでは加算しない
-- Round境界15秒timeoutはそのRoundの不戦敗としてRound取得数へ反映し、最終的に通常BO3で確定したMatch結果だけをRanked集計へ加算する
-- server障害 / 両者同時切断は加算しない
-- authoritative match ID単位のsettlementで二重集計しない
-
-順位決定値は、対象シーズン内の全プレイヤーによるランクマッチ総勝利数とする。
-
-```text
-AhogeSeasonRank
+value:
 - season_id
 - character_id
+- ahoge_rating
 - total_match_wins
 - total_ranked_matches
 ```
 
-`total_match_wins` のみを順位決定値に使用する。
+leaderboard owner UUIDはランキングrecordの安定owner識別だけに使用する。
 
-`total_ranked_matches` は運営上の使用率・バランス確認等に利用できるが、公開順位の決定には使用しない。
-
-集計規則:
-
-1. ランクマッチの勝敗をサーバーで確定する
-2. 勝者プレイヤーの `PlayerSeasonRank` を更新する
-3. 勝者がそのマッチで使用した `character_id` を取得する
-4. 対応する `AhogeSeasonRank.total_match_wins` を1増加する
-5. 両者の使用キャラクターの `total_ranked_matches` を必要に応じて更新する
-6. フレンドマッチでは上記のランキング集計を行わない
-
-ラウンド勝利数はAHOGE LEGENDランキングへ加算しない。BO3のマッチ全体に勝利したときだけ1勝を加算する。
-
-個々のプレイヤーが同じアホ毛で何勝したかではなく、全プレイヤーの勝利数をキャラクターごとに合算する。
-
-当月1位のキャラクターを、その月の「伝説のアホ毛」としてUI上で強調表示できる。
-
-### 16.4 ランキング表示
-
-ランキング画面は少なくとも次の2タブを持つ。
+Ranking RPC response:
 
 ```text
-Ranking
-├─ PLAYER
-└─ AHOGE LEGEND
+season_id
+records[]
+- display_rank
+- character_id
+- ahoge_rating
+- total_match_wins
+- total_ranked_matches
+- legendary
+rank_count
+ranking_public
+ranking_hidden_until_unix_ms
 ```
 
-AHOGE LEGEND側では、少なくとも次を表示する。
+clientは `display_rank / ahoge_rating / legendary` をserver確定値として表示し、勝数・対戦数から順位やRatingを再計算しない。
 
-- 順位
-- キャラクター／アホ毛
-- 当月総勝利数
-- 現在の対象月
-- 1位への特別表示
+旧Seasonの公開制御はPLAYER Rankingと共通とする。
 
-過去シーズン表示を実装する場合は、現在月のランキングとは別の履歴表示として扱う。
+- 月末23:00 JSTから旧Seasonを非公開
+- 翌月00:00 JSTから新Seasonを通常公開
+- 旧Season最終結果は翌08:00 JSTに公開
+- 非公開応答は `records=[] / ranking_public=false / ranking_hidden_until_unix_ms=<08:00>`
+
+### 16.4 UI-12 client契約
+
+Godot clientは次のRPC wrapperを `OnlineSession` に持つ。
+
+```text
+get_season_metadata(season_id = "")
+get_player_ranking(limit = 20, season_id = "")
+get_ahoge_legend_ranking(limit = 20, season_id = "")
+```
+
+UI-12初期実装はcurrent Seasonだけを表示し、過去Season選択UIは後続対象とする。
+
+画面遷移:
+
+```text
+Top Menu
+→ RANKING
+→ UI-12
+→ BACK
+→ Top Menu
+```
+
+UI状態:
+
+- LOADING: RPC待機中
+- READY: server recordsを表示
+- EMPTY: 公開中だがrecordsが0件
+- FINALIZING: `ranking_public=false`
+- ERROR: 認証 / RPC / response parse失敗
+
+PLAYER / AHOGE LEGENDタブ切替時は対応するserver Ranking RPCを取得し直す。Season labelはserver responseの `season_id` を正本とし、clientローカル時計からSeasonを推測しない。
 
 ## 17. 画面UI
 
