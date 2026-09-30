@@ -170,6 +170,102 @@ func get_current_rating() -> Dictionary:
 	return response
 
 
+func get_season_metadata(season_id: String = "") -> Dictionary:
+	if not is_authenticated():
+		return {
+			"ok": false,
+			"message": "Season取得には認証が必要です。",
+		}
+
+	var result = null
+	if season_id.is_empty():
+		result = await client.rpc_async(session, OnlineConfigScript.SEASON_METADATA_RPC)
+	else:
+		result = await client.rpc_async(
+			session,
+			OnlineConfigScript.SEASON_METADATA_RPC,
+			JSON.stringify({"season_id": season_id})
+		)
+	if result == null or result.is_exception():
+		return {
+			"ok": false,
+			"message": _result_error_message(result, "Season情報を取得できませんでした。"),
+		}
+
+	var parsed = JSON.parse_string(str(result.payload))
+	if not parsed is Dictionary:
+		return {
+			"ok": false,
+			"message": "Season情報のserver応答を解析できませんでした。",
+		}
+	var response: Dictionary = parsed
+	response["ok"] = true
+	return response
+
+
+func get_player_ranking(
+	limit: int = OnlineConfigScript.RANKING_DEFAULT_LIMIT,
+	season_id: String = ""
+) -> Dictionary:
+	return await _get_ranking(
+		OnlineConfigScript.PLAYER_RANKING_RPC,
+		limit,
+		season_id,
+		"PLAYER Ranking"
+	)
+
+
+func get_ahoge_legend_ranking(
+	limit: int = OnlineConfigScript.RANKING_DEFAULT_LIMIT,
+	season_id: String = ""
+) -> Dictionary:
+	return await _get_ranking(
+		OnlineConfigScript.AHOGE_LEGEND_RANKING_RPC,
+		limit,
+		season_id,
+		"AHOGE LEGEND Ranking"
+	)
+
+
+func _get_ranking(
+	rpc_id: String,
+	limit: int,
+	season_id: String,
+	label: String
+) -> Dictionary:
+	if not is_authenticated():
+		return {
+			"ok": false,
+			"message": "%s取得には認証が必要です。" % label,
+		}
+
+	var payload := {
+		"limit": clampi(limit, 1, OnlineConfigScript.RANKING_MAX_LIMIT),
+	}
+	if not season_id.is_empty():
+		payload["season_id"] = season_id
+	var result = await client.rpc_async(
+		session,
+		rpc_id,
+		JSON.stringify(payload)
+	)
+	if result == null or result.is_exception():
+		return {
+			"ok": false,
+			"message": _result_error_message(result, "%sを取得できませんでした。" % label),
+		}
+
+	var parsed = JSON.parse_string(str(result.payload))
+	if not parsed is Dictionary:
+		return {
+			"ok": false,
+			"message": "%sのserver応答を解析できませんでした。" % label,
+		}
+	var response: Dictionary = parsed
+	response["ok"] = true
+	return response
+
+
 func get_ahoge_character_rating(character_id: String, season_id: String = "") -> Dictionary:
 	if not is_authenticated():
 		return {
