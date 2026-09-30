@@ -746,9 +746,9 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 - settlement後のAHOGE LEGEND順位を表示してよい
 - 総対戦数・勝率等は補助情報として表示してよい
 
-Ahoge Ratingはserver settlement後の確定値だけを表示し、clientで変動量を再計算しない。
+Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確定値だけを表示し、clientで変動量を再計算しない。UI-11は `match_id` を使ってsettlementを取得し、通常終了と再ログイン復帰で同じbefore / after / deltaを表示する。
 
-同じ `character_id` 同士の対戦ではAhoge Ratingは変動しないため、必要に応じて `±0` と表示できる。
+同じ `character_id` 同士の対戦ではAhoge Ratingは変動しないため `±0` と表示する。Player Ratingはmirror matchでも通常どおり変動するため、2種類のRatingを別行で表示する。
 
 再戦ボタンは表示しない。
 
@@ -823,6 +823,8 @@ PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし�
 - Ahoge Rating
 - 対象シーズン
 - 1位の強調表示
+
+Ranking responseの順位値はserver確定Ahoge Ratingのみとし、総勝利数・総対戦数は補助統計として受け取る。clientは勝数から順位を再計算しない。
 
 補助表示候補:
 

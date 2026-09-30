@@ -14,7 +14,7 @@
 
 ## 2. 現在地
 
-2026-09-29時点では工程3まで完了し、**工程4: GameFlow・主要12画面 #25** を進行中である。
+2026-09-30時点では工程3まで完了し、**工程4: GameFlow・主要12画面 #25** を進行中である。M2 Ranked主要導線 #54 / #86 / #89 / #90 はmain採用・Human Verificationまで完了し、現在は工程4後半 #88 Ahoge Rating方式への移行を実施する。
 
 完了済みの主要基盤:
 
@@ -32,11 +32,9 @@
 - M1 Battle Core #53 Human Verification PASS
 - 工程3 #24 completed
 
-現在は工程4前半のRanked主要導線 #86 / PR #87 を進めている。#54 Human Verificationでローカルmatch保存に起因するuser取り違えを検出したため、**#89 ユーザー永続データserver正本化** をblocking修正として先に完了し、その後 #54 M2 Ranked主要導線 Human Verificationを再実施する。
+M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181041b` でmain採用済み。#54 Human VerificationもPASSし、未解決matchのNakama Storage正本化とRound境界15秒切断復帰も完了した。
 
-Human Verification中に未解決match復帰仕様を見直し、元matchへの強制復帰、10秒timeout、retry上限2回、失敗後TopMenuへ戻して再選択時に再試行する契約を確定した。
-
-またAHOGE LEGEND Rankingは、従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ再設計した。工程3で作成した総勝利数ベースの初期実装はそのまま完成形とせず、M2 PASS後・UI-12接続前に #88 で新方式へ移行する。
+現在は #88 でAHOGE LEGEND Rankingを従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ移行する。工程3で作成した総勝利数ベース初期実装は互換参考統計だけ残し、順位値をAhoge Ratingへ置換する。UI-12本画面量産前にserver settlement / Ranking RPC / UI-11 result contractを完成させる。
 
 
 ## 3. 製造工程

@@ -330,7 +330,9 @@ ahoge_rating_B_after = ahoge_rating_B_before - delta
 
 `ahoge_weight` と `ahoge_k` の最終値は固定せず、対戦シミュレーションと実データを使って調整する。Rating全体のインフレ／デフレを避けるため、異なるアホ毛同士の1試合では原則として同じ絶対量を一方へ加算し、他方から減算する。
 
-`ahoge_k` はデータ量が少ない時期ほどRatingが動きやすく、十分な対戦数が蓄積した後は安定するよう、両キャラクターのシーズン対戦数を考慮して段階的または連続的に縮小できる構造とする。具体的な閾値・係数はbalance検証で確定する。
+実装では `server/nakama/src/ahoge_rating_config.ts` を調整値の単一正本とする。`AHOGE_BASE_RATING=1500` は仕様値、`ahoge_weight / ahoge_k / K安定化stage` はbalance調整値として分離する。初期実装は動作検証用defaultを持てるが、本番balance確定値とは扱わない。計算関数やUIへ調整値を重複記述しない。
+
+`ahoge_k` はデータ量が少ない時期ほどRatingが動きやすく、十分な対戦数が蓄積した後は安定するよう、両キャラクターのシーズン対戦数を考慮して段階的または連続的に縮小できる構造とする。初期実装では安定化stageを空にでき、balance検証でstageを追加するだけで計算ロジックを変更せず調整できるようにする。具体的な閾値・係数はbalance検証で確定する。
 
 #### 3.10.4 更新量の意図
 
@@ -380,7 +382,13 @@ total_ranked_matches
 
 clientは期待勝率・Ahoge Rating・変動量を再計算しない。UIはserver settlement後の値を取得して表示する。
 
-`ahoge_season_rank` storageをキャラクター別シーズン集計の正本とし、少なくともAhoge Rating・総勝利数・総対戦数を保持する。Nakama leaderboardはAhoge Rating順の投影として扱う。
+`ahoge_season_rank` storageをキャラクター別シーズン集計の正本とし、少なくとも `season_id / character_id / ahoge_rating / total_match_wins / total_ranked_matches` を保持する。旧recordに `ahoge_rating` がない場合は1500として読み取り、次回settlement時に新形式へ保存する。
+
+Nakama leaderboardはAhoge Rating順の投影として扱う。leaderboard scoreはAhoge Ratingとし、勝数・対戦数はmetadataまたはstorage正本から返す。旧勝数scoreが残っているseasonでもRanking RPC取得時に既存storage recordを新Rating scoreへ再投影し、勝数とRatingが混在した順位を返さない。
+
+`ranked_match_settlement` はmatch単位のserver確定settlement正本とし、Player RatingとAhoge Ratingのbefore / after / delta、期待勝率、使用character、mirror判定を保存する。同一matchのretryでは再計算せず、このsettlement recordを使用してleaderboard投影だけを再試行する。
+
+clientはmatch IDを指定して専用RPCから自分自身のsettlement結果を取得できる。RPCはそのmatchのwinner / loser以外へsettlement値を返さない。UI-11はこのRPCだけをPlayer Rating / Ahoge Rating変動の正本とし、通常Match Resultでも `RESULT_PENDING` からの再ログイン復帰でも同じ表示契約を使用する。
 
 フレンドマッチはPlayer Rating・Ahoge Rating・PLAYER Ranking・AHOGE LEGEND Rankingのいずれにも影響しない。
 
@@ -456,7 +464,7 @@ UI-09初期実装は正式台詞コンテンツを要求せず、snapshotで確�
 
 UI-10 Rankedは既存M1 HUD表現を再利用するが、M1デバッグ用の第二client自動生成は使用しない。実際の相手はremote playerとし、ローカルplayerの入力だけを `OnlineSession.send_combat_input()` でserverへ送る。
 
-UI-11 Rankedは `MATCH_RESULT` のwinner / final score / finish_causeを勝敗正本として表示する。RatingはMatch Resultからclient計算せず、server settlement後の `ahoge_current_rating` を再取得して `rating_before → rating_after` を表示する。
+UI-11 Rankedは `MATCH_RESULT` のwinner / final score / finish_causeを勝敗正本として表示する。RatingはMatch Resultからclient計算しない。`match_id` を使ってserverのRanked settlement RPCを取得し、Player Ratingと使用characterのAhoge Ratingをそれぞれ `before → after (delta)` で表示する。再ログインResultでも同じsettlement RPCを使用するため、clientローカルにmatch前Ratingを保存して正本化しない。
 
 UI-11 Rankedの操作は次のみとする。
 
