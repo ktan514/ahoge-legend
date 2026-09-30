@@ -596,13 +596,17 @@ func _wait_state_pair(
 ) -> bool:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		var first := _find_state(_p1_states, user_id, state_name, start_p1)
-		var second := _find_state(_p2_states, user_id, state_name, start_p2)
-		if not first.is_empty() and not second.is_empty():
-			if first != second:
-				_fail("P1/P2で%s stateが一致しません。" % state_name)
-				return false
-			return true
+		for p1_index in range(maxi(start_p1, 0), _p1_states.size()):
+			var first: Dictionary = _p1_states[p1_index]
+			if str(first.get("user_id", "")) != user_id \
+					or str(first.get("state", "")) != state_name:
+				continue
+			for p2_index in range(maxi(start_p2, 0), _p2_states.size()):
+				var second: Dictionary = _p2_states[p2_index]
+				if str(second.get("user_id", "")) == user_id \
+						and str(second.get("state", "")) == state_name \
+						and first == second:
+					return true
 		await create_timer(0.02).timeout
 	return false
 
