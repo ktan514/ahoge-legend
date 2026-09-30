@@ -793,16 +793,20 @@ PLAYER RankingとAHOGE LEGEND Rankingは別タブとするが、AHOGE LEGEND内�
 
 ### 17.3 PLAYER
 
-PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし、wins / lossesは順位決定には使用しない。
+PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし、wins / losses / drawsは順位決定には使用しない。
 
-表示候補:
+表示必須:
 
 - 順位
 - プレイヤー名
 - Player Rating
 - ランク帯
+
+補助表示:
+
 - 勝数
 - 敗数
+- 引き分け数
 
 ### 17.4 AHOGE LEGEND
 
@@ -826,6 +830,18 @@ PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし�
 Ranking responseの順位値はserver確定Ahoge Ratingのみとし、総勝利数・総対戦数は補助統計として受け取る。clientは勝数から順位を再計算しない。
 
 旧Seasonは月末最終日23:00〜翌月8:00まで非公開とする。翌月0:00以降は新Season Rankingを通常表示し、旧Seasonのみ `FINALIZING...` 等の非公開状態を表示する。旧Season最終結果は翌朝8:00に公開する。
+
+UI-12初期表示はPLAYERタブとする。タブ切替時はserverから対応Rankingを再取得する。
+
+画面状態:
+
+- `LOADING...`: server response待機
+- `NO RANKING DATA`: 公開中だがrecords 0件
+- `FINALIZING...`: `ranking_public=false`
+- `RANKING ERROR: ...`: RPC / parse失敗
+- READY: records表示
+
+Season表示はserverが返す `season_id` を `YYYY / MM` へ整形する。clientローカル時刻からSeasonを推測しない。
 
 補助表示候補:
 

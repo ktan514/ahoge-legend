@@ -1,5 +1,6 @@
 extends Control
 
+const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const TOP_MENU_SCENE := preload("res://scenes/screens/top_menu/TopMenu.tscn")
 const BATTLE_MODE_SCENE := preload("res://scenes/screens/battle_mode/BattleModeSelect.tscn")
 const CHARACTER_SELECT_SCENE := preload("res://scenes/screens/character_select/CharacterSelect.tscn")
@@ -9,6 +10,7 @@ const ONLINE_BATTLE_SCENE := preload("res://scenes/screens/battle/OnlineBattle.t
 const BATTLE_SCENE := preload("res://scenes/screens/battle/Battle.tscn")
 const M1_BATTLE_SCENE := preload("res://scenes/screens/battle/BattleM1Debug.tscn")
 const MATCH_RESULT_SCENE := preload("res://scenes/screens/result/MatchResult.tscn")
+const RANKING_SCENE := preload("res://scenes/screens/ranking/Ranking.tscn")
 
 var _online_session = null
 
@@ -53,7 +55,52 @@ func _show_top_menu() -> void:
 	var screen = _replace_screen(TOP_MENU_SCENE)
 	screen.connect("local_test_requested", Callable(self, "_show_local_character_select"))
 	screen.connect("online_battle_requested", Callable(self, "_on_online_battle_requested"))
+	screen.connect("ranking_requested", Callable(self, "_show_ranking").bind("player"))
 	screen.connect("exit_requested", Callable(self, "_on_exit_requested"))
+
+
+func _show_ranking(tab: String = "player") -> void:
+	_show_loading("LOADING RANKING...")
+
+	if not _online_session.is_authenticated():
+		var auth_result: Dictionary = await _online_session.authenticate_local_device()
+		if not bool(auth_result.get("ok", false)):
+			_show_ranking_response(tab, {
+				"ok": false,
+				"message": str(auth_result.get("message", "認証に失敗しました。")),
+			})
+			return
+
+	var season: Dictionary = await _online_session.get_season_metadata()
+	if not bool(season.get("ok", false)):
+		_show_ranking_response(tab, season)
+		return
+
+	var season_id := str(season.get("season_id", ""))
+	var response: Dictionary
+	if tab == "ahoge":
+		response = await _online_session.get_ahoge_legend_ranking(
+			OnlineConfigScript.RANKING_DEFAULT_LIMIT,
+			season_id
+		)
+	else:
+		response = await _online_session.get_player_ranking(
+			OnlineConfigScript.RANKING_DEFAULT_LIMIT,
+			season_id
+		)
+
+	if not response.has("season_id"):
+		response["season_id"] = season_id
+	_show_ranking_response(tab, response)
+
+
+func _show_ranking_response(tab: String, response: Dictionary) -> void:
+	var screen = RANKING_SCENE.instantiate()
+	screen.call("configure", tab, response)
+	_replace_screen_instance(screen)
+	screen.connect("player_tab_requested", Callable(self, "_show_ranking").bind("player"))
+	screen.connect("ahoge_tab_requested", Callable(self, "_show_ranking").bind("ahoge"))
+	screen.connect("back_requested", Callable(self, "_show_top_menu"))
 
 
 func _on_online_battle_requested() -> void:

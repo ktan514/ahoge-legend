@@ -19,8 +19,13 @@ const MATCH_RECOVERY_RETRY_LIMIT: int = 2
 
 const ACTIVE_MATCH_RPC_GET: String = "ahoge_active_match_get"
 const ACTIVE_MATCH_RPC_ACK: String = "ahoge_active_match_ack"
+const SEASON_METADATA_RPC: String = "ahoge_season_metadata"
+const PLAYER_RANKING_RPC: String = "ahoge_player_ranking"
+const AHOGE_LEGEND_RANKING_RPC: String = "ahoge_legend_ranking"
 const AHOGE_CHARACTER_RATING_RPC: String = "ahoge_character_rating"
 const RANKED_SETTLEMENT_RPC: String = "ahoge_ranked_settlement"
+const RANKING_DEFAULT_LIMIT: int = 20
+const RANKING_MAX_LIMIT: int = 100
 const MATCH_MODE_RANKED: String = "ranked"
 const MATCH_MODE_FRIEND: String = "friend"
 const ACTIVE_MATCH_STATE_ACTIVE: String = "ACTIVE"

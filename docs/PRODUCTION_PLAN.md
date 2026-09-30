@@ -205,6 +205,9 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - 完全無操作MatchはAhoge Ratingへ影響させない
 - 同一player pair反復対戦はAhoge Rating影響を段階減衰する
 - 耐不正の閾値・係数は設定分離し、abuse検証で調整する
+- UI-12はTop Menuから遷移でき、PLAYER / AHOGE LEGENDを別タブでserver Rankingへ接続する
+- UI-12はserverのdisplay_rank / Rating / ranking_publicを正本として表示し、client再計算しない
+- UI-12初期実装はcurrent Seasonのみ。旧Season非公開時はFINALIZING、公開中0件はNO RANKING DATAを表示する
 
 ## 8. 工程5: 正式キャラクター・演出・素材
 
