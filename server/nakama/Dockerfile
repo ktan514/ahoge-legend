@@ -6,7 +6,8 @@ COPY package.json tsconfig.json ./
 RUN npm install
 
 COPY src ./src
-RUN npm run type-check && npm run build
+COPY tests ./tests
+RUN npm run type-check && npm run build && node tests/rating_model_smoke.js
 
 FROM heroiclabs/nakama:3.41.0
 

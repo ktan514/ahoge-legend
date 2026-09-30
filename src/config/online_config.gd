@@ -19,6 +19,8 @@ const MATCH_RECOVERY_RETRY_LIMIT: int = 2
 
 const ACTIVE_MATCH_RPC_GET: String = "ahoge_active_match_get"
 const ACTIVE_MATCH_RPC_ACK: String = "ahoge_active_match_ack"
+const AHOGE_CHARACTER_RATING_RPC: String = "ahoge_character_rating"
+const RANKED_SETTLEMENT_RPC: String = "ahoge_ranked_settlement"
 const MATCH_MODE_RANKED: String = "ranked"
 const MATCH_MODE_FRIEND: String = "friend"
 const ACTIVE_MATCH_STATE_ACTIVE: String = "ACTIVE"

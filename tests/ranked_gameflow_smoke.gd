@@ -224,6 +224,13 @@ func _run() -> void:
 	if not await _wait_screen(app, "MatchResult", 5000):
 		_fail("authoritative Match ResultからUI-11へ遷移しません。", app)
 		return
+	if not _has_label_text(app, "PLAYER RATING") \
+			or not _has_label_text(app, "AHOGE RATING"):
+		_fail("UI-11にPlayer / Ahoge Rating settlementが表示されません。", app)
+		return
+	if _has_label_text(app, "server settlementを取得できませんでした。"):
+		_fail("UI-11がRanked settlementを取得できていません。", app)
+		return
 	if not await _wait_no_active_match(online_session, 6000):
 		_fail("UI-11表示確定後もserver-side active matchが残っています。", app)
 		return

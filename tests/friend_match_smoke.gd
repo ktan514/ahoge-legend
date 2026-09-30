@@ -484,7 +484,7 @@ func _read_ahoge_ranking(client, session) -> Dictionary:
 
 
 func _same_rating_record(before: Dictionary, after: Dictionary) -> bool:
-	for key in ["rating", "wins", "losses", "season_id"]:
+	for key in ["rating", "wins", "losses", "draws", "season_id"]:
 		if str(before.get(key, "")) != str(after.get(key, "")):
 			return false
 	return true
@@ -493,14 +493,15 @@ func _same_rating_record(before: Dictionary, after: Dictionary) -> bool:
 func _ahoge_counts(ranking: Dictionary, character_id: String) -> Dictionary:
 	var records = ranking.get("records", [])
 	if not records is Array:
-		return {"wins": 0, "matches": 0}
+		return {"wins": 0, "matches": 0, "rating": 1500}
 	for record in records:
 		if record is Dictionary and str(record.get("character_id", "")) == character_id:
 			return {
 				"wins": int(record.get("total_match_wins", 0)),
 				"matches": int(record.get("total_ranked_matches", 0)),
+				"rating": int(record.get("ahoge_rating", 1500)),
 			}
-	return {"wins": 0, "matches": 0}
+	return {"wins": 0, "matches": 0, "rating": 1500}
 
 
 func _wait_room_state(

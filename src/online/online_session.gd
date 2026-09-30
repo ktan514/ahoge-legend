@@ -170,6 +170,79 @@ func get_current_rating() -> Dictionary:
 	return response
 
 
+func get_ahoge_character_rating(character_id: String, season_id: String = "") -> Dictionary:
+	if not is_authenticated():
+		return {
+			"ok": false,
+			"message": "Ahoge Rating取得には認証が必要です。",
+		}
+	if not OnlineConfigScript.is_supported_online_character_id(character_id):
+		return {
+			"ok": false,
+			"message": "未対応character_idです: %s" % character_id,
+		}
+
+	var payload := {"character_id": character_id}
+	if not season_id.is_empty():
+		payload["season_id"] = season_id
+	var result = await client.rpc_async(
+		session,
+		OnlineConfigScript.AHOGE_CHARACTER_RATING_RPC,
+		JSON.stringify(payload)
+	)
+	if result == null or result.is_exception():
+		return {
+			"ok": false,
+			"message": _result_error_message(result, "Ahoge Ratingを取得できませんでした。"),
+		}
+	var parsed = JSON.parse_string(str(result.payload))
+	if not parsed is Dictionary:
+		return {
+			"ok": false,
+			"message": "Ahoge Ratingのserver応答を解析できませんでした。",
+		}
+	var response: Dictionary = parsed
+	response["ok"] = true
+	return response
+
+
+func get_ranked_match_settlement(match_id: String) -> Dictionary:
+	if not is_authenticated():
+		return {
+			"ok": false,
+			"found": false,
+			"message": "Ranked settlement取得には認証が必要です。",
+		}
+	if match_id.is_empty():
+		return {
+			"ok": false,
+			"found": false,
+			"message": "match_idがありません。",
+		}
+
+	var result = await client.rpc_async(
+		session,
+		OnlineConfigScript.RANKED_SETTLEMENT_RPC,
+		JSON.stringify({"match_id": match_id})
+	)
+	if result == null or result.is_exception():
+		return {
+			"ok": false,
+			"found": false,
+			"message": _result_error_message(result, "Ranked settlementを取得できませんでした。"),
+		}
+	var parsed = JSON.parse_string(str(result.payload))
+	if not parsed is Dictionary:
+		return {
+			"ok": false,
+			"found": false,
+			"message": "Ranked settlementのserver応答を解析できませんでした。",
+		}
+	var response: Dictionary = parsed
+	response["ok"] = true
+	return response
+
+
 func refresh_active_online_match() -> Dictionary:
 	if not is_authenticated():
 		return {

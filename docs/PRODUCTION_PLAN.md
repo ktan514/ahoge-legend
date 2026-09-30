@@ -14,13 +14,13 @@
 
 ## 2. 現在地
 
-2026-09-29時点では工程3まで完了し、**工程4: GameFlow・主要12画面 #25** を進行中である。
+2026-09-30時点では工程3まで完了し、**工程4: GameFlow・主要12画面 #25** を進行中である。M2 Ranked主要導線 #54 / #86 / #89 / #90 はmain採用・Human Verificationまで完了し、現在は工程4後半 #88 Ahoge Rating方式への移行を実施する。
 
 完了済みの主要基盤:
 
 - Godot 4.7.2ローカル1対1縦切り
 - authoritative戦闘コア
-- authoritative 85秒 / Hit / Overtime / Round / BO3 / Match Result
+- authoritative 85秒 / Hit / 時間切れ同点 / Round / BO3 / Match Draw / Match Result
 - Nakama 3.41.0 + PostgreSQL 16.8-alpine
 - Device Authentication / Realtime Socket
 - Ranked Matchmaker
@@ -32,11 +32,9 @@
 - M1 Battle Core #53 Human Verification PASS
 - 工程3 #24 completed
 
-現在は工程4前半のRanked主要導線 #86 / PR #87 を進めている。#54 Human Verificationでローカルmatch保存に起因するuser取り違えを検出したため、**#89 ユーザー永続データserver正本化** をblocking修正として先に完了し、その後 #54 M2 Ranked主要導線 Human Verificationを再実施する。
+M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181041b` でmain採用済み。#54 Human VerificationもPASSし、未解決matchのNakama Storage正本化とRound境界15秒切断復帰も完了した。
 
-Human Verification中に未解決match復帰仕様を見直し、元matchへの強制復帰、10秒timeout、retry上限2回、失敗後TopMenuへ戻して再選択時に再試行する契約を確定した。
-
-またAHOGE LEGEND Rankingは、従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ再設計した。工程3で作成した総勝利数ベースの初期実装はそのまま完成形とせず、M2 PASS後・UI-12接続前に #88 で新方式へ移行する。
+現在は #88 でAHOGE LEGEND Rankingを従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ移行する。工程3で作成した総勝利数ベース初期実装は互換参考統計だけ残し、順位値をAhoge Ratingへ置換する。UI-12本画面量産前にserver settlement / Ranking RPC / UI-11 result contractを完成させる。
 
 
 ## 3. 製造工程
@@ -107,9 +105,9 @@ Human Verification中に未解決match復帰仕様を見直し、元matchへの�
 2. 85秒timer
 3. 5 Hitラウンド勝利
 4. timeout時のHit数比較
-5. Overtime
+5. timeout同点時の両者+1
 6. Round result
-7. 2本先取BO3
+7. 2本先取 / 同時2点Draw
 8. Match result
 
 完了条件:
@@ -194,11 +192,19 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - AHOGE LEGENDの順位値は総勝利数ではなくAhoge Rating
 - ランキング単位は個別 `character_id`
 - LONG / NORMAL / SHORTのタイプ別ランキングは存在しない
-- 同一character対戦ではAhoge Ratingを変動させない
+- 同一character対戦では勝敗・DrawともAhoge Ratingを変動させない。ただしPlayer Ratingは独立して通常変動する
 - 異なるcharacter対戦では試合前Player RatingとAhoge Ratingから期待勝率を計算する
 - 順当勝ちの変動は小さく、番狂わせの変動は大きくする
+- Draw時はPlayer Rating / 異character Ahoge Ratingを実績値0.5で更新する
 - clientはRatingを計算せずserver settlement結果だけを表示する
+- 旧Season Rankingは月末23:00〜翌月8:00非公開、新Season Rankingは0:00から公開する
+- 0:00より前に開始したMatchは終了時刻に関係なく旧Seasonへ含め、0:00ちょうど以降に開始したMatchだけ新Seasonへ集計する
 - 勝数 / 対戦数 / 勝率は参考統計として保持できるが順位には使わない
+- Player Ratingは各matchでdelta合計0を保証する
+- Ahoge Ratingはplayer-character-season単位の総絶対影響上限を持つ
+- 完全無操作MatchはAhoge Ratingへ影響させない
+- 同一player pair反復対戦はAhoge Rating影響を段階減衰する
+- 耐不正の閾値・係数は設定分離し、abuse検証で調整する
 
 ## 8. 工程5: 正式キャラクター・演出・素材
 
