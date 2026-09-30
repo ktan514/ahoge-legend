@@ -407,22 +407,39 @@ func _same_round_started_event(first: Dictionary, second: Dictionary) -> bool:
 func _wait_round_draw_pair(round_number: int, timeout_ms: int) -> bool:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		var first := _find_round_result(_p1_round_results, round_number)
-		var second := _find_round_result(_p2_round_results, round_number)
-		if not first.is_empty() and not second.is_empty():
-			if first != second:
-				_fail("P1/P2のDraw Round Resultが一致しません。")
-				return false
-			if str(first.get("finish_cause", "")) != "TIMEOUT_DRAW" \
-					or not str(first.get("winner_user_id", "")).is_empty() \
-					or not str(first.get("loser_user_id", "")).is_empty() \
-					or int(first.get("winner_hits", -1)) != int(first.get("loser_hits", -2)):
-				_fail("TIMEOUT_DRAW Resultが期待値と一致しません。")
-				return false
-			return true
+		for first in _p1_round_results:
+			if int(first.get("round_number", -1)) != round_number:
+				continue
+			for second in _p2_round_results:
+				if int(second.get("round_number", -1)) != round_number:
+					continue
+				if not _same_round_result_event(first, second):
+					continue
+				if str(first.get("finish_cause", "")) != "TIMEOUT_DRAW" \
+						or not str(first.get("winner_user_id", "")).is_empty() \
+						or not str(first.get("loser_user_id", "")).is_empty() \
+						or int(first.get("winner_hits", -1)) != int(first.get("loser_hits", -2)):
+					_fail("TIMEOUT_DRAW Resultが期待値と一致しません。")
+					return false
+				return true
 		await create_timer(0.05).timeout
 	_fail("Round %d TIMEOUT_DRAWを受信できませんでした。" % round_number)
 	return false
+
+
+func _same_round_result_event(first: Dictionary, second: Dictionary) -> bool:
+	for key in [
+		"round_number",
+		"winner_user_id",
+		"loser_user_id",
+		"finish_cause",
+		"winner_hits",
+		"loser_hits",
+		"server_tick",
+	]:
+		if first.get(key) != second.get(key):
+			return false
+	return true
 
 
 func _wait_score_pair(
