@@ -2,7 +2,7 @@ const RANKING_SEASON_COLLECTION = "ranking_season";
 const SEASON_SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 const SEASON_JST_OFFSET_MILLISECONDS = 9 * 60 * 60 * 1000;
 const SEASON_RANKING_HIDE_BEFORE_END_MILLISECONDS = 60 * 60 * 1000;
-const SEASON_FINALIZATION_GRACE_MILLISECONDS = 10 * 60 * 1000;
+const SEASON_FINAL_RESULT_PUBLISH_DELAY_MILLISECONDS = 8 * 60 * 60 * 1000;
 
 interface RankingSeasonMetadata {
   season_id: string;
@@ -77,7 +77,7 @@ function seasonRankingVisibility(
   const hiddenFrom =
     bounds.ends_at_unix_ms - SEASON_RANKING_HIDE_BEFORE_END_MILLISECONDS;
   const hiddenUntil =
-    bounds.ends_at_unix_ms + SEASON_FINALIZATION_GRACE_MILLISECONDS;
+    bounds.ends_at_unix_ms + SEASON_FINAL_RESULT_PUBLISH_DELAY_MILLISECONDS;
   const hidden =
     referenceUnixMilliseconds >= hiddenFrom &&
     referenceUnixMilliseconds < hiddenUntil;
@@ -101,19 +101,9 @@ function resolveRankedSettlementSeasonId(
     throw new Error("invalid ranked settlement time");
   }
 
-  const startSeasonId = currentSeasonIdJst(matchStartedAtUnixMilliseconds);
-  const startBounds = seasonBoundsJst(startSeasonId);
-  const finalizationDeadline =
-    startBounds.ends_at_unix_ms + SEASON_FINALIZATION_GRACE_MILLISECONDS;
-
-  if (
-    matchStartedAtUnixMilliseconds < startBounds.ends_at_unix_ms &&
-    matchFinishedAtUnixMilliseconds <= finalizationDeadline
-  ) {
-    return startSeasonId;
-  }
-
-  return currentSeasonIdJst(matchFinishedAtUnixMilliseconds);
+  // Season所属はMatch開始時刻だけで固定する。
+  // 00:00より前に開始したmatchは、終了が月を跨いでも旧Seasonへsettlementする。
+  return currentSeasonIdJst(matchStartedAtUnixMilliseconds);
 }
 
 function ensureSeasonMetadata(
