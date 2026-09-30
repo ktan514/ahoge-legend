@@ -20,7 +20,7 @@
 
 - Godot 4.7.2ローカル1対1縦切り
 - authoritative戦闘コア
-- authoritative 85秒 / Hit / Overtime / Round / BO3 / Match Result
+- authoritative 85秒 / Hit / 時間切れ同点 / Round / BO3 / Match Draw / Match Result
 - Nakama 3.41.0 + PostgreSQL 16.8-alpine
 - Device Authentication / Realtime Socket
 - Ranked Matchmaker
@@ -105,9 +105,9 @@ M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181
 2. 85秒timer
 3. 5 Hitラウンド勝利
 4. timeout時のHit数比較
-5. Overtime
+5. timeout同点時の両者+1
 6. Round result
-7. 2本先取BO3
+7. 2本先取 / 同時2点Draw
 8. Match result
 
 完了条件:
@@ -192,10 +192,13 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - AHOGE LEGENDの順位値は総勝利数ではなくAhoge Rating
 - ランキング単位は個別 `character_id`
 - LONG / NORMAL / SHORTのタイプ別ランキングは存在しない
-- 同一character対戦ではAhoge Ratingを変動させない
+- 同一character対戦では勝敗・DrawともAhoge Ratingを変動させない。ただしPlayer Ratingは独立して通常変動する
 - 異なるcharacter対戦では試合前Player RatingとAhoge Ratingから期待勝率を計算する
 - 順当勝ちの変動は小さく、番狂わせの変動は大きくする
+- Draw時はPlayer Rating / 異character Ahoge Ratingを実績値0.5で更新する
 - clientはRatingを計算せずserver settlement結果だけを表示する
+- 旧Season Rankingは月末23:00〜翌月0:10非公開、新Season Rankingは0:00から公開する
+- 0:00前開始かつ0:10まで終了したMatchだけ旧Seasonへ含め、それ以外は新Seasonへ集計する
 - 勝数 / 対戦数 / 勝率は参考統計として保持できるが順位には使わない
 
 ## 8. 工程5: 正式キャラクター・演出・素材

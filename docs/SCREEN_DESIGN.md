@@ -584,7 +584,6 @@ HUD:
 - 取得ラウンド数
 - ヒット数
 - 85秒タイマー
-- OVERTIME
 - JUST PARRY
 - JUST DODGE
 - CLASH
@@ -606,7 +605,7 @@ HUD:
 │       │                                                    │       │
 │       └────────────────────────────────────────────────────┘       │
 │                                                                    │
-│               JUST PARRY / JUST DODGE / OVERTIME                  │
+│               JUST PARRY / JUST DODGE / DRAW                  │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -630,11 +629,11 @@ BO3のため、各プレイヤーについて最大2つの取得マーカーを�
 
 分秒表記へ変更しない。
 
-### 15.7 OVERTIME
+### 15.7 時間切れ同点
 
-同点で85秒が終了した場合、通常タイマー位置を使って `OVERTIME` を強調表示する。
+85秒終了時にHit数が同点なら、両者へラウンドポイントを1点ずつ加算する。
 
-次の有効ヒットでラウンド終了することが分かる補助表示を追加してよい。
+UIは `DRAW ROUND` を短く表示し、その後のserver確定scoreを表示する。両者が同時に2点へ到達した場合はUI-11へ遷移して `DRAW` を表示する。Overtime表示は使用しない。
 
 ### 15.8 オンライン対戦中のPause
 
@@ -729,10 +728,10 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 ### 16.1 共通表示
 
-- WIN / LOSE
-- マッチ勝者
-- 勝利キャラクター
-- 勝利時の短いテキスト
+- WIN / LOSE / DRAW
+- マッチ勝者（Draw時はなし）
+- 勝利キャラクター（Draw時はなし）
+- 勝利時またはDraw時の短いテキスト
 - 各ラウンド結果
 
 ### 16.2 ランクマッチ結果
@@ -748,7 +747,7 @@ Countdownの `3 / 2 / 1 / GO!` はserver eventに同期する。演出上のfade
 
 Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確定値だけを表示し、clientで変動量を再計算しない。UI-11は `match_id` を使ってsettlementを取得し、通常終了と再ログイン復帰で同じbefore / after / deltaを表示する。
 
-同じ `character_id` 同士の対戦ではAhoge Ratingは変動しないため `±0` と表示する。Player Ratingはmirror matchでも通常どおり変動するため、2種類のRatingを別行で表示する。
+同じ `character_id` 同士の対戦ではAhoge Ratingは勝敗・Drawにかかわらず `±0` と表示する。Player Ratingはmirror matchでも独立して通常計算し、DrawでもRating差に応じて変動するため、2種類のRatingを別行で表示する。
 
 再戦ボタンは表示しない。
 
@@ -825,6 +824,8 @@ PLAYERタブはPlayer Rating降順で表示する。同Ratingは同順位とし�
 - 1位の強調表示
 
 Ranking responseの順位値はserver確定Ahoge Ratingのみとし、総勝利数・総対戦数は補助統計として受け取る。clientは勝数から順位を再計算しない。
+
+旧Seasonは月末最終日23:00〜翌月0:10だけ非公開とする。翌月0:00以降は新Season Rankingを通常表示し、旧Seasonのみ `FINALIZING...` 等の非公開状態を表示する。0:10に旧Season最終結果を再公開する。
 
 補助表示候補:
 

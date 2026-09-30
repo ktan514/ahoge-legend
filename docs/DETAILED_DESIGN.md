@@ -348,6 +348,13 @@ Player Ratingは「その人が強かったから勝った部分」を補正す�
 
 Player Ratingの更新は既存PLAYER Ranking用Eloとして独立して行い、Ahoge Ratingの計算には **試合開始前のPlayer Rating** を使用する。
 
+Draw時のPlayer RatingとAhoge Ratingは別々に計算する。
+
+- Player Rating: `actual = 0.5`。同一character対戦でも通常計算する
+- Ahoge Rating: 異character対戦では `actual = 0.5`、同一character対戦では常にdelta 0
+- Rating差があるDrawでは、期待値0.5を上回る側（格下側）が上昇し、下回る側（格上側）が低下する
+- Friend Matchは両Ratingとも非対象
+
 authoritative match生成時に、Rankedだけ次をmatch stateへ固定する。
 
 ```text
@@ -361,7 +368,7 @@ ahoge_match_count_before_by_character
 
 一方、Ahoge RatingのStorage更新では他matchの更新を上書きしない。今回matchのdeltaを試合開始時snapshotから計算したうえで、settlement時に読み直した現在のStorage Ratingへそのdeltaだけを加減し、Storage versionによる楽観的排他で競合時は再読込・再試行する。
 
-match単位settlementの `ahoge_rating_before / after / delta` は「そのmatch開始時Ratingと、そのmatch単独の寄与」を表す。AHOGE LEGEND Rankingの現在値は、並行して完了した他matchの寄与も含むStorage正本を投影する。
+match単位settlementは、期待値計算用の開始時snapshotと、実際の集計先Seasonでのbefore / after / deltaを分けて保持する。AHOGE LEGEND Rankingの現在値は、並行して完了した他matchの寄与も含むStorage正本を投影する。
 
 #### 3.10.5 同一アホ毛対戦
 
@@ -369,8 +376,8 @@ match単位settlementの `ahoge_rating_before / after / delta` は「そのmatch
 
 そのため同一アホ毛対戦では:
 
-- Ahoge Ratingを変動させない
-- Player Ratingは通常どおり更新する
+- Ahoge Ratingを変動させない（勝敗・Drawとも±0）
+- Player Ratingは通常どおり更新する（Draw時も実績値0.5で変動し得る）
 - 勝敗・対戦数等の参考統計は記録できる
 - タイプが同じでも `character_id` が異なる場合は通常のAhoge Rating更新対象とする
 
@@ -995,67 +1002,49 @@ else:
 
 1. match loop先頭でserver tickから `remaining_seconds` を更新する
 2. 0へ変化した場合、その時点までにserverが確定済みの `round_hit_count_by_user` を比較する
-3. Hit数に差があれば、多い側を `round_winner_user_id` として確定する
-4. `round_finished = true`
-5. `round_finish_cause = TIMEOUT`
-6. 両者を `ROUND_LOCKED` へ遷移させる
-7. 同じmatch loop内の新規combat入力・未確定Contactはtimeout後のHit数へ含めない
+3. Hit数に差があれば、多い側へラウンドポイントを1点加算する
+4. Hit数が同点なら、両者へラウンドポイントを1点ずつ加算する
+5. 両者を `ROUND_LOCKED` へ遷移させる
+6. 同じmatch loop内の新規combat入力・未確定Contactはtimeout後のHit数へ含めない
+7. ラウンドポイント反映後に2点到達を判定する
+   - 片側だけ2点 → そのplayerのMatch Win
+   - 両側同時2点 → Match Draw
+   - どちらも2点未満 → 次Round
 
 0到達tickでまだContactEventとして確定していない攻撃は無効とする。85秒という終了境界を跨いだHitをtimeout比較へ後付けしない。
 
-同点の場合はこの段階で勝者を確定しない。
+同点時もOvertimeへ遷移しない。旧 `round_awaiting_overtime / round_overtime / OVERTIME_HIT` は製品勝敗経路では使用しない。
+
+同点Roundのserver状態:
 
 ```text
-round_finished = false
+round_finished = true
 round_winner_user_id = ""
-round_awaiting_overtime = true
+round_finish_cause = TIMEOUT_DRAW
+round_draw = true
 ```
 
-Overtime開始処理が接続されるまでは両者を一旦 `ROUND_LOCKED` にして、timer 0のまま新規combatを停止する。次のOvertime実装で `round_awaiting_overtime` を解除し、サドンデス戦闘へ遷移させる。
-
-timeout確定後またはOvertime待ち中は、client側でHit数・勝者・timerを独自更新しない。
-
-### 10.4 Overtime
-
-延長戦中は次の有効ヒットで即座にラウンド終了する。
-
-オンラインauthoritative matchでは、timeout同点tickでは一旦 `round_awaiting_overtime = true` として両者を `ROUND_LOCKED` にする。timeout境界を跨いだ未確定入力・ContactをOvertimeへ持ち越さないため、このtickでは戦闘を再開しない。
-
-次のserver tick先頭でOvertimeを開始する。
+Match Draw:
 
 ```text
-round_awaiting_overtime = false
-round_overtime = true
-round_finished = false
-round_winner_user_id = ""
-round_finish_cause = NONE
+match_finished = true
+match_winner_user_id = ""
+match_finish_cause = BO3_DRAW
+match_draw = true
 ```
 
-Overtime開始時は両者のcombat stateを新しい `IDLE` へ初期化する。timeout前のCHARGING / WINDUP / STRIKE / COOLDOWN / Defense / Stagger / pending Contactは復元しない。SHORTのdetach / regrow状態も持ち越さず、Overtime開始時は `ahoge_available = true` から再開する。
+### 10.4 同点ラウンド
 
-server → client通知:
+同点ラウンドは `TIMEOUT_DRAW` として両者へ1点を加算する。次の例を正式挙動とする。
 
 ```text
-RoundOvertimeStartedEvent
-- server_tick
+0-0 → Draw Round → 1-1 → 次Round
+1-0 → Draw Round → 2-1 → P1 Match Win
+0-1 → Draw Round → 1-2 → P2 Match Win
+1-1 → Draw Round → 2-2 → Match Draw
 ```
 
-Overtime開始tickで `RoundOvertimeStartedEvent` を両clientへ通知し、その後に両者の `COMBAT_STATE_CHANGED(IDLE)` を通知する。timerは0のまま再開せず、Overtime中は `ROUND_TIMER_CHANGED` を追加送信しない。
-
-Overtime中の勝敗規則:
-
-- PARRY / DODGE / JUST_PARRY / JUST_DODGEでは終了しない
-- AttackClashでは終了しない
-- `HitConfirmedEvent` が成立した場合だけ攻撃側Hit数を+1する
-- Hit count更新後、その攻撃側を `round_winner_user_id` として即座に確定する
-- `round_finish_cause = OVERTIME_HIT`
-- 両者を `ROUND_LOCKED` へ遷移する
-- 5 Hit規定数よりOvertimeの「次Hit」規則を優先する
-
-Overtime終了後は通常のラウンド終了と同様に新規combat / Contact / Hit / Hit count更新を停止する。
-
-Round Result通知、取得ラウンド数への反映、次ラウンドResetは後続工程で接続する。
-
+Overtime / サドンデスは行わない。
 ### 10.5 Round Result
 
 server内部でラウンド勝者が確定した場合、終了原因に関係なく同一の `RoundResultEvent` を両クライアントへ1回だけ通知する。
@@ -1064,24 +1053,26 @@ server内部でラウンド勝者が確定した場合、終了原因に関係�
 
 - 5 Hit到達: `HIT_LIMIT`
 - 85秒timeoutでHit数差あり: `TIMEOUT`
-- Overtime中の次の有効Hit: `OVERTIME_HIT`
+- 85秒timeoutでHit数同点: `TIMEOUT_DRAW`
+- Round境界切断不戦敗: `DISCONNECT_FORFEIT`
 
 server → client通知:
 
 ```text
 RoundResultEvent
 - round_number
-- winner_user_id
-- loser_user_id
+- winner_user_id       # Draw時は空
+- loser_user_id        # Draw時は空
 - finish_cause
 - winner_hits
 - loser_hits
+- is_draw
 - server_tick
 ```
 
 初期 `round_number` は1とする。次ラウンド開始時のincrementはBO3実装で接続する。
 
-`winner_hits / loser_hits` はResult確定tick時点のauthoritativeな現在ラウンドHit数を使用する。Overtimeでは勝利HitのHit count加算後にResultを確定する。
+`winner_hits / loser_hits` はResult確定tick時点のauthoritativeな現在ラウンドHit数を使用する。Drawでは両値が同値で、`winner_user_id / loser_user_id` は空、`is_draw=true` とする。
 
 通知順序:
 
@@ -1949,12 +1940,45 @@ value:
 
 これにより月替わり時に過去metadataのstate更新処理を必要としない。
 
-現在SeasonのRating / AHOGE集計は新しいseason_idのStorage key / leaderboard IDへ自然に切り替える。前SeasonのStorage / leaderboardは削除・上書きしない。
+現在SeasonのRating / AHOGE集計は新しいseason_idのStorage key / leaderboard IDへ切り替える。前SeasonのStorage / leaderboardは削除・上書きしない。
 
-- 新Seasonでplayer recordが未作成ならRating 1500 / wins 0 / losses 0
-- 新SeasonでAHOGE recordが未作成ならtotal_match_wins 0 / total_ranked_matches 0
-- Match settlementは結果確定時刻のseason_idへ記録する
-- settlement object自体にもseason_idを保持する
+- 新Seasonでplayer recordが未作成ならRating 1500 / wins 0 / losses 0 / draws 0
+- 新SeasonでAHOGE recordが未作成ならAhoge Rating 1500 / total_match_wins 0 / total_ranked_matches 0
+
+#### 16.1.1 月末締めと公開制御
+
+旧Seasonランキングは最終日の23:00 JSTから翌月0:10 JSTまで非公開とする。
+
+```text
+月末 23:00
+  → 旧Season Rankingを非公開
+
+翌月 00:00
+  → 新Season開始
+  → 新Season Rankingは通常公開
+  → 旧Seasonだけ引き続き非公開
+
+翌月 00:10
+  → 旧Season最終結果を確定
+  → 旧Season Rankingを再公開
+```
+
+PLAYER RankingとAHOGE LEGEND Rankingの両方へ同じ公開制御を適用する。非公開期間の旧Season Ranking RPCはrecordsを返さず、`ranking_public=false` と `ranking_hidden_until_unix_ms` を返す。新Seasonは0:00以降通常取得できる。
+
+Matchの集計先Seasonは、Match開始時刻と終了時刻からserverだけが決定する。
+
+- 0:00より前に開始し、旧Season終了から10分以内（00:10まで）に終了 → 旧Season
+- 0:00以降に開始 → 新Season
+- 0:00より前に開始しても、00:10を超えて終了 → 新Season
+
+期待勝率の計算入力と集計先Seasonは分離する。
+
+- 計算入力: Match開始時に固定したPlayer Rating / Ahoge Rating snapshot
+- 集計先: 上記締めルールで決定したSeason
+- 集計先が新Seasonの場合、新Seasonの現在Rating（未作成なら1500）へ今回Matchのdeltaだけを適用する
+- 旧Seasonの絶対Rating値を新Seasonへ持ち越さない
+
+settlement objectは計算snapshotのSeasonと実際の集計先Seasonを両方保持する。
 
 PLAYER Ranking / AHOGE LEGEND Ranking取得RPCはpayloadの `season_id` を任意指定できる。
 
@@ -2625,10 +2649,16 @@ Login
 Rating settlementはRoundではなくMatch結果に対して1回だけ行う。
 
 - Round 1 / Round 2 / Round 3の各Round終了ではRatingを更新しない
-- 通常BO3で2本先取が成立した時に1match分更新する
-- Round境界15秒timeoutで成立した不戦勝Round自体ではRatingを更新しない。2本先取でMatch Resultが確定した時だけ1match分更新する
-- Friend Matchは従来どおりRating非対象
-- server障害 / 両者同時切断など勝敗を通常確定しない終了はRating更新しない
+- 片側が2点到達したMatch Winで1match分更新する
+- 両者が同時に2点へ到達したMatch Drawでも1match分更新する
+- Round境界15秒timeoutで成立した不戦勝Round自体ではRatingを更新しない
+- Player RatingとAhoge Ratingは別計算・別正本として扱う
+- Player Ratingは同一character対戦でも通常どおり更新する
+- Player RatingのDrawは実績値0.5。Rating差がある場合、高Rating側は低下し低Rating側は上昇する
+- Ahoge Ratingは異character対戦だけ勝敗/Drawで更新する
+- 同一character対戦では勝敗/DrawにかかわらずAhoge Ratingは±0
+- Friend Matchは従来どおり両Rating非対象
+- server障害 / 両者同時切断など通常のWin/Drawとして確定しない終了はRating更新しない
 
 ### 21.6 プレイヤーランキング初期値
 
@@ -2646,9 +2676,10 @@ new_rating
 ```
 
 - 勝者 `score = 1`
+- Draw `score = 0.5`
 - 敗者 `score = 0`
 - 更新後Ratingは標準的な四捨五入で整数化する
-- 通常戦闘Roundと `DISCONNECT_FORFEIT` Roundを含め、最終的に `BO3` で確定したRanked MatchだけをRating更新対象とする
+- 通常戦闘Roundと `DISCONNECT_FORFEIT` Roundを含め、最終的に `BO3` または `BO3_DRAW` で確定したRanked MatchだけをRating更新対象とする
 - Friend MatchはRating更新対象外
 - server障害 / 両者同時切断など勝敗を通常確定しない終了はRating更新しない
 
@@ -2664,9 +2695,10 @@ value:
 - rating
 - wins
 - losses
+- draws
 ```
 
-当月オブジェクトが存在しないplayerはRating 1500 / wins 0 / losses 0として扱い、最初のRanked結果で作成する。
+対象Seasonのオブジェクトが存在しないplayerはRating 1500 / wins 0 / losses 0 / draws 0として扱い、最初のRanked結果で作成する。
 
 season_idはJSTの対象月を `YYYY-MM` 形式で表す。月次Season切替の完全な運用は後続Season Issueで実装するが、Rating保存keyは最初からseason単位に分離する。
 
