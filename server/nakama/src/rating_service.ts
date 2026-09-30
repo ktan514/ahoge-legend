@@ -26,6 +26,11 @@ interface EloUpdateResult {
   loserExpected: number;
 }
 
+interface RankedMatchSettlementRecord {
+  value: any;
+  version: string;
+}
+
 function eloExpectedScore(selfRating: number, opponentRating: number): number {
   return 1 / (1 + Math.pow(10, (opponentRating - selfRating) / 400));
 }
@@ -178,10 +183,10 @@ function syncRankedMatchLeaderboardProjection(
   }
 }
 
-function rankedMatchSettlementExists(
+function readRankedMatchSettlement(
   nk: nkruntime.Nakama,
   matchId: string
-): boolean {
+): RankedMatchSettlementRecord | null {
   const objects = nk.storageRead([
     {
       collection: RANKED_MATCH_SETTLEMENT_COLLECTION,
@@ -189,7 +194,20 @@ function rankedMatchSettlementExists(
       userId: SYSTEM_USER_ID
     }
   ]);
-  return !!objects && objects.length > 0;
+  if (!objects || objects.length === 0) {
+    return null;
+  }
+  return {
+    value: objects[0].value as any,
+    version: objects[0].version
+  };
+}
+
+function rankedMatchSettlementExists(
+  nk: nkruntime.Nakama,
+  matchId: string
+): boolean {
+  return readRankedMatchSettlement(nk, matchId) !== null;
 }
 
 function shouldUpdateRatingForFinishCause(finishCause: string): boolean {
@@ -220,9 +238,6 @@ function settleRankedMatchRating(
     return false;
   }
 
-  const seasonId = currentSeasonIdJst(unixMilliseconds);
-  ensureSeasonMetadata(nk, seasonId);
-
   const winnerCharacterId = String(characterIdByUser[winnerUserId] || "");
   const loserCharacterId = String(characterIdByUser[loserUserId] || "");
   if (!winnerCharacterId || !loserCharacterId) {
@@ -230,22 +245,37 @@ function settleRankedMatchRating(
     return false;
   }
 
-  if (rankedMatchSettlementExists(nk, matchId)) {
+  const existingSettlement = readRankedMatchSettlement(nk, matchId);
+  if (existingSettlement) {
+    const existingSeasonId = String(existingSettlement.value.season_id || "");
+    const existingWinnerCharacterId = String(
+      existingSettlement.value.winner_character_id || winnerCharacterId
+    );
+    const existingLoserCharacterId = String(
+      existingSettlement.value.loser_character_id || loserCharacterId
+    );
+    if (!existingSeasonId) {
+      logger.error("ahoge settlement exists without season_id. match_id=%s", matchId);
+      return false;
+    }
     return (
       syncRankedMatchLeaderboardProjection(
         nk,
         winnerUserId,
         loserUserId,
-        seasonId
+        existingSeasonId
       ) &&
       syncAhogeLegendProjection(
         nk,
-        winnerCharacterId,
-        loserCharacterId,
-        seasonId
+        existingWinnerCharacterId,
+        existingLoserCharacterId,
+        existingSeasonId
       )
     );
   }
+
+  const seasonId = currentSeasonIdJst(unixMilliseconds);
+  ensureSeasonMetadata(nk, seasonId);
   const winnerRecord = readPlayerSeasonRank(nk, winnerUserId, seasonId);
   const loserRecord = readPlayerSeasonRank(nk, loserUserId, seasonId);
   const elo = calculateEloUpdate(
@@ -266,11 +296,13 @@ function settleRankedMatchRating(
     losses: loserRecord.value.losses + 1
   };
 
-  const ahogeWrites = buildAhogeSeasonRankWrites(
+  const ahogeSettlement = buildAhogeSeasonRankSettlement(
     nk,
     winnerCharacterId,
     loserCharacterId,
-    seasonId
+    seasonId,
+    winnerRecord.value.rating,
+    loserRecord.value.rating
   );
 
   const writes: nkruntime.StorageWriteRequest[] = [
@@ -292,7 +324,7 @@ function settleRankedMatchRating(
       permissionRead: 1,
       permissionWrite: 0
     },
-    ...ahogeWrites,
+    ...ahogeSettlement.writes,
     {
       collection: RANKED_MATCH_SETTLEMENT_COLLECTION,
       key: matchId,
@@ -305,6 +337,25 @@ function settleRankedMatchRating(
         winner_character_id: winnerCharacterId,
         loser_character_id: loserCharacterId,
         finish_cause: finishCause,
+        winner_player_rating_before: winnerRecord.value.rating,
+        winner_player_rating_after: elo.winnerRating,
+        winner_player_rating_delta: elo.winnerRating - winnerRecord.value.rating,
+        winner_player_expected: elo.winnerExpected,
+        loser_player_rating_before: loserRecord.value.rating,
+        loser_player_rating_after: elo.loserRating,
+        loser_player_rating_delta: elo.loserRating - loserRecord.value.rating,
+        loser_player_expected: elo.loserExpected,
+        winner_ahoge_rating_before: ahogeSettlement.winner_rating_before,
+        winner_ahoge_rating_after: ahogeSettlement.winner_rating_after,
+        winner_ahoge_rating_delta: ahogeSettlement.winner_delta,
+        winner_ahoge_expected: ahogeSettlement.winner_expected,
+        loser_ahoge_rating_before: ahogeSettlement.loser_rating_before,
+        loser_ahoge_rating_after: ahogeSettlement.loser_rating_after,
+        loser_ahoge_rating_delta: ahogeSettlement.loser_delta,
+        loser_ahoge_expected: ahogeSettlement.loser_expected,
+        ahoge_mirror_match: ahogeSettlement.mirror_match,
+        ahoge_weight: ahogeSettlement.weight,
+        ahoge_k: ahogeSettlement.k_factor,
         settled_at_unix_ms: unixMilliseconds
       },
       version: "*",
@@ -345,13 +396,15 @@ function settleRankedMatchRating(
     }
 
     logger.info(
-      "ahoge ranked rating settled. match_id=%s season=%s winner=%s loser=%s winner_rating=%d loser_rating=%d",
+      "ahoge ranked rating settled. match_id=%s season=%s winner=%s loser=%s player_winner_rating=%d player_loser_rating=%d ahoge_winner_rating=%d ahoge_loser_rating=%d",
       matchId,
       seasonId,
       winnerUserId,
       loserUserId,
       elo.winnerRating,
-      elo.loserRating
+      elo.loserRating,
+      ahogeSettlement.winner_rating_after,
+      ahogeSettlement.loser_rating_after
     );
     return true;
   } catch (error) {
@@ -380,6 +433,69 @@ function settleRankedMatchRating(
     return false;
   }
 }
+
+const rankedMatchSettlementRpc: nkruntime.RpcFunction = function (
+  ctx,
+  _logger,
+  nk,
+  payload
+): string {
+  if (!ctx.userId) {
+    throw new Error("authentication required");
+  }
+
+  let matchId = "";
+  if (payload) {
+    try {
+      const parsed = JSON.parse(payload);
+      matchId = String(parsed.match_id || "");
+    } catch (_error) {
+      throw new Error("invalid payload");
+    }
+  }
+  if (!matchId) {
+    throw new Error("match_id required");
+  }
+
+  const record = readRankedMatchSettlement(nk, matchId);
+  if (!record) {
+    return JSON.stringify({found: false});
+  }
+
+  const value = record.value;
+  const userId = String(ctx.userId);
+  const winnerUserId = String(value.winner_user_id || "");
+  const loserUserId = String(value.loser_user_id || "");
+  if (userId !== winnerUserId && userId !== loserUserId) {
+    throw new Error("settlement participant required");
+  }
+
+  const isWinner = userId === winnerUserId;
+  const prefix = isWinner ? "winner_" : "loser_";
+  return JSON.stringify({
+    found: true,
+    match_id: matchId,
+    season_id: String(value.season_id || ""),
+    user_id: userId,
+    character_id: String(
+      isWinner
+        ? value.winner_character_id || ""
+        : value.loser_character_id || ""
+    ),
+    is_winner: isWinner,
+    player_rating_before: Number(value[prefix + "player_rating_before"] || 0),
+    player_rating_after: Number(value[prefix + "player_rating_after"] || 0),
+    player_rating_delta: Number(value[prefix + "player_rating_delta"] || 0),
+    player_expected: Number(value[prefix + "player_expected"] || 0),
+    ahoge_rating_before: Number(value[prefix + "ahoge_rating_before"] || AHOGE_BASE_RATING),
+    ahoge_rating_after: Number(value[prefix + "ahoge_rating_after"] || AHOGE_BASE_RATING),
+    ahoge_rating_delta: Number(value[prefix + "ahoge_rating_delta"] || 0),
+    ahoge_expected: Number(value[prefix + "ahoge_expected"] || 0),
+    ahoge_mirror_match: Boolean(value.ahoge_mirror_match),
+    ahoge_weight: Number(value.ahoge_weight || 0),
+    ahoge_k: Number(value.ahoge_k || 0)
+  });
+};
 
 const currentRatingRpc: nkruntime.RpcFunction = function (
   ctx,

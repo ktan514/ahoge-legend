@@ -11,6 +11,7 @@ const CHARACTER_RANK_OWNER_IDS: {[key: string]: string} = {
 interface AhogeSeasonRankValue {
   season_id: string;
   character_id: string;
+  ahoge_rating: number;
   total_match_wins: number;
   total_ranked_matches: number;
 }
@@ -19,6 +20,21 @@ interface AhogeSeasonRankRecord {
   value: AhogeSeasonRankValue;
   version: string;
   exists: boolean;
+}
+
+interface AhogeRatingSettlementResult {
+  writes: nkruntime.StorageWriteRequest[];
+  mirror_match: boolean;
+  winner_rating_before: number;
+  winner_rating_after: number;
+  loser_rating_before: number;
+  loser_rating_after: number;
+  winner_expected: number;
+  loser_expected: number;
+  winner_delta: number;
+  loser_delta: number;
+  weight: number;
+  k_factor: number;
 }
 
 function characterRankingOwnerId(characterId: string): string {
@@ -39,6 +55,7 @@ function defaultAhogeSeasonRank(
   return {
     season_id: seasonId,
     character_id: characterId,
+    ahoge_rating: AHOGE_BASE_RATING,
     total_match_wins: 0,
     total_ranked_matches: 0
   };
@@ -76,6 +93,11 @@ function readAhogeSeasonRank(
     value: {
       season_id: String(raw.season_id || seasonId),
       character_id: String(raw.character_id || characterId),
+      ahoge_rating: Number(
+        raw.ahoge_rating === undefined
+          ? AHOGE_BASE_RATING
+          : raw.ahoge_rating
+      ),
       total_match_wins: Number(raw.total_match_wins || 0),
       total_ranked_matches: Number(raw.total_ranked_matches || 0)
     },
@@ -84,12 +106,31 @@ function readAhogeSeasonRank(
   };
 }
 
-function buildAhogeSeasonRankWrites(
+function ahogeEffectiveRating(
+  playerRating: number,
+  ahogeRating: number
+): number {
+  return (
+    playerRating +
+    AHOGE_RATING_WEIGHT * (ahogeRating - AHOGE_BASE_RATING)
+  );
+}
+
+function ahogeExpectedScore(
+  selfEffective: number,
+  opponentEffective: number
+): number {
+  return 1 / (1 + Math.pow(10, (opponentEffective - selfEffective) / 400));
+}
+
+function buildAhogeSeasonRankSettlement(
   nk: nkruntime.Nakama,
   winnerCharacterId: string,
   loserCharacterId: string,
-  seasonId: string
-): nkruntime.StorageWriteRequest[] {
+  seasonId: string,
+  winnerPlayerRatingBefore: number,
+  loserPlayerRatingBefore: number
+): AhogeRatingSettlementResult {
   const winnerOwnerId = characterRankingOwnerId(winnerCharacterId);
   const loserOwnerId = characterRankingOwnerId(loserCharacterId);
   if (!winnerOwnerId || !loserOwnerId) {
@@ -98,7 +139,72 @@ function buildAhogeSeasonRankWrites(
 
   if (winnerCharacterId === loserCharacterId) {
     const record = readAhogeSeasonRank(nk, winnerCharacterId, seasonId);
-    return [
+    const expected = ahogeExpectedScore(
+      ahogeEffectiveRating(
+        winnerPlayerRatingBefore,
+        record.value.ahoge_rating
+      ),
+      ahogeEffectiveRating(
+        loserPlayerRatingBefore,
+        record.value.ahoge_rating
+      )
+    );
+    return {
+      writes: [
+        {
+          collection: AHOGE_SEASON_RANK_COLLECTION,
+          key: ahogeSeasonStorageKey(seasonId, winnerCharacterId),
+          userId: AHOGE_STORAGE_SYSTEM_USER_ID,
+          value: {
+            season_id: seasonId,
+            character_id: winnerCharacterId,
+            ahoge_rating: record.value.ahoge_rating,
+            total_match_wins: record.value.total_match_wins + 1,
+            total_ranked_matches: record.value.total_ranked_matches + 2
+          },
+          version: record.version,
+          permissionRead: 1,
+          permissionWrite: 0
+        }
+      ],
+      mirror_match: true,
+      winner_rating_before: record.value.ahoge_rating,
+      winner_rating_after: record.value.ahoge_rating,
+      loser_rating_before: record.value.ahoge_rating,
+      loser_rating_after: record.value.ahoge_rating,
+      winner_expected: expected,
+      loser_expected: 1 - expected,
+      winner_delta: 0,
+      loser_delta: 0,
+      weight: AHOGE_RATING_WEIGHT,
+      k_factor: ahogeKForMatchCounts(
+        record.value.total_ranked_matches,
+        record.value.total_ranked_matches
+      )
+    };
+  }
+
+  const winnerRecord = readAhogeSeasonRank(nk, winnerCharacterId, seasonId);
+  const loserRecord = readAhogeSeasonRank(nk, loserCharacterId, seasonId);
+  const winnerEffective = ahogeEffectiveRating(
+    winnerPlayerRatingBefore,
+    winnerRecord.value.ahoge_rating
+  );
+  const loserEffective = ahogeEffectiveRating(
+    loserPlayerRatingBefore,
+    loserRecord.value.ahoge_rating
+  );
+  const winnerExpected = ahogeExpectedScore(winnerEffective, loserEffective);
+  const kFactor = ahogeKForMatchCounts(
+    winnerRecord.value.total_ranked_matches,
+    loserRecord.value.total_ranked_matches
+  );
+  const delta = Math.round(kFactor * (1 - winnerExpected));
+  const winnerAfter = winnerRecord.value.ahoge_rating + delta;
+  const loserAfter = loserRecord.value.ahoge_rating - delta;
+
+  return {
+    writes: [
       {
         collection: AHOGE_SEASON_RANK_COLLECTION,
         key: ahogeSeasonStorageKey(seasonId, winnerCharacterId),
@@ -106,48 +212,42 @@ function buildAhogeSeasonRankWrites(
         value: {
           season_id: seasonId,
           character_id: winnerCharacterId,
-          total_match_wins: record.value.total_match_wins + 1,
-          total_ranked_matches: record.value.total_ranked_matches + 2
+          ahoge_rating: winnerAfter,
+          total_match_wins: winnerRecord.value.total_match_wins + 1,
+          total_ranked_matches: winnerRecord.value.total_ranked_matches + 1
         },
-        version: record.version,
+        version: winnerRecord.version,
+        permissionRead: 1,
+        permissionWrite: 0
+      },
+      {
+        collection: AHOGE_SEASON_RANK_COLLECTION,
+        key: ahogeSeasonStorageKey(seasonId, loserCharacterId),
+        userId: AHOGE_STORAGE_SYSTEM_USER_ID,
+        value: {
+          season_id: seasonId,
+          character_id: loserCharacterId,
+          ahoge_rating: loserAfter,
+          total_match_wins: loserRecord.value.total_match_wins,
+          total_ranked_matches: loserRecord.value.total_ranked_matches + 1
+        },
+        version: loserRecord.version,
         permissionRead: 1,
         permissionWrite: 0
       }
-    ];
-  }
-
-  const winnerRecord = readAhogeSeasonRank(nk, winnerCharacterId, seasonId);
-  const loserRecord = readAhogeSeasonRank(nk, loserCharacterId, seasonId);
-  return [
-    {
-      collection: AHOGE_SEASON_RANK_COLLECTION,
-      key: ahogeSeasonStorageKey(seasonId, winnerCharacterId),
-      userId: AHOGE_STORAGE_SYSTEM_USER_ID,
-      value: {
-        season_id: seasonId,
-        character_id: winnerCharacterId,
-        total_match_wins: winnerRecord.value.total_match_wins + 1,
-        total_ranked_matches: winnerRecord.value.total_ranked_matches + 1
-      },
-      version: winnerRecord.version,
-      permissionRead: 1,
-      permissionWrite: 0
-    },
-    {
-      collection: AHOGE_SEASON_RANK_COLLECTION,
-      key: ahogeSeasonStorageKey(seasonId, loserCharacterId),
-      userId: AHOGE_STORAGE_SYSTEM_USER_ID,
-      value: {
-        season_id: seasonId,
-        character_id: loserCharacterId,
-        total_match_wins: loserRecord.value.total_match_wins,
-        total_ranked_matches: loserRecord.value.total_ranked_matches + 1
-      },
-      version: loserRecord.version,
-      permissionRead: 1,
-      permissionWrite: 0
-    }
-  ];
+    ],
+    mirror_match: false,
+    winner_rating_before: winnerRecord.value.ahoge_rating,
+    winner_rating_after: winnerAfter,
+    loser_rating_before: loserRecord.value.ahoge_rating,
+    loser_rating_after: loserAfter,
+    winner_expected: winnerExpected,
+    loser_expected: 1 - winnerExpected,
+    winner_delta: delta,
+    loser_delta: -delta,
+    weight: AHOGE_RATING_WEIGHT,
+    k_factor: kFactor
+  };
 }
 
 function ahogeLegendLeaderboardId(seasonId: string): string {
@@ -187,14 +287,27 @@ function syncAhogeRankingRecord(
     leaderboardId,
     ownerId,
     "",
-    record.value.total_match_wins,
+    record.value.ahoge_rating,
     0,
     {
       season_id: seasonId,
       character_id: characterId,
+      total_match_wins: record.value.total_match_wins,
       total_ranked_matches: record.value.total_ranked_matches
     }
   );
+}
+
+function syncExistingAhogeLegendProjection(
+  nk: nkruntime.Nakama,
+  seasonId: string
+): void {
+  Object.keys(CHARACTER_RANK_OWNER_IDS).forEach(function (characterId): void {
+    const record = readAhogeSeasonRank(nk, characterId, seasonId);
+    if (record.exists) {
+      syncAhogeRankingRecord(nk, characterId, seasonId);
+    }
+  });
 }
 
 function syncAhogeLegendProjection(
@@ -213,6 +326,37 @@ function syncAhogeLegendProjection(
     return false;
   }
 }
+
+const ahogeCharacterRatingRpc: nkruntime.RpcFunction = function (
+  ctx,
+  _logger,
+  nk,
+  payload
+): string {
+  if (!ctx.userId) {
+    throw new Error("authentication required");
+  }
+
+  let characterId = "";
+  let requestedSeasonId = "";
+  if (payload) {
+    try {
+      const parsed = JSON.parse(payload);
+      characterId = String(parsed.character_id || "");
+      requestedSeasonId = parseOptionalSeasonId(parsed);
+    } catch (_error) {
+      throw new Error("invalid payload");
+    }
+  }
+  if (!characterRankingOwnerId(characterId)) {
+    throw new Error("unsupported character_id");
+  }
+
+  const now = Date.now();
+  const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
+  ensureSeasonMetadata(nk, seasonId);
+  return JSON.stringify(readAhogeSeasonRank(nk, characterId, seasonId).value);
+};
 
 const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
   ctx,
@@ -242,6 +386,7 @@ const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
   const now = Date.now();
   const seasonId = resolveRequestedSeasonId(requestedSeasonId, now);
   ensureSeasonMetadata(nk, seasonId);
+  syncExistingAhogeLegendProjection(nk, seasonId);
   const leaderboardId = ensureAhogeLegendLeaderboard(nk, seasonId);
   const result = nk.leaderboardRecordsList(
     leaderboardId,
@@ -252,16 +397,16 @@ const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
   );
 
   const rawRecords = result.records || [];
-  let previousWins: number | null = null;
+  let previousRating: number | null = null;
   let previousDisplayRank = 0;
 
   const records = rawRecords.map(function (record, index): any {
-    const wins = Number(record.score);
+    const rating = Number(record.score);
     let displayRank = index + 1;
-    if (previousWins !== null && wins === previousWins) {
+    if (previousRating !== null && rating === previousRating) {
       displayRank = previousDisplayRank;
     }
-    previousWins = wins;
+    previousRating = rating;
     previousDisplayRank = displayRank;
 
     let metadata: any = {};
@@ -281,7 +426,8 @@ const ahogeLegendRankingRpc: nkruntime.RpcFunction = function (
     return {
       display_rank: displayRank,
       character_id: characterId,
-      total_match_wins: wins,
+      ahoge_rating: canonical.value.ahoge_rating,
+      total_match_wins: canonical.value.total_match_wins,
       total_ranked_matches: canonical.value.total_ranked_matches,
       legendary: displayRank === 1
     };

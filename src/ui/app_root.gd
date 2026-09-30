@@ -232,6 +232,7 @@ func _ranked_summary_from_snapshot(snapshot: Dictionary) -> Dictionary:
 	var loser_user_id := opponent_user_id if winner_user_id == local_user_id else local_user_id
 	return {
 		"mode": "ranked",
+		"match_id": str(_online_session.current_match_id),
 		"winner_user_id": winner_user_id,
 		"loser_user_id": loser_user_id,
 		"local_user_id": local_user_id,
@@ -247,10 +248,27 @@ func _ranked_summary_from_snapshot(snapshot: Dictionary) -> Dictionary:
 
 func _show_ranked_result(summary: Dictionary) -> void:
 	_show_loading("SYNCING RESULT...")
-	var rating_before: Dictionary = summary.get("rating_before", {})
-	var rating_after: Dictionary = await _wait_for_ranked_rating_settlement(rating_before)
 	var completed_summary := summary.duplicate(true)
-	completed_summary["rating_after"] = rating_after
+	var match_id := str(summary.get("match_id", _online_session.current_match_id))
+	var settlement := await _wait_for_ranked_settlement(match_id)
+	completed_summary["settlement"] = settlement
+
+	if bool(settlement.get("found", false)):
+		completed_summary["rating_before"] = {
+			"rating": int(settlement.get("player_rating_before", 1500)),
+		}
+		completed_summary["rating_after"] = {
+			"rating": int(settlement.get("player_rating_after", 1500)),
+		}
+		completed_summary["ahoge_rating_before"] = int(
+			settlement.get("ahoge_rating_before", 1500)
+		)
+		completed_summary["ahoge_rating_after"] = int(
+			settlement.get("ahoge_rating_after", 1500)
+		)
+		completed_summary["ahoge_rating_delta"] = int(
+			settlement.get("ahoge_rating_delta", 0)
+		)
 
 	var screen = MATCH_RESULT_SCENE.instantiate()
 	screen.call("configure", completed_summary)
@@ -265,25 +283,17 @@ func _show_ranked_result(summary: Dictionary) -> void:
 		printerr("Ranked Result active match ack failed: %s" % str(ack_result.get("message", "")))
 
 
-func _wait_for_ranked_rating_settlement(rating_before: Dictionary) -> Dictionary:
+func _wait_for_ranked_settlement(match_id: String) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + 5000
 	var latest: Dictionary = {}
 	while Time.get_ticks_msec() < deadline:
-		var current: Dictionary = await _online_session.get_current_rating()
+		var current: Dictionary = await _online_session.get_ranked_match_settlement(match_id)
 		if bool(current.get("ok", false)):
 			latest = current.duplicate(true)
-			if rating_before.is_empty() or _rating_record_changed(rating_before, current):
+			if bool(current.get("found", false)):
 				return latest
 		await get_tree().create_timer(0.05).timeout
 	return latest
-
-
-func _rating_record_changed(before: Dictionary, after: Dictionary) -> bool:
-	return (
-		int(before.get("rating", -1)) != int(after.get("rating", -1))
-		or int(before.get("wins", -1)) != int(after.get("wins", -1))
-		or int(before.get("losses", -1)) != int(after.get("losses", -1))
-	)
 
 
 func _show_local_battle(player_one_id: String, player_two_id: String) -> void:

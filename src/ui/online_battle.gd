@@ -413,6 +413,7 @@ func _emit_ranked_result(authoritative_result: Dictionary) -> void:
 	var winner_user_id := str(authoritative_result.get("winner_user_id", ""))
 	var summary := {
 		"mode": "ranked",
+		"match_id": str(_online_session.current_match_id),
 		"winner_user_id": winner_user_id,
 		"loser_user_id": str(authoritative_result.get("loser_user_id", "")),
 		"local_user_id": _local_user_id,

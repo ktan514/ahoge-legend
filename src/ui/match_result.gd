@@ -68,13 +68,31 @@ func _build_ranked_result(root: VBoxContainer) -> void:
 		var before_value := int(rating_before.get("rating", 1500))
 		var after_value := int(rating_after.get("rating", before_value))
 		var delta := after_value - before_value
-		rating.text = "Rating  %d → %d  (%+d)" % [before_value, after_value, delta]
+		rating.text = "PLAYER RATING  %d → %d  (%+d)" % [before_value, after_value, delta]
 	elif not rating_after.is_empty():
-		rating.text = "Rating  %d" % int(rating_after.get("rating", 1500))
+		rating.text = "PLAYER RATING  %d" % int(rating_after.get("rating", 1500))
 	else:
-		rating.text = "Rating: server同期結果を取得できませんでした。"
+		rating.text = "PLAYER RATING: server settlementを取得できませんでした。"
 	rating.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(rating)
+
+	var ahoge_rating := Label.new()
+	var settlement: Dictionary = _summary.get("settlement", {})
+	if bool(settlement.get("found", false)):
+		var ahoge_before := int(_summary.get("ahoge_rating_before", 1500))
+		var ahoge_after := int(_summary.get("ahoge_rating_after", ahoge_before))
+		var ahoge_delta := int(_summary.get("ahoge_rating_delta", ahoge_after - ahoge_before))
+		ahoge_rating.text = "AHOGE RATING  %d → %d  (%+d)" % [
+			ahoge_before,
+			ahoge_after,
+			ahoge_delta,
+		]
+		if bool(settlement.get("ahoge_mirror_match", false)):
+			ahoge_rating.text += "  MIRROR"
+	else:
+		ahoge_rating.text = "AHOGE RATING: server settlementを取得できませんでした。"
+	ahoge_rating.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(ahoge_rating)
 
 	var actions := HBoxContainer.new()
 	actions.alignment = BoxContainer.ALIGNMENT_CENTER
