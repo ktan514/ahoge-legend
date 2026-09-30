@@ -7,6 +7,7 @@ const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
 signal ranked_match_completed(summary: Dictionary)
+signal friend_match_completed(summary: Dictionary)
 
 @onready var hud = $BattleHUD
 
@@ -14,6 +15,7 @@ var _online_session = null
 
 var _initial_snapshot: Dictionary = {}
 var _rating_before: Dictionary = {}
+var _match_mode: String = "ranked"
 var _config
 var _local_state
 var _opponent_state
@@ -47,6 +49,8 @@ var _snapshot := {
 func configure(initial_snapshot: Dictionary, rating_before: Dictionary) -> void:
 	_initial_snapshot = initial_snapshot.duplicate(true)
 	_rating_before = rating_before.duplicate(true)
+	var configured_mode := str(initial_snapshot.get("match_mode", "ranked"))
+	_match_mode = configured_mode if configured_mode in ["ranked", "friend"] else "ranked"
 
 
 func _ready() -> void:
@@ -59,7 +63,7 @@ func _ready() -> void:
 		_local_user_id = str(_online_session.session.user_id)
 
 	_connect_online_signals()
-	hud.set_connection_status("RANKED: CONNECTED")
+	hud.set_connection_status("%s: CONNECTED" % _mode_label())
 	hud.set_help_text("左クリック Attack/Charge・右クリック Parry/Dodge")
 	hud.set_exit_button_text("ONLINE MATCH中は退出不可")
 	hud.exit_requested.connect(_on_exit_requested)
@@ -159,8 +163,10 @@ func _on_match_snapshot_received(snapshot: Dictionary) -> void:
 
 
 func _apply_match_snapshot(snapshot: Dictionary) -> void:
-	if str(snapshot.get("match_mode", "")) != "ranked":
+	var snapshot_mode := str(snapshot.get("match_mode", ""))
+	if snapshot_mode not in ["ranked", "friend"]:
 		return
+	_match_mode = snapshot_mode
 	var character_map: Dictionary = snapshot.get("character_id_by_user", {})
 	if not _configure_combatants(character_map):
 		hud.flash_message("authoritative player情報を取得できません。")
@@ -187,10 +193,10 @@ func _apply_match_snapshot(snapshot: Dictionary) -> void:
 
 	_input_ready = not _match_finished and not _round_countdown_active
 	if _match_finished:
-		hud.set_connection_status("RANKED: MATCH FINISHED")
+		hud.set_connection_status("%s: MATCH FINISHED" % _mode_label())
 		_emit_result_from_snapshot(snapshot)
 	else:
-		hud.set_connection_status("RANKED: READY")
+		hud.set_connection_status("%s: READY" % _mode_label())
 	_render()
 
 
@@ -384,7 +390,7 @@ func _on_match_result(
 	_match_finished = true
 	_input_ready = false
 	_render()
-	_emit_ranked_result({
+	_emit_online_result({
 		"winner_user_id": winner_user_id,
 		"loser_user_id": loser_user_id,
 		"round_wins_by_user": round_wins_by_user.duplicate(true),
@@ -405,7 +411,7 @@ func _emit_result_from_snapshot(snapshot: Dictionary) -> void:
 	var loser_user_id := ""
 	if not is_draw:
 		loser_user_id = _opponent_user_id if winner_user_id == _local_user_id else _local_user_id
-	_emit_ranked_result({
+	_emit_online_result({
 		"winner_user_id": winner_user_id,
 		"loser_user_id": loser_user_id,
 		"round_wins_by_user": snapshot.get("round_wins_by_user", {}).duplicate(true),
@@ -415,7 +421,7 @@ func _emit_result_from_snapshot(snapshot: Dictionary) -> void:
 	})
 
 
-func _emit_ranked_result(authoritative_result: Dictionary) -> void:
+func _emit_online_result(authoritative_result: Dictionary) -> void:
 	if _completion_emitted:
 		return
 	_completion_emitted = true
@@ -423,7 +429,7 @@ func _emit_ranked_result(authoritative_result: Dictionary) -> void:
 	var is_draw := bool(authoritative_result.get("is_draw", false)) \
 		or str(authoritative_result.get("finish_cause", "")) == "BO3_DRAW"
 	var summary := {
-		"mode": "ranked",
+		"mode": _match_mode,
 		"match_id": str(_online_session.current_match_id),
 		"winner_user_id": winner_user_id,
 		"loser_user_id": str(authoritative_result.get("loser_user_id", "")),
@@ -436,17 +442,26 @@ func _emit_ranked_result(authoritative_result: Dictionary) -> void:
 		"final_round_number": int(authoritative_result.get("final_round_number", 1)),
 		"finish_cause": str(authoritative_result.get("finish_cause", "")),
 		"rating_before": _rating_before.duplicate(true),
+		"friend_room_code": str(_initial_snapshot.get("friend_room_code", "")),
+		"friend_match_generation": int(_initial_snapshot.get("friend_match_generation", 0)),
 	}
-	call_deferred("_emit_ranked_match_completed", summary)
+	call_deferred("_emit_online_match_completed", summary)
 
 
-func _emit_ranked_match_completed(summary: Dictionary) -> void:
-	ranked_match_completed.emit(summary)
+func _emit_online_match_completed(summary: Dictionary) -> void:
+	if _match_mode == "friend":
+		friend_match_completed.emit(summary)
+	else:
+		ranked_match_completed.emit(summary)
+
+
+func _mode_label() -> String:
+	return "FRIEND" if _match_mode == "friend" else "RANKED"
 
 
 func _on_reconnect_started(_grace_seconds: int) -> void:
 	_input_ready = false
-	hud.set_connection_status("RANKED: RECONNECTING")
+	hud.set_connection_status("%s: RECONNECTING" % _mode_label())
 	hud.show_network_overlay("RECONNECTING...")
 
 
@@ -454,16 +469,16 @@ func _on_reconnect_succeeded(_match_id: String) -> void:
 	if not _opponent_boundary_waiting:
 		hud.clear_network_overlay()
 	if _match_finished:
-		hud.set_connection_status("RANKED: MATCH FINISHED")
+		hud.set_connection_status("%s: MATCH FINISHED" % _mode_label())
 		_input_ready = false
 	else:
-		hud.set_connection_status("RANKED: READY")
+		hud.set_connection_status("%s: READY" % _mode_label())
 		_input_ready = not _round_countdown_active
 
 
 func _on_reconnect_failed(message: String) -> void:
 	_input_ready = false
-	hud.set_connection_status("RANKED: RECONNECT FAILED")
+	hud.set_connection_status("%s: RECONNECT FAILED" % _mode_label())
 	hud.show_network_overlay(message)
 
 
@@ -477,12 +492,12 @@ func _on_player_connection_changed(
 		return
 	if connected:
 		_stop_opponent_boundary_wait()
-		hud.set_connection_status("RANKED: READY")
+		hud.set_connection_status("%s: READY" % _mode_label())
 	elif reconnect_deadline_tick >= 0:
 		_start_opponent_boundary_wait()
 	else:
 		_stop_opponent_boundary_wait()
-		hud.set_connection_status("RANKED: OPPONENT RECONNECTING")
+		hud.set_connection_status("%s: OPPONENT RECONNECTING" % _mode_label())
 
 
 func _start_opponent_boundary_wait() -> void:
@@ -493,7 +508,7 @@ func _start_opponent_boundary_wait() -> void:
 	_opponent_boundary_wait_display_seconds = OnlineConfigScript.ROUND_BOUNDARY_RECONNECT_WAIT_SECONDS
 	_opponent_boundary_wait_generation += 1
 	hud.clear_round_countdown()
-	hud.set_connection_status("RANKED: WAITING FOR OPPONENT")
+	hud.set_connection_status("%s: WAITING FOR OPPONENT" % _mode_label())
 	hud.show_opponent_wait_countdown(_opponent_boundary_wait_display_seconds)
 
 

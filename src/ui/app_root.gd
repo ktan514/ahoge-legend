@@ -11,6 +11,9 @@ const BATTLE_SCENE := preload("res://scenes/screens/battle/Battle.tscn")
 const M1_BATTLE_SCENE := preload("res://scenes/screens/battle/BattleM1Debug.tscn")
 const MATCH_RESULT_SCENE := preload("res://scenes/screens/result/MatchResult.tscn")
 const RANKING_SCENE := preload("res://scenes/screens/ranking/Ranking.tscn")
+const FRIEND_MATCH_MENU_SCENE := preload("res://scenes/screens/friend_match/FriendMatchMenu.tscn")
+const FRIEND_ROOM_JOIN_SCENE := preload("res://scenes/screens/friend_room_join/FriendRoomJoin.tscn")
+const FRIEND_ROOM_LOBBY_SCENE := preload("res://scenes/screens/friend_room_lobby/FriendRoomLobby.tscn")
 
 var _online_session = null
 
@@ -19,6 +22,11 @@ var _last_player_one_id: String = "LONG_TEST"
 var _last_player_two_id: String = "SHORT_TEST"
 var _ranked_character_id: String = "LONG_TEST"
 var _ranked_rating_before: Dictionary = {}
+var _friend_room_code: String = ""
+var _friend_room: Dictionary = {}
+var _friend_character_id: String = "LONG_TEST"
+var _friend_join_in_progress: bool = false
+var _friend_refresh_in_progress: bool = false
 var _m1_direct_mode: bool = false
 
 
@@ -46,7 +54,7 @@ func _initialize_online_state() -> void:
 		_show_top_menu()
 		return
 	if bool(active.get("active", false)):
-		await _force_resume_unresolved_ranked_match()
+		await _force_resume_unresolved_online_match()
 		return
 	_show_top_menu()
 
@@ -116,7 +124,7 @@ func _on_online_battle_requested() -> void:
 		_show_top_menu()
 		return
 	if bool(active.get("active", false)):
-		await _force_resume_unresolved_ranked_match()
+		await _force_resume_unresolved_online_match()
 		return
 	_show_battle_mode_select()
 
@@ -124,6 +132,7 @@ func _on_online_battle_requested() -> void:
 func _show_battle_mode_select() -> void:
 	var screen = _replace_screen(BATTLE_MODE_SCENE)
 	screen.connect("ranked_requested", Callable(self, "_on_ranked_requested").bind(screen))
+	screen.connect("friend_requested", Callable(self, "_on_friend_requested").bind(screen))
 	screen.connect("back_requested", Callable(self, "_show_top_menu"))
 
 
@@ -144,7 +153,7 @@ func _on_ranked_requested(screen: Control) -> void:
 			screen.call("set_status", str(active.get("message", "未解決対戦を確認できませんでした。")))
 		return
 	if bool(active.get("active", false)):
-		await _force_resume_unresolved_ranked_match()
+		await _force_resume_unresolved_online_match()
 		return
 
 	var realtime_result: Dictionary = await _online_session.connect_realtime_socket()
@@ -163,7 +172,7 @@ func _on_ranked_requested(screen: Control) -> void:
 	_show_ranked_character_select()
 
 
-func _force_resume_unresolved_ranked_match() -> void:
+func _force_resume_unresolved_online_match() -> void:
 	_show_loading("RESTORING ORIGINAL MATCH...")
 
 	var restored: Dictionary = await _online_session.restore_unresolved_match_with_retry()
@@ -180,21 +189,360 @@ func _force_resume_unresolved_ranked_match() -> void:
 		_show_top_menu()
 		return
 
-	if str(snapshot.get("match_mode", "")) != "ranked":
-		# Friend UIは工程4後半。lockは解除せずTopへ戻す。
+	var match_mode := str(snapshot.get("match_mode", ""))
+	if match_mode == "ranked":
+		if destination == "battle":
+			_ranked_rating_before = {}
+			_show_ranked_online_battle(snapshot)
+			return
+		if destination == "ranked_result":
+			_show_ranked_result_from_snapshot(snapshot)
+			return
 		_show_top_menu()
 		return
 
-	if destination == "battle":
-		_ranked_rating_before = {}
-		_show_ranked_online_battle(snapshot)
-		return
-
-	if destination == "ranked_result":
-		_show_ranked_result_from_snapshot(snapshot)
-		return
+	if match_mode == "friend":
+		_friend_room_code = str(snapshot.get("friend_room_code", ""))
+		_update_friend_character_from_snapshot(snapshot)
+		if _friend_room_code.is_empty():
+			_show_top_menu()
+			return
+		if destination == "battle":
+			_show_friend_online_battle(snapshot)
+			return
+		if destination == "friend_character_select":
+			var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+			if not bool(ack_result.get("ok", false)):
+				_show_top_menu()
+				return
+			var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
+			if not bool(room.get("ok", false)):
+				_show_friend_menu(str(room.get("message", "Friend roomを復元できませんでした。")))
+				return
+			_set_friend_room(room)
+			_show_friend_character_select()
+			return
 
 	_show_top_menu()
+
+
+func _on_friend_requested(screen: Control) -> void:
+	if is_instance_valid(screen):
+		screen.call("set_status", "Nakamaへ接続中...")
+
+	if not _online_session.is_authenticated():
+		var auth_result: Dictionary = await _online_session.authenticate_local_device()
+		if not bool(auth_result.get("ok", false)):
+			if is_instance_valid(screen) and _current_screen == screen:
+				screen.call("set_status", str(auth_result.get("message", "認証に失敗しました。")))
+			return
+
+	var active: Dictionary = await _online_session.refresh_active_online_match()
+	if not bool(active.get("ok", false)):
+		if is_instance_valid(screen) and _current_screen == screen:
+			screen.call("set_status", str(active.get("message", "未解決対戦を確認できませんでした。")))
+		return
+	if bool(active.get("active", false)):
+		await _force_resume_unresolved_online_match()
+		return
+
+	var realtime_result: Dictionary = await _online_session.connect_realtime_socket()
+	if not bool(realtime_result.get("ok", false)):
+		if is_instance_valid(screen) and _current_screen == screen:
+			screen.call("set_status", str(realtime_result.get("message", "Realtime接続に失敗しました。")))
+		return
+
+	_show_friend_menu()
+
+
+func _show_friend_menu(message: String = "") -> void:
+	var screen = _replace_screen(FRIEND_MATCH_MENU_SCENE)
+	screen.connect("create_requested", Callable(self, "_create_friend_room"))
+	screen.connect("join_requested", Callable(self, "_show_friend_join"))
+	screen.connect("back_requested", Callable(self, "_show_battle_mode_select"))
+	if not message.is_empty():
+		screen.call("set_status", message)
+
+
+func _create_friend_room() -> void:
+	_show_loading("CREATING FRIEND ROOM...")
+	var room: Dictionary = await _online_session.create_friend_room()
+	if not bool(room.get("ok", false)):
+		_show_friend_menu(str(room.get("message", "Friend roomを作成できませんでした。")))
+		return
+	_set_friend_room(room)
+	_show_friend_lobby()
+
+
+func _show_friend_join(message: String = "") -> void:
+	var screen = _replace_screen(FRIEND_ROOM_JOIN_SCENE)
+	screen.connect("join_requested", Callable(self, "_join_friend_room"))
+	screen.connect("back_requested", Callable(self, "_show_friend_menu"))
+	if not message.is_empty():
+		screen.call("set_status", message)
+
+
+func _join_friend_room(room_code: String) -> void:
+	_show_loading("JOINING FRIEND ROOM...")
+	var room: Dictionary = await _online_session.join_friend_room(room_code)
+	if not bool(room.get("ok", false)):
+		_show_friend_join(str(room.get("message", "Friend roomへ参加できませんでした。")))
+		return
+	_set_friend_room(room)
+	_show_friend_lobby()
+
+
+func _show_friend_lobby() -> void:
+	if _friend_room.is_empty() or _friend_room_code.is_empty():
+		_show_friend_menu("Friend room情報がありません。")
+		return
+	var local_user_id := _session_user_id()
+	var screen = FRIEND_ROOM_LOBBY_SCENE.instantiate()
+	screen.call("configure", _friend_room, local_user_id)
+	_replace_screen_instance(screen)
+	screen.connect("refresh_requested", Callable(self, "_refresh_friend_lobby").bind(screen))
+	screen.connect("character_select_requested", Callable(self, "_show_friend_character_select"))
+	screen.connect("ready_requested", Callable(self, "_set_friend_ready").bind(screen))
+	screen.connect("leave_requested", Callable(self, "_leave_friend_room").bind(screen))
+	call_deferred("_refresh_friend_lobby", screen)
+
+
+func _refresh_friend_lobby(screen: Control) -> void:
+	if _friend_refresh_in_progress or not is_instance_valid(screen) or _current_screen != screen:
+		return
+	if _friend_room_code.is_empty():
+		return
+	_friend_refresh_in_progress = true
+	var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
+	_friend_refresh_in_progress = false
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+	if not bool(room.get("ok", false)):
+		screen.call("set_status", str(room.get("message", "Friend room状態を取得できませんでした。")))
+		return
+	_set_friend_room(room)
+	screen.call("update_room", room)
+	if str(room.get("state", "")) == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
+		await _join_friend_match(room)
+
+
+func _show_friend_character_select() -> void:
+	var screen = CHARACTER_SELECT_SCENE.instantiate()
+	screen.call("configure_friend", _friend_character_id)
+	_replace_screen_instance(screen)
+	screen.connect("friend_character_selected", Callable(self, "_set_friend_character"))
+	screen.connect("back_requested", Callable(self, "_show_friend_lobby"))
+
+
+func _set_friend_character(character_id: String) -> void:
+	_show_loading("UPDATING CHARACTER...")
+	var room: Dictionary = await _online_session.set_friend_room_character(
+		_friend_room_code,
+		character_id
+	)
+	if not bool(room.get("ok", false)):
+		_show_friend_lobby()
+		if is_instance_valid(_current_screen):
+			_current_screen.call("set_status", str(room.get("message", "Characterを更新できませんでした。")))
+		return
+	_friend_character_id = character_id
+	_set_friend_room(room)
+	_show_friend_lobby()
+
+
+func _set_friend_ready(ready: bool, screen: Control) -> void:
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+	screen.call("set_status", "READY状態をserverへ送信中...")
+	var room: Dictionary = await _online_session.set_friend_room_ready(_friend_room_code, ready)
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+	if not bool(room.get("ok", false)):
+		screen.call("set_status", str(room.get("message", "Ready状態を更新できませんでした。")))
+		return
+	_set_friend_room(room)
+	screen.call("update_room", room)
+	screen.call("set_status", "")
+	if str(room.get("state", "")) == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
+		await _join_friend_match(room)
+
+
+func _join_friend_match(room: Dictionary) -> void:
+	if _friend_join_in_progress:
+		return
+	_friend_join_in_progress = true
+	_set_friend_room(room)
+	_show_loading("JOINING FRIEND MATCH...")
+
+	if not _online_session.is_realtime_connected():
+		var realtime_result: Dictionary = await _online_session.connect_realtime_socket()
+		if not bool(realtime_result.get("ok", false)):
+			_friend_join_in_progress = false
+			_show_friend_lobby()
+			if is_instance_valid(_current_screen):
+				_current_screen.call("set_status", str(realtime_result.get("message", "Realtime接続に失敗しました。")))
+			return
+
+	var joined: Dictionary = await _online_session.join_friend_match_from_room(room)
+	_friend_join_in_progress = false
+	if not bool(joined.get("ok", false)):
+		_show_friend_lobby()
+		if is_instance_valid(_current_screen):
+			_current_screen.call("set_status", str(joined.get("message", "Friend matchへjoinできませんでした。")))
+		return
+	_show_friend_pre_battle()
+
+
+func _show_friend_pre_battle() -> void:
+	var screen = PRE_BATTLE_SCENE.instantiate()
+	screen.call("configure_match_mode", "friend")
+	_replace_screen_instance(screen)
+	screen.connect("completed", Callable(self, "_on_friend_pre_battle_completed"))
+
+
+func _on_friend_pre_battle_completed(snapshot: Dictionary) -> void:
+	if bool(snapshot.get("match_finished", false)):
+		_show_friend_result_from_snapshot(snapshot)
+		return
+	_show_friend_online_battle(snapshot)
+
+
+func _show_friend_online_battle(snapshot: Dictionary) -> void:
+	_friend_room_code = str(snapshot.get("friend_room_code", _friend_room_code))
+	_update_friend_character_from_snapshot(snapshot)
+	var screen = ONLINE_BATTLE_SCENE.instantiate()
+	screen.call("configure", snapshot, {})
+	_replace_screen_instance(screen)
+	screen.connect("friend_match_completed", Callable(self, "_show_friend_result"))
+
+
+func _show_friend_result_from_snapshot(snapshot: Dictionary) -> void:
+	var summary := _friend_summary_from_snapshot(snapshot)
+	_show_friend_result(summary)
+
+
+func _friend_summary_from_snapshot(snapshot: Dictionary) -> Dictionary:
+	var local_user_id := _session_user_id()
+	var character_map: Dictionary = snapshot.get("character_id_by_user", {})
+	var opponent_user_id := ""
+	for user_id in character_map.keys():
+		if str(user_id) != local_user_id:
+			opponent_user_id = str(user_id)
+			break
+	var winner_user_id := str(snapshot.get("match_winner_user_id", ""))
+	var is_draw := bool(snapshot.get("match_draw", false)) \
+		or str(snapshot.get("match_finish_cause", "")) == "BO3_DRAW"
+	var loser_user_id := ""
+	if not is_draw:
+		loser_user_id = opponent_user_id if winner_user_id == local_user_id else local_user_id
+	return {
+		"mode": "friend",
+		"match_id": str(_online_session.current_match_id),
+		"friend_room_code": str(snapshot.get("friend_room_code", _friend_room_code)),
+		"winner_user_id": winner_user_id,
+		"loser_user_id": loser_user_id,
+		"local_user_id": local_user_id,
+		"local_won": not is_draw and winner_user_id == local_user_id,
+		"is_draw": is_draw,
+		"local_character_id": str(character_map.get(local_user_id, _friend_character_id)),
+		"opponent_character_id": str(character_map.get(opponent_user_id, "")),
+		"round_wins_by_user": snapshot.get("round_wins_by_user", {}).duplicate(true),
+		"final_round_number": int(snapshot.get("round_number", 1)),
+		"finish_cause": str(snapshot.get("match_finish_cause", "")),
+	}
+
+
+func _show_friend_result(summary: Dictionary) -> void:
+	_show_loading("SYNCING FRIEND RESULT...")
+	_friend_room_code = str(summary.get("friend_room_code", _friend_room_code))
+	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
+
+	if not _friend_room_code.is_empty():
+		var room: Dictionary = await _wait_for_friend_room_post_match(_friend_room_code)
+		if not room.is_empty():
+			_set_friend_room(room)
+
+	var screen = MATCH_RESULT_SCENE.instantiate()
+	screen.call("configure", summary)
+	_replace_screen_instance(screen)
+	screen.connect("rematch_requested", Callable(self, "_on_friend_rematch_requested"))
+	screen.connect("character_select_requested", Callable(self, "_show_friend_character_select"))
+	screen.connect("leave_room_requested", Callable(self, "_leave_friend_room").bind(screen))
+
+
+func _on_friend_rematch_requested() -> void:
+	if _friend_room_code.is_empty():
+		_show_friend_menu("Friend room情報がありません。")
+		return
+	var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
+	if not bool(room.get("ok", false)):
+		_show_friend_menu(str(room.get("message", "Friend roomを取得できませんでした。")))
+		return
+	_set_friend_room(room)
+	_show_friend_lobby()
+
+
+func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
+	var deadline := Time.get_ticks_msec() + 5000
+	var latest: Dictionary = {}
+	while Time.get_ticks_msec() < deadline:
+		var room: Dictionary = await _online_session.get_friend_room_status(room_code)
+		if bool(room.get("ok", false)):
+			latest = room.duplicate(true)
+			if str(room.get("state", "")) in ["POST_MATCH", "LOBBY", "WAITING"]:
+				return latest
+		await get_tree().create_timer(0.05).timeout
+	return latest
+
+
+func _leave_friend_room(_screen: Control = null) -> void:
+	if _friend_room_code.is_empty():
+		_clear_friend_room_context()
+		_show_friend_menu()
+		return
+	_show_loading("LEAVING FRIEND ROOM...")
+	var result: Dictionary = await _online_session.leave_friend_room(_friend_room_code)
+	if not bool(result.get("ok", false)):
+		_show_friend_lobby()
+		if is_instance_valid(_current_screen):
+			_current_screen.call("set_status", str(result.get("message", "Friend roomから退出できませんでした。")))
+		return
+	_clear_friend_room_context()
+	_show_friend_menu()
+
+
+func _set_friend_room(room: Dictionary) -> void:
+	_friend_room = room.duplicate(true)
+	_friend_room_code = str(room.get("room_code", _friend_room_code))
+	var role := str(room.get("role", ""))
+	var selected := ""
+	if role == "host":
+		selected = str(room.get("host_character_id", ""))
+	elif role == "guest":
+		selected = str(room.get("guest_character_id", ""))
+	if not selected.is_empty():
+		_friend_character_id = selected
+
+
+func _update_friend_character_from_snapshot(snapshot: Dictionary) -> void:
+	var local_user_id := _session_user_id()
+	var character_map: Dictionary = snapshot.get("character_id_by_user", {})
+	var selected := str(character_map.get(local_user_id, ""))
+	if not selected.is_empty():
+		_friend_character_id = selected
+
+
+func _clear_friend_room_context() -> void:
+	_friend_room_code = ""
+	_friend_room = {}
+	_friend_join_in_progress = false
+	_friend_refresh_in_progress = false
+
+
+func _session_user_id() -> String:
+	return str(_online_session.session.user_id) if _online_session.session != null else ""
 
 
 func _show_local_character_select() -> void:
@@ -221,7 +569,7 @@ func _show_ranked_matching(character_id: String) -> void:
 			_current_screen.call("set_status", str(active.get("message", "未解決対戦を確認できませんでした。")))
 		return
 	if bool(active.get("active", false)):
-		await _force_resume_unresolved_ranked_match()
+		await _force_resume_unresolved_online_match()
 		return
 
 	_ranked_character_id = character_id

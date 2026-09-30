@@ -3,6 +3,7 @@ extends Control
 signal rematch_requested
 signal next_match_requested
 signal character_select_requested
+signal leave_room_requested
 signal top_requested
 
 var _summary: Dictionary = {}
@@ -26,6 +27,8 @@ func _ready() -> void:
 	var mode := str(_summary.get("mode", "local"))
 	if mode == "ranked":
 		_build_ranked_result(root)
+	elif mode == "friend":
+		_build_friend_result(root)
 	else:
 		_build_local_result(root)
 
@@ -122,6 +125,67 @@ func _build_ranked_result(root: VBoxContainer) -> void:
 		top_requested.emit()
 	)
 	actions.add_child(top)
+
+
+func _build_friend_result(root: VBoxContainer) -> void:
+	var title := Label.new()
+	if bool(_summary.get("is_draw", false)):
+		title.text = "DRAW"
+	else:
+		title.text = "YOU WIN" if bool(_summary.get("local_won", false)) else "YOU LOSE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	root.add_child(title)
+
+	var local_user_id := str(_summary.get("local_user_id", ""))
+	var round_wins: Dictionary = _summary.get("round_wins_by_user", {})
+	var local_score := int(round_wins.get(local_user_id, 0))
+	var opponent_score := 0
+	for user_id in round_wins.keys():
+		if str(user_id) != local_user_id:
+			opponent_score = int(round_wins.get(user_id, 0))
+			break
+
+	var details := Label.new()
+	details.text = "%s  %d - %d  %s" % [
+		str(_summary.get("local_character_id", "")),
+		local_score,
+		opponent_score,
+		str(_summary.get("opponent_character_id", "")),
+	]
+	details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(details)
+
+	var note := Label.new()
+	note.text = "NO RATING CHANGE (FRIEND MATCH)"
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	root.add_child(note)
+
+	var actions := HBoxContainer.new()
+	actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	actions.add_theme_constant_override("separation", 12)
+	root.add_child(actions)
+
+	var rematch := Button.new()
+	rematch.text = "REMATCH"
+	rematch.pressed.connect(func() -> void:
+		rematch_requested.emit()
+	)
+	actions.add_child(rematch)
+
+	var character_select := Button.new()
+	character_select.text = "CHANGE CHARACTER"
+	character_select.pressed.connect(func() -> void:
+		character_select_requested.emit()
+	)
+	actions.add_child(character_select)
+
+	var leave_room := Button.new()
+	leave_room.text = "LEAVE ROOM"
+	leave_room.pressed.connect(func() -> void:
+		leave_room_requested.emit()
+	)
+	actions.add_child(leave_room)
 
 
 func _build_local_result(root: VBoxContainer) -> void:

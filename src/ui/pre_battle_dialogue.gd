@@ -9,6 +9,11 @@ var _online_session = null
 var _label: Label
 var _completed: bool = false
 var _snapshot: Dictionary = {}
+var _expected_match_mode: String = "ranked"
+
+
+func configure_match_mode(match_mode: String) -> void:
+	_expected_match_mode = match_mode if match_mode in ["ranked", "friend"] else "ranked"
 
 
 func _ready() -> void:
@@ -41,7 +46,7 @@ func _ready() -> void:
 
 
 func _on_snapshot(snapshot: Dictionary) -> void:
-	if _completed or str(snapshot.get("match_mode", "")) != "ranked":
+	if _completed or str(snapshot.get("match_mode", "")) != _expected_match_mode:
 		return
 	_snapshot = snapshot.duplicate(true)
 	var character_map: Dictionary = snapshot.get("character_id_by_user", {})

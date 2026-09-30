@@ -4,10 +4,12 @@ const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 
 signal battle_requested(player_one_id: String, player_two_id: String)
 signal ranked_character_selected(character_id: String)
+signal friend_character_selected(character_id: String)
 signal back_requested
 
 const MODE_LOCAL := "local"
 const MODE_RANKED := "ranked"
+const MODE_FRIEND := "friend"
 
 var _mode: String = MODE_LOCAL
 var _player_one: OptionButton
@@ -23,6 +25,11 @@ func configure(player_one_id: String, player_two_id: String) -> void:
 
 func configure_ranked(character_id: String) -> void:
 	set_meta("mode", MODE_RANKED)
+	set_meta("initial_player_one", character_id)
+
+
+func configure_friend(character_id: String) -> void:
+	set_meta("mode", MODE_FRIEND)
 	set_meta("initial_player_one", character_id)
 
 
@@ -48,7 +55,7 @@ func _ready() -> void:
 
 	var player_one_box := VBoxContainer.new()
 	var player_one_label := Label.new()
-	player_one_label.text = "YOUR AHOGE" if _mode == MODE_RANKED else "PLAYER 1"
+	player_one_label.text = "YOUR AHOGE" if _mode != MODE_LOCAL else "PLAYER 1"
 	player_one_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	player_one_box.add_child(player_one_label)
 	_player_one = _create_character_selector()
@@ -69,9 +76,13 @@ func _ready() -> void:
 	_preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(_preview)
 
-	if _mode == MODE_RANKED:
+	if _mode != MODE_LOCAL:
 		var note := Label.new()
-		note.text = "Ranked Match / Rating対象"
+		note.text = (
+			"Ranked Match / Rating対象"
+			if _mode == MODE_RANKED
+			else "Friend Match / Rating変動なし"
+		)
 		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		root.add_child(note)
 
@@ -88,7 +99,7 @@ func _ready() -> void:
 	actions.add_child(back)
 
 	var start := Button.new()
-	start.text = "DECIDE" if _mode == MODE_RANKED else "START LOCAL BATTLE"
+	start.text = "DECIDE" if _mode != MODE_LOCAL else "START LOCAL BATTLE"
 	start.pressed.connect(_on_start_pressed)
 	actions.add_child(start)
 
@@ -131,7 +142,7 @@ func _selected_id(selector: OptionButton) -> String:
 
 func _update_preview() -> void:
 	var player_one = CharacterCatalogScript.get_by_id(_selected_id(_player_one))
-	if _mode == MODE_RANKED:
+	if _mode != MODE_LOCAL:
 		_preview.text = "%s [%s / %s]" % [
 			player_one.display_name,
 			player_one.ahoge_type_name(),
@@ -153,5 +164,8 @@ func _update_preview() -> void:
 func _on_start_pressed() -> void:
 	if _mode == MODE_RANKED:
 		ranked_character_selected.emit(_selected_id(_player_one))
+		return
+	if _mode == MODE_FRIEND:
+		friend_character_selected.emit(_selected_id(_player_one))
 		return
 	battle_requested.emit(_selected_id(_player_one), _selected_id(_player_two))

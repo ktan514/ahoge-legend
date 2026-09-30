@@ -559,6 +559,8 @@ function broadcastMatchSnapshot(
     JSON.stringify({
       server_tick: tick,
       match_mode: state.matchMode,
+      friend_room_code: state.friendRoomCode,
+      friend_match_generation: state.friendMatchGeneration,
       round_number: state.roundNumber,
       round_wins_by_user: roundWinsSnapshot(state),
       round_hit_count_by_user: state.roundHitCountByUser,
@@ -1676,6 +1678,8 @@ function persistActiveMatchResultIfNeeded(
   const snapshot = {
     server_tick: tick,
     match_mode: state.matchMode,
+    friend_room_code: state.friendRoomCode,
+    friend_match_generation: state.friendMatchGeneration,
     round_number: state.roundNumber,
     round_wins_by_user: roundWinsSnapshot(state),
     round_hit_count_by_user: state.roundHitCountByUser,
