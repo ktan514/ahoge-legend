@@ -31,7 +31,7 @@ on:
       - "scripts/client-round-timer-smoke.sh"
       - "scripts/client-hit-limit-smoke.sh"
       - "scripts/client-timeout-winner-smoke.sh"
-      - "scripts/client-overtime-smoke.sh"
+      - "scripts/client-timeout-draw-smoke.sh"
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
@@ -70,7 +70,7 @@ on:
       - "tests/round_timer_smoke.gd"
       - "tests/hit_limit_smoke.gd"
       - "tests/timeout_winner_smoke.gd"
-      - "tests/overtime_smoke.gd"
+      - "tests/timeout_draw_smoke.gd"
       - "tests/round_result_smoke.gd"
       - "tests/bo3_smoke.gd"
       - "tests/match_result_smoke.gd"
@@ -106,7 +106,7 @@ on:
       - "scripts/client-round-timer-smoke.sh"
       - "scripts/client-hit-limit-smoke.sh"
       - "scripts/client-timeout-winner-smoke.sh"
-      - "scripts/client-overtime-smoke.sh"
+      - "scripts/client-timeout-draw-smoke.sh"
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
@@ -145,7 +145,7 @@ on:
       - "tests/round_timer_smoke.gd"
       - "tests/hit_limit_smoke.gd"
       - "tests/timeout_winner_smoke.gd"
-      - "tests/overtime_smoke.gd"
+      - "tests/timeout_draw_smoke.gd"
       - "tests/round_result_smoke.gd"
       - "tests/bo3_smoke.gd"
       - "tests/match_result_smoke.gd"
@@ -330,9 +330,13 @@ jobs:
         if: matrix.group == 'long'
         run: ./scripts/client-timeout-winner-smoke.sh
 
-      - name: Godot authoritative Overtime smoke
+      - name: Seed unequal Player Rating for Draw smoke
         if: matrix.group == 'long'
-        run: ./scripts/client-overtime-smoke.sh
+        run: ./scripts/client-match-result-smoke.sh
+
+      - name: Godot authoritative timeout Draw smoke
+        if: matrix.group == 'long'
+        run: ./scripts/client-timeout-draw-smoke.sh
 
       - name: Shutdown
         if: always()

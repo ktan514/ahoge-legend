@@ -484,7 +484,7 @@ func _read_ahoge_ranking(client, session) -> Dictionary:
 
 
 func _same_rating_record(before: Dictionary, after: Dictionary) -> bool:
-	for key in ["rating", "wins", "losses", "season_id"]:
+	for key in ["rating", "wins", "losses", "draws", "season_id"]:
 		if str(before.get(key, "")) != str(after.get(key, "")):
 			return false
 	return true

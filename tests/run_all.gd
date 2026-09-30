@@ -46,7 +46,7 @@ func _init() -> void:
 	_test_authoritative_hit_count_protocol()
 	_test_authoritative_round_timer_protocol()
 	_test_authoritative_round_locked_protocol()
-	_test_authoritative_overtime_protocol()
+	_test_authoritative_draw_protocol()
 	_test_authoritative_round_result_protocol()
 	_test_authoritative_bo3_protocol()
 	_test_authoritative_match_result_protocol()
@@ -594,17 +594,34 @@ func _test_authoritative_round_locked_protocol() -> void:
 	_expect_equal(event["state"], "ROUND_LOCKED", "ROUND_LOCKED状態をdecodeできる")
 
 
-func _test_authoritative_overtime_protocol() -> void:
-	var payload := JSON.stringify({
-		"server_tick": 900,
-	})
-	var event := CombatInputProtocolScript.parse_round_overtime_started_payload(payload)
-	_expect_equal(int(event["server_tick"]), 900, "Overtime開始server tickをdecodeできる")
-
-	var invalid := CombatInputProtocolScript.parse_round_overtime_started_payload(
-		JSON.stringify({"server_tick": -1})
+func _test_authoritative_draw_protocol() -> void:
+	var draw_round := CombatInputProtocolScript.parse_round_result_payload(
+		JSON.stringify({
+			"round_number": 1,
+			"winner_user_id": "",
+			"loser_user_id": "",
+			"finish_cause": "TIMEOUT_DRAW",
+			"winner_hits": 2,
+			"loser_hits": 2,
+			"is_draw": true,
+			"server_tick": 900,
+		})
 	)
-	_expect_true(invalid.is_empty(), "負のOvertime server tickを拒否する")
+	_expect_true(bool(draw_round.get("is_draw", false)), "timeout同点RoundをDrawとしてdecodeできる")
+	_expect_equal(str(draw_round.get("finish_cause", "")), "TIMEOUT_DRAW", "Draw Round finish causeを保持する")
+
+	var legacy_overtime := CombatInputProtocolScript.parse_round_result_payload(
+		JSON.stringify({
+			"round_number": 1,
+			"winner_user_id": "player-1",
+			"loser_user_id": "player-2",
+			"finish_cause": "OVERTIME_HIT",
+			"winner_hits": 3,
+			"loser_hits": 2,
+			"server_tick": 901,
+		})
+	)
+	_expect_true(legacy_overtime.is_empty(), "旧OVERTIME_HIT Round Resultを拒否する")
 
 
 func _test_authoritative_round_result_protocol() -> void:
@@ -615,6 +632,7 @@ func _test_authoritative_round_result_protocol() -> void:
 		"finish_cause": "HIT_LIMIT",
 		"winner_hits": 5,
 		"loser_hits": 2,
+		"is_draw": false,
 		"server_tick": 1000,
 	})
 	var event := CombatInputProtocolScript.parse_round_result_payload(payload)
@@ -631,6 +649,7 @@ func _test_authoritative_round_result_protocol() -> void:
 			"finish_cause": "DISCONNECT_FORFEIT",
 			"winner_hits": 0,
 			"loser_hits": 0,
+			"is_draw": false,
 			"server_tick": 2000,
 		})
 	)
@@ -658,6 +677,7 @@ func _test_authoritative_bo3_protocol() -> void:
 	var score_payload := JSON.stringify({
 		"completed_round_number": 2,
 		"round_winner_user_id": "player-2",
+		"round_draw": false,
 		"round_wins_by_user": {"player-1": 1, "player-2": 1},
 		"match_finished": false,
 		"server_tick": 1200,
@@ -666,6 +686,18 @@ func _test_authoritative_bo3_protocol() -> void:
 	_expect_equal(int(score_event["completed_round_number"]), 2, "BO3 completed roundをdecodeできる")
 	_expect_equal(int(score_event["round_wins_by_user"]["player-1"]), 1, "BO3 P1 scoreをdecodeできる")
 	_expect_equal(bool(score_event["match_finished"]), false, "BO3継続状態をdecodeできる")
+
+	var draw_score := CombatInputProtocolScript.parse_bo3_score_changed_payload(
+		JSON.stringify({
+			"completed_round_number": 2,
+			"round_winner_user_id": "",
+			"round_draw": true,
+			"round_wins_by_user": {"player-1": 2, "player-2": 2},
+			"match_finished": true,
+			"server_tick": 1200,
+		})
+	)
+	_expect_true(bool(draw_score.get("round_draw", false)), "BO3 Draw Roundをdecodeできる")
 
 	var started_payload := JSON.stringify({
 		"round_number": 3,
@@ -693,6 +725,7 @@ func _test_authoritative_match_result_protocol() -> void:
 		"round_wins_by_user": {"player-1": 2, "player-2": 1},
 		"final_round_number": 3,
 		"finish_cause": "BO3",
+		"is_draw": false,
 		"server_tick": 1300,
 	})
 	var event := CombatInputProtocolScript.parse_match_result_payload(payload)
@@ -700,6 +733,20 @@ func _test_authoritative_match_result_protocol() -> void:
 	_expect_equal(int(event["round_wins_by_user"]["player-1"]), 2, "Match Result winner scoreをdecodeできる")
 	_expect_equal(int(event["final_round_number"]), 3, "Match Result final roundをdecodeできる")
 	_expect_equal(str(event["finish_cause"]), "BO3", "Match Result finish causeをdecodeできる")
+
+	var draw_event := CombatInputProtocolScript.parse_match_result_payload(
+		JSON.stringify({
+			"winner_user_id": "",
+			"loser_user_id": "",
+			"round_wins_by_user": {"player-1": 2, "player-2": 2},
+			"final_round_number": 2,
+			"finish_cause": "BO3_DRAW",
+			"is_draw": true,
+			"server_tick": 1301,
+		})
+	)
+	_expect_true(bool(draw_event.get("is_draw", false)), "Match Drawをdecodeできる")
+	_expect_equal(str(draw_event.get("finish_cause", "")), "BO3_DRAW", "Match Draw finish causeを保持する")
 
 	var legacy_disconnect_payload := JSON.stringify({
 		"winner_user_id": "player-1",
@@ -771,6 +818,7 @@ func _test_authoritative_match_snapshot_protocol() -> void:
 		"round_finished": false,
 		"round_winner_user_id": "",
 		"round_finish_cause": "NONE",
+		"round_draw": false,
 		"round_awaiting_overtime": false,
 		"round_overtime": false,
 		"round_countdown_active": false,
@@ -778,6 +826,7 @@ func _test_authoritative_match_snapshot_protocol() -> void:
 		"match_finished": false,
 		"match_winner_user_id": "",
 		"match_finish_cause": "NONE",
+		"match_draw": false,
 		"character_id_by_user": {"player-1": "LONG_TEST", "player-2": "SHORT_TEST"},
 		"last_input_sequence": 12,
 		"combat_state_by_user": {

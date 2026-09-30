@@ -441,6 +441,11 @@ func _run() -> void:
 		_fail("終了済みmatch再join後にRatingが二重更新されました。")
 		return
 
+	var ack_result: Dictionary = await online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		_fail("Match Result検証後にP1 active matchをackできませんでした。")
+		return
+
 	await online_session.realtime_socket.leave_match_async(p1_joined[0])
 	await _second_socket.leave_match_async(_second_match_id)
 	online_session.disconnect_realtime_socket()

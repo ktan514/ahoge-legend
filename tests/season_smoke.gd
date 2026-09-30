@@ -74,6 +74,48 @@ func _run() -> void:
 		_fail("前Season終了時刻と現在Season開始時刻が連続していません。")
 		return
 
+	var hide_start_ms := current_start - 60 * 60 * 1000
+	var hidden_until_ms := current_start + 10 * 60 * 1000
+	var just_before_hide := await _rpc_dict(
+		client,
+		session,
+		"ahoge_season_metadata",
+		JSON.stringify({"at_unix_ms": hide_start_ms - 1})
+	)
+	var at_hide_start := await _rpc_dict(
+		client,
+		session,
+		"ahoge_season_metadata",
+		JSON.stringify({"at_unix_ms": hide_start_ms})
+	)
+	if just_before_hide.is_empty() or at_hide_start.is_empty():
+		_fail("旧Seasonランキング非公開境界を取得できませんでした。")
+		return
+	if not bool(just_before_hide.get("ranking_public", false)):
+		_fail("月末22:59:59.999で旧Season Rankingが非公開です。")
+		return
+	if bool(at_hide_start.get("ranking_public", true)):
+		_fail("月末23:00で旧Season Rankingが非公開になりません。")
+		return
+	if int(at_hide_start.get("ranking_hidden_until_unix_ms", -1)) != hidden_until_ms:
+		_fail("旧Season Rankingの再公開時刻が翌月00:10ではありません。")
+		return
+	if not bool(at_boundary.get("ranking_public", false)):
+		_fail("翌月00:00から新Season Rankingが公開されていません。")
+		return
+
+	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
+	if current_start + 5 * 60 * 1000 <= now_ms:
+		var after_boundary := await _rpc_dict(
+			client,
+			session,
+			"ahoge_season_metadata",
+			JSON.stringify({"at_unix_ms": current_start + 5 * 60 * 1000})
+		)
+		if after_boundary.is_empty() or not bool(after_boundary.get("ranking_public", false)):
+			_fail("翌月00:05の新Season Rankingが公開状態ではありません。")
+			return
+
 	var previous_again := await _rpc_dict(
 		client,
 		session,
@@ -116,20 +158,30 @@ func _run() -> void:
 			"season_id": previous_id,
 		})
 	)
-	if not _assert_default_ahoge_rating(
-		current_ahoge_rating,
-		current_id,
-		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
-	):
-		_fail("新Season Ahoge Rating初期値が1500ではありません。")
-		return
-	if not _assert_default_ahoge_rating(
-		previous_ahoge_rating,
-		previous_id,
-		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
-	):
-		_fail("未作成の過去Season Ahoge Rating初期値が1500ではありません。")
-		return
+	if bool(current_ahoge_rating.get("ranking_public", true)):
+		if not _assert_default_ahoge_rating(
+			current_ahoge_rating,
+			current_id,
+			OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+		):
+			_fail("新Season Ahoge Rating初期値が1500ではありません。")
+			return
+	else:
+		if int(current_ahoge_rating.get("ranking_hidden_until_unix_ms", -1)) <= 0:
+			_fail("非公開Ahoge Ratingに再公開時刻がありません。")
+			return
+	if bool(previous_ahoge_rating.get("ranking_public", true)):
+		if not _assert_default_ahoge_rating(
+			previous_ahoge_rating,
+			previous_id,
+			OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+		):
+			_fail("未作成の過去Season Ahoge Rating初期値が1500ではありません。")
+			return
+	else:
+		if int(previous_ahoge_rating.get("ranking_hidden_until_unix_ms", -1)) <= 0:
+			_fail("旧Season非公開応答に再公開時刻がありません。")
+			return
 
 	var previous_player_ranking := await _rpc_dict(
 		client,

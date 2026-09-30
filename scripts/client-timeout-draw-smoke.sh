@@ -11,7 +11,7 @@ LOG_FILE="$(mktemp)"
 trap 'rm -f "$LOG_FILE"' EXIT
 
 set +e
-./scripts/godot-strict.sh --headless --path . --script res://tests/overtime_smoke.gd 2>&1 | tee "$LOG_FILE"
+./scripts/godot-strict.sh --headless --path . --script res://tests/timeout_draw_smoke.gd 2>&1 | tee "$LOG_FILE"
 STATUS=${PIPESTATUS[0]}
 set -e
 
@@ -20,6 +20,6 @@ if [ "$STATUS" -ne 0 ]; then
 fi
 
 if grep -Eq 'Authorization[^\n]*Bearer|Bearer[[:space:]]+[A-Za-z0-9._-]+|/ws\?[^\n]*token=' "$LOG_FILE"; then
-  echo "認証tokenがOvertimeログへ出力されています。" >&2
+  echo "認証tokenがTimeout Draw smokeログへ出力されています。" >&2
   exit 1
 fi
