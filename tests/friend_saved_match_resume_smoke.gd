@@ -237,7 +237,7 @@ func _run() -> void:
 		return
 
 	# 終了済み状態でも同じDevice IDで再起動する。
-	# GuestはHost専用Resultへ復帰し、操作ボタンを持たずHostの選択を待つ。
+	# GuestはHost専用Resultへ復帰し、REMATCH / CHANGE CHARACTERは持たずLEAVE ROOMだけ持つ。
 	online_session.clear_runtime_session_preserving_match()
 	var finished_app = AppRootScene.instantiate()
 	get_root().add_child(finished_app)
@@ -248,10 +248,14 @@ func _run() -> void:
 		_fail("終了済みFriend match後のP2再認証でuser_idが変化しました。")
 		return
 	var guest_result = finished_app.get_child(0)
-	for button_text in ["REMATCH", "CHANGE CHARACTER", "LEAVE ROOM"]:
-		if _find_button(guest_result, button_text) != null:
-			_fail("Guest Friend Resultに操作ボタン%sが表示されています。" % button_text)
-			return
+	if _find_button(guest_result, "REMATCH") != null \
+			or _find_button(guest_result, "CHANGE CHARACTER") != null:
+		_fail("Guest Friend ResultにHost専用操作ボタンが表示されています。")
+		return
+	var guest_leave_button := _find_button(guest_result, "LEAVE ROOM")
+	if guest_leave_button == null:
+		_fail("Guest Friend ResultにLEAVE ROOMがありません。")
+		return
 	if not _has_label_text(guest_result, "WAITING FOR HOST..."):
 		_fail("Guest Friend ResultにHOST選択待ち表示がありません。")
 		return
@@ -261,22 +265,35 @@ func _run() -> void:
 		_fail("Friend Result復帰後もP2のactive match lockが残っています。")
 		return
 
-	# HostのResult contextをackした後、Host LEAVE ROOMでroomを閉じる。
-	# Guestはserver room消滅をpollして自動的にTopMenuへ戻る。
+	# Guestが自分だけLEAVE ROOMするとGuestはTopMenuへ戻り、Host roomはWAITINGへ戻る。
+	guest_result.emit_signal("leave_room_requested")
+	if not await _wait_screen(finished_app, "TopMenu", 5000):
+		_fail("Guest LEAVE ROOM後にP2がTopMenuへ戻りませんでした。")
+		return
+
+	var host_room := await _rpc_dict(
+		host_client,
+		host_session,
+		OnlineConfigScript.FRIEND_ROOM_RPC_STATUS,
+		{"room_code": room_code}
+	)
+	if host_room.is_empty() \
+			or str(host_room.get("state", "")) != "WAITING" \
+			or not str(host_room.get("guest_user_id", "")).is_empty():
+		_fail("Guest Result退出後にHost roomが次Guest待ちへ戻っていません。")
+		return
+
 	if not await _ack_host_result(host_client, host_session, match_id, 5000):
 		_fail("P1 Friend Result contextをackできませんでした。")
 		return
-	var host_leave := await _rpc_dict(
+	var host_close := await _rpc_dict(
 		host_client,
 		host_session,
-		OnlineConfigScript.FRIEND_ROOM_RPC_RESULT_ACTION,
-		{"room_code": room_code, "action": "leave"}
+		OnlineConfigScript.FRIEND_ROOM_RPC_LEAVE,
+		{"room_code": room_code}
 	)
-	if not bool(host_leave.get("closed", false)):
-		_fail("Host ResultのLEAVE ROOMでFriend roomを閉じられませんでした。")
-		return
-	if not await _wait_screen(finished_app, "TopMenu", 5000):
-		_fail("Host LEAVE ROOM後にGuestがTopMenuへ追従しませんでした。")
+	if not bool(host_close.get("closed", false)):
+		_fail("Guest退出後のHost roomをcleanupできませんでした。")
 		return
 
 	finished_app.queue_free()
