@@ -36,6 +36,7 @@ let InitModule: nkruntime.InitModule = function (
   initializer.registerRpc("ahoge_friend_room_status", friendRoomStatusRpc);
   initializer.registerRpc("ahoge_friend_room_character", friendRoomCharacterRpc);
   initializer.registerRpc("ahoge_friend_room_ready", friendRoomReadyRpc);
+  initializer.registerRpc("ahoge_friend_room_result_action", friendRoomResultActionRpc);
   initializer.registerRpc("ahoge_friend_room_leave", friendRoomLeaveRpc);
   initializer.registerMatch("ahoge_ranked", rankedMatchHandler);
   initializer.registerMatchmakerMatched(rankedMatchmakerMatched);
