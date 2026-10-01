@@ -653,6 +653,26 @@ function friendRoomReadyRpc(
   throw new Error("friend room ready conflict");
 }
 
+function clearFriendResultContextForRematch(
+  nk: nkruntime.Nakama,
+  userId: string,
+  previousMatchId: string
+): void {
+  const record = readActiveOnlineMatch(nk, userId);
+  if (!record) {
+    return;
+  }
+  if (
+    record.value.match_id !== previousMatchId ||
+    record.value.match_mode !== "friend" ||
+    record.value.state !== ACTIVE_ONLINE_MATCH_STATE_RESULT_PENDING
+  ) {
+    throw new Error("friend rematch participant has another unresolved match");
+  }
+  deleteActiveOnlineMatch(nk, userId, record.version);
+}
+
+
 function friendRoomResultActionRpc(
   ctx: nkruntime.Context,
   _logger: nkruntime.Logger,
@@ -727,6 +747,9 @@ function friendRoomResultActionRpc(
       throw new Error("friend rematch participants are incomplete");
     }
 
+    const previousMatchId = room.current_match_id;
+    clearFriendResultContextForRematch(nk, room.host_user_id, previousMatchId);
+    clearFriendResultContextForRematch(nk, room.guest_user_id, previousMatchId);
     requireNoActiveOnlineMatchForUser(nk, room.host_user_id);
     requireNoActiveOnlineMatchForUser(nk, room.guest_user_id);
 
