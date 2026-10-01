@@ -212,6 +212,7 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - Friend MatchはUI-09 / UI-10をRankedと共用し、match_mode=friendではRating settlementを表示しない
 - Friend ResultのREMATCH / CHANGE CHARACTER / room全体終了はHostのみ。REMATCHは同じGuest・同じCharacterで直接次match、CHANGE CHARACTERは同じ2人でLobbyへ戻り両者Character再選択、Host LEAVEはroomを閉じて両者Topへ戻す。GuestはResultから自分だけLEAVE可能
 - Friend authoritative snapshotへroom codeを含め、再ログイン復帰でも元roomを復元する
+- UI-02 SettingsはAudio 4系統 / Window・Fullscreen / Resolution / VSync / Control説明を実画面化し、端末ローカル `user://settings.cfg` へAPPLY時だけ保存する
 
 ## 8. 工程5: 正式キャラクター・演出・素材
 
