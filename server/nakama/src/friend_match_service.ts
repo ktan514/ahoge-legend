@@ -731,9 +731,6 @@ function markFriendRoomMatchFinished(
     if (room.match_generation !== matchGeneration) {
       return true;
     }
-    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
-      return true;
-    }
     if (
       room.state !== FRIEND_ROOM_STATE_IN_MATCH &&
       room.state !== FRIEND_ROOM_STATE_STARTING
@@ -744,9 +741,13 @@ function markFriendRoomMatchFinished(
       return true;
     }
 
-    room.state = FRIEND_ROOM_STATE_POST_MATCH;
-    room.current_match_id = matchId;
+    // Friendの次対戦Guest枠は前Match参加者へ予約しない。
+    // Match終了時にHost roomだけ維持し、Guest枠を先着JOINへ解放する。
+    room.state = FRIEND_ROOM_STATE_WAITING;
+    room.current_match_id = "";
     room.host_ready = false;
+    room.guest_user_id = "";
+    room.guest_character_id = "";
     room.guest_ready = false;
     touchFriendRoom(room, Date.now());
 
