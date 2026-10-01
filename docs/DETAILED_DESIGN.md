@@ -2027,13 +2027,15 @@ Friend Result:
 - WIN / LOSE / DRAW
 - 最終BO3 score
 - `NO RATING CHANGE (FRIEND MATCH)`
-- REMATCH
-- CHANGE CHARACTER
-- LEAVE ROOM
+- ボタン順: `CHANGE CHARACTER` / `REMATCH` / `LEAVE ROOM`
+- `CHANGE CHARACTER` → Character Select
+- `REMATCH` → Characterを維持したままFriend Lobby
+- `LEAVE ROOM` → Friend room退出
 
 Match終了後はHostのroom自体は維持するが、Guest membership / Guest character / Guest Readyを解放し、roomを次Guest待ちのWAITINGへ戻す。前MatchのGuestへ席を予約しない。
 
 REMATCH:
+- Result中央のREMATCHはCharacter Selectへ進まず、Characterを維持したままLobbyへ戻る
 - HostがREMATCH → 同じroomのLobbyへ戻り、Guest待ち
 - GuestがREMATCH → snapshotのroom codeへJOINを試みる。空席ならGuestを取得し、他userが先にJOIN済みならfull
 - CHANGE CHARACTERもGuestの場合は先に同じJOIN競争へ参加し、Guest枠を取得できた場合だけCharacter Selectへ進む
