@@ -54,7 +54,16 @@ func _run() -> void:
 	bgm.value = 44
 	se.value = 33
 	voice.value = 22
+	mode.select(1)
+	await process_frame
+	if not resolution.disabled:
+		_fail("Fullscreen選択時にResolutionが非活性になりません。", app)
+		return
 	mode.select(0)
+	await process_frame
+	if resolution.disabled:
+		_fail("Window選択時にResolutionが活性化しません。", app)
+		return
 	resolution.select(2)
 	vsync.button_pressed = false
 
