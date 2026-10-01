@@ -251,10 +251,20 @@ func _run() -> void:
 			or _has_label_text(result_screen, "AHOGE RATING"):
 		_fail("Friend ResultにRating変動が表示されています。", app)
 		return
-	for button_text in ["REMATCH", "CHANGE CHARACTER", "LEAVE ROOM"]:
-		if _find_button(result_screen, button_text) == null:
-			_fail("Friend Resultに%sがありません。" % button_text, app)
-			return
+	var change_character_button = _find_button(result_screen, "CHANGE CHARACTER")
+	var rematch_button = _find_button(result_screen, "REMATCH")
+	var leave_room_button = _find_button(result_screen, "LEAVE ROOM")
+	if change_character_button == null or rematch_button == null or leave_room_button == null:
+		_fail("Friend Resultの3ボタンが揃っていません。", app)
+		return
+	if change_character_button.get_parent() != rematch_button.get_parent() \
+			or rematch_button.get_parent() != leave_room_button.get_parent() \
+			or not (
+				change_character_button.get_index() < rematch_button.get_index()
+				and rematch_button.get_index() < leave_room_button.get_index()
+			):
+		_fail("Friend Resultのボタン順がCHANGE CHARACTER / REMATCH / LEAVE ROOMではありません。", app)
+		return
 
 	# P2 result lockも解除し、後続テストへ残さない。
 	await _ack_second_result(second_client, second_session, match_id, 6000)
