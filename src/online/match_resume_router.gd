@@ -3,7 +3,7 @@ extends RefCounted
 const DESTINATION_NONE: String = "none"
 const DESTINATION_BATTLE: String = "battle"
 const DESTINATION_RANKED_RESULT: String = "ranked_result"
-const DESTINATION_FRIEND_CHARACTER_SELECT: String = "friend_character_select"
+const DESTINATION_FRIEND_RESULT: String = "friend_result"
 
 
 static func resolve(snapshot: Dictionary) -> String:
@@ -14,7 +14,7 @@ static func resolve(snapshot: Dictionary) -> String:
 		return DESTINATION_BATTLE
 
 	if str(snapshot.get("match_mode", "")) == "friend":
-		return DESTINATION_FRIEND_CHARACTER_SELECT
+		return DESTINATION_FRIEND_RESULT
 
 	if str(snapshot.get("match_mode", "")) == "ranked":
 		return DESTINATION_RANKED_RESULT

@@ -1,7 +1,7 @@
 extends Control
 
-signal ranked_requested
-signal friend_requested
+signal create_requested
+signal join_requested
 signal back_requested
 
 var _status_label: Label
@@ -14,29 +14,29 @@ func _ready() -> void:
 
 	var root := VBoxContainer.new()
 	root.alignment = BoxContainer.ALIGNMENT_CENTER
-	root.custom_minimum_size = Vector2(440.0, 0.0)
+	root.custom_minimum_size = Vector2(480.0, 0.0)
 	root.add_theme_constant_override("separation", 14)
 	center.add_child(root)
 
 	var title := Label.new()
-	title.text = "ONLINE BATTLE"
+	title.text = "FRIEND MATCH"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 32)
 	root.add_child(title)
 
-	var ranked := Button.new()
-	ranked.text = "RANKED MATCH"
-	ranked.pressed.connect(func() -> void:
-		ranked_requested.emit()
+	var create := Button.new()
+	create.text = "CREATE ROOM"
+	create.pressed.connect(func() -> void:
+		create_requested.emit()
 	)
-	root.add_child(ranked)
+	root.add_child(create)
 
-	var friend := Button.new()
-	friend.text = "FRIEND MATCH"
-	friend.pressed.connect(func() -> void:
-		friend_requested.emit()
+	var join := Button.new()
+	join.text = "JOIN ROOM"
+	join.pressed.connect(func() -> void:
+		join_requested.emit()
 	)
-	root.add_child(friend)
+	root.add_child(join)
 
 	_status_label = Label.new()
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -1882,11 +1882,10 @@ value:
 room stateは次を使用する。
 
 ```text
-WAITING    # hostのみ
-LOBBY      # host/guestが入室しCharacter Select / Ready待ち
-STARTING   # 両者Ready成立後、authoritative match生成中
-IN_MATCH   # Friend authoritative match進行中
-POST_MATCH # Match Result確定後、同roomで再戦待ち
+WAITING  # hostのみ。初回または前Match終了後の次Guest待ち
+LOBBY    # host/guestが入室しCharacter Select / Ready待ち
+STARTING # 両者Ready成立後、authoritative match生成中
+IN_MATCH # Friend authoritative match進行中
 ```
 
 放置roomは最後の有効なroom更新から2時間で失効する。status readだけでは失効時刻を延長しない。失効roomをread/joinした場合はserverが失効として拒否し、可能な場合はStorageを削除する。
@@ -1913,20 +1912,61 @@ Friend Matchは `matchMode=friend` とし、Match Resultが確定しても次を
 
 Round / BO3 / Reconnect / Match ResultはRankedと同じserver authoritative battle handlerを使用する。
 
-#### 15.2.5 Rematch
+#### 15.2.5 Result / Rematch
 
-Match Result確定時、serverは対応roomを `POST_MATCH` へ戻し、両者のReadyを解除する。選択characterは保持する。
+Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の次戦方針の選択権はHostだけが持つ。Guestは `WAITING FOR HOST...` と自分自身の `LEAVE ROOM` だけを持ち、Hostの選択を待つ。
 
-`REMATCH` は同じroomのLobbyへ戻る操作として扱う。両者が再度Readyになった時点で新しいauthoritative Friend matchを生成する。これにより片側だけの操作で再戦を強制せず、同じroom codeを維持したまま複数matchを行える。
+Host Result操作はserver RPCを正本とし、次の3択とする。
 
-`CHANGE CHARACTER` ではcharacter更新によりReadyを解除し、両者Ready成立後に次matchを生成する。
+```text
+REMATCH
+CHANGE CHARACTER
+LEAVE ROOM
+```
+
+- `REMATCH`
+  - 現在のHost / Guestを維持する
+  - 両者のcharacterを変更しない
+  - Lobby / Character Selectを挟まず、同じ2人・同じcharacterで新しいauthoritative Friend matchを生成する
+  - Guest Resultはroom stateが `IN_MATCH` になったことを検知して同じ新matchへjoinする
+- `CHANGE CHARACTER`
+  - Hostだけが選択できる
+  - 現在のHost / Guest membershipは維持する
+  - 両者のcharacterを未選択へ戻す
+  - roomを同じroom codeの `LOBBY` へ戻す
+  - Host / GuestともFriend Lobbyへ戻り、両者がCharacterを選び直す
+- `LEAVE ROOM`
+  - Hostだけが選択できる
+  - roomを削除してcodeを無効化する
+  - Host / GuestともTop Menuへ戻る
+
+Host / GuestともResult表示中は500ms程度でroom statusをpollする。
+
+Result表示とroom同期の順序契約:
+
+- authoritative Match Resultを受信した時点でResult画面を即表示する。Friend roomのPOST_MATCH反映完了を画面表示の前提にしない
+- Result画面表示直後はroom同期中として操作ボタンを一時非活性にしてよいが、Loading専用画面で待機し続けない
+- roomが終了した旧match IDのまま `IN_MATCH` の場合はsettlement反映待ちとしてResult画面を維持する
+- `IN_MATCH` をREMATCH確定と判断するのは、roomの `current_match_id` がResultの旧 `match_id` と異なる場合だけ
+- `POST_MATCH` と自分のactive result ack完了を確認したらHostの3択とGuestのLEAVE ROOMを活性化する。room settlementだけ先行した瞬間にREMATCHを送らない
+- HostがResult操作を1つ選択した時点で3ボタンを即時非活性化し、同じResult actionの二重送信を防ぐ。server拒否時は最新room stateを再取得して操作可否を復元する
+
+- `POST_MATCH` → Host選択待ちを継続
+- `IN_MATCH + current_match_id` → REMATCH確定として新Friend matchへjoin
+- `LOBBY` → CHANGE CHARACTER確定として両者Lobbyへ戻る
+- `WAITING` → GuestがResultから退出した状態。HostはLobbyへ戻って次Guest待ち
+- room not found / expired → Host LEAVE ROOM確定としてTop Menuへ戻る
+
+GuestはResultの選択操作RPCを送信できない。ただしGuest自身の `LEAVE ROOM` は許可し、Guestだけをroomから外してTop Menuへ戻す。その場合Host roomは `WAITING` へ戻り、HostはLobbyへ遷移する。空いたGuest枠は前Match参加者かどうかに関係なくroom code JOINの先着順とする。
+
+Host以外のclient判断でREMATCH / CHANGE CHARACTER / room全体終了を確定しない。
 
 #### 15.2.6 Leave / room終了
 
 - active matchが `STARTING / IN_MATCH` の間はroom leave/closeで対戦結果を独自確定しない
 - active match中の意図的退出・両者同時切断・server障害の勝敗契約は #71 の責務とし、本Issueでは追加しない
-- guestがLobby / POST_MATCHで退出した場合はguest slotを空け、roomを `WAITING` へ戻す
-- hostがLobby / WAITING / POST_MATCHで退出した場合はroomを終了し、Storageを削除してcodeを無効化する
+- guestがLobbyで退出した場合はguest slotを空け、roomを `WAITING` へ戻す
+- hostがLobby / WAITINGで退出した場合はroomを終了し、Storageを削除してcodeを無効化する
 - room終了後のcodeではjoinできない
 
 #### 15.2.7 Reconnect / 未解決match lock
@@ -1934,7 +1974,7 @@ Match Result確定時、serverは対応roomを `POST_MATCH` へ戻し、両者�
 Friend matchへjoinした後は既存 Nakama `user_id` 単位のserver-side `active_online_match/current` に `match_mode=friend` として保持する。
 
 - 進行中Friend matchもRankedと同じく、active Round中はdeadlineなしで同一matchへ復帰し、Round境界のみ15秒待機する
-- 終了済みFriend matchへ再ログインした場合はResultを再表示せずFriend文脈のCharacter Selectへ戻す
+- 終了済みFriend matchへ再ログインした場合はserver result snapshotからFriend Resultへ復帰する。Hostは3択を再表示し、GuestはHOST選択待ち + 自分のLEAVE ROOMを再表示する。すでにHost選択が確定済みならroom stateへ追従する
 - 未解決match contextがある間、`OnlineSession` は新しいFriend room作成・参加・対戦開始を拒否する
 - Match Not Found / Invalid Match IDの安全解除契約を変更しない
 
@@ -1948,10 +1988,91 @@ ahoge_friend_room_join
 ahoge_friend_room_status
 ahoge_friend_room_character
 ahoge_friend_room_ready
+ahoge_friend_room_result_action
 ahoge_friend_room_leave
 ```
 
-RPCはすべて認証済みuserのみ利用可能とし、room membership / room state / character ID / code形式をserverで検証する。
+RPCはすべて認証済みuserのみ利用可能とし、room membership / room state / character ID / code形式をserverで検証する。`ahoge_friend_room_result_action` はHostだけが `rematch / change_character / leave` を確定できる。Guest自身の退出は従来の `ahoge_friend_room_leave` を使用する。
+
+#### 15.2.9 UI-06〜08 client契約
+
+Friend UIはserver room responseだけを状態正本とする。
+
+```text
+UI-03 Battle Mode
+→ UI-06 Friend Match Menu
+   ├─ CREATE ROOM
+   │   → ahoge_friend_room_create
+   │   → UI-08 Lobby
+   └─ JOIN ROOM
+       → UI-07 Room Code
+       → ahoge_friend_room_join
+       → UI-08 Lobby
+```
+
+UI-08は500ms間隔を目安に `ahoge_friend_room_status` をpollし、次を表示する。
+
+- `room_code`
+- `role`
+- host / guest user
+- host / guest character
+- host / guest ready
+- room `state`
+
+Lobbyのclient操作:
+
+- CHARACTER SELECT → 共通UI-04をFriend modeで開く → `ahoge_friend_room_character`
+- READY / CANCEL READY → `ahoge_friend_room_ready`
+- LEAVE ROOM → `ahoge_friend_room_leave`
+- COPY → OS clipboardへroom codeをコピーするだけでserver状態は変更しない
+
+Host / Guest退出契約:
+
+- HostがWAITING / LOBBYでLEAVEするとroomを閉じる
+- GuestはLobby pollでserverから `friend room not found` / `friend room expired` / `friend room membership required` を受けた場合、roomが継続不能になったterminal状態として扱い、local room contextを破棄してFriend Menuへ戻る
+- Host closeとGuestのLEAVE操作が競合し、Guestのleave RPCが同じterminal状態を返した場合も「すでに退出済み」とみなしFriend Menuへ戻る
+- timeout / network error / parse errorなどroom存在有無を確定できない失敗ではlocal room contextを破棄せずLobbyに留まり、pollを継続する
+
+clientは「両者Readyだから開始」と独自判定しない。server responseが `state=IN_MATCH` かつ `current_match_id` を持った時だけ `join_friend_match_from_room` を実行する。
+
+Friend matchの `MATCH_SNAPSHOT` とserver-side result snapshotには次を追加する。
+
+```text
+friend_room_code
+friend_match_generation
+```
+
+これによりclient再起動 / reconnect後も、server authoritative snapshotから元Friend roomを復元できる。
+
+Friend再起動復帰のidentity契約:
+
+- Device認証の `device_id` は同一インストールで永続化し、再起動後も同じ値を使用する
+- 同じ `device_id` で再認証したclientは同じNakama `user_id` として扱う
+- Friend match中にclientが終了してもserver-side `active_online_match/current` とそのMatch参加資格は解除しない。再起動後は元authoritative matchへ復帰する
+- 再起動時は新規Friend導線へ進む前に `active_online_match/current` を確認し、ACTIVEなら元authoritative matchへ強制復帰する
+- RESULT_PENDINGならserver result snapshotからFriend Resultを復元し、room stateと同期してHost選択待ちまたは確定済み遷移へ接続する
+- Friend roomのhost / guest membershipはNakama `user_id` を正本とし、Match終了時のPOST_MATCHでは両者membershipを保持する
+- Guest自身がLEAVEした場合だけGuest枠を解放し、その空席はroom code JOINの成功順で確定する。前MatchのGuestだったかどうかは優先条件にしない
+- 別 `device_id` は別userであり、進行中Matchの参加資格を引き継がない
+
+ローカル2client Human VerificationではP1/P2が同一 `user://` を共有し得るため、P2専用helperで別Device IDを一度だけ生成・保存し、再起動時も必ず同じP2 Device IDを再利用する。これにより実製品の「同一インストール再起動」を再現する。
+
+Friend matchのUI-09 / UI-10はRankedと同じSceneを再利用するが、`match_mode` を表示・遷移の正本とする。
+
+- `ranked` → 従来のRating settlement付きUI-11
+- `friend` → Friend Result。Player/Ahoge Ratingを表示しない
+
+Friend Result:
+
+- WIN / LOSE / DRAW
+- 最終BO3 score
+- `NO RATING CHANGE (FRIEND MATCH)`
+- Host: `REMATCH` / `CHANGE CHARACTER` / `LEAVE ROOM`
+- Guest: `WAITING FOR HOST...` / `LEAVE ROOM` のみ。Host専用のREMATCH / CHANGE CHARACTER / room全体LEAVEはGuest画面ではvisibleにしない
+
+Result操作はHostだけが行い、server room stateを通してGuestへ伝播する。GuestはHostの選択へ追従する。
+
+終了済みFriend matchから再ログインした場合も、server result snapshotとroom stateを正本にResult文脈を復元し、Host選択待ちまたは確定済み遷移へ接続する。
 
 ## 16. ランキング
 

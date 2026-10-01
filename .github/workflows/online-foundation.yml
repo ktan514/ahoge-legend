@@ -12,6 +12,10 @@ on:
       - "scripts/client-season-smoke.sh"
       - "scripts/client-ranking-screen-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
+      - "scripts/client-friend-gameflow-smoke.sh"
+      - "scripts/client-friend-saved-resume-smoke.sh"
+      - "scripts/client-friend-host-leave-smoke.sh"
+      - "scripts/client-friend-hv-p2.sh"
       - "scripts/client-ranked-gameflow-smoke.sh"
       - "scripts/client-ranked-hv-opponent.sh"
       - "scripts/client-reconnect-smoke.sh"
@@ -39,6 +43,17 @@ on:
       - "scripts/client-m1-battle.sh"
       - "scripts/client-m1-battle-smoke.sh"
       - "src/ui/app_root.gd"
+      - "src/ui/battle_mode_select.gd"
+      - "src/ui/character_select.gd"
+      - "src/ui/pre_battle_dialogue.gd"
+      - "src/ui/online_battle.gd"
+      - "src/ui/match_result.gd"
+      - "src/ui/friend_match_menu.gd"
+      - "src/ui/friend_room_join.gd"
+      - "src/ui/friend_room_lobby.gd"
+      - "scenes/screens/friend_match/FriendMatchMenu.tscn"
+      - "scenes/screens/friend_room_join/FriendRoomJoin.tscn"
+      - "scenes/screens/friend_room_lobby/FriendRoomLobby.tscn"
       - "src/ui/top_menu.gd"
       - "src/ui/ranking.gd"
       - "scenes/screens/ranking/Ranking.tscn"
@@ -55,6 +70,9 @@ on:
       - "tests/season_smoke.gd"
       - "tests/ranking_screen_smoke.gd"
       - "tests/friend_match_smoke.gd"
+      - "tests/friend_gameflow_smoke.gd"
+      - "tests/friend_saved_match_resume_smoke.gd"
+      - "tests/friend_host_leave_smoke.gd"
       - "tests/ranked_gameflow_smoke.gd"
       - "tools/ranked_hv_opponent.gd"
       - "tests/reconnect_smoke.gd"
@@ -92,6 +110,10 @@ on:
       - "scripts/client-season-smoke.sh"
       - "scripts/client-ranking-screen-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
+      - "scripts/client-friend-gameflow-smoke.sh"
+      - "scripts/client-friend-saved-resume-smoke.sh"
+      - "scripts/client-friend-host-leave-smoke.sh"
+      - "scripts/client-friend-hv-p2.sh"
       - "scripts/client-ranked-gameflow-smoke.sh"
       - "scripts/client-ranked-hv-opponent.sh"
       - "scripts/client-reconnect-smoke.sh"
@@ -119,6 +141,17 @@ on:
       - "scripts/client-m1-battle.sh"
       - "scripts/client-m1-battle-smoke.sh"
       - "src/ui/app_root.gd"
+      - "src/ui/battle_mode_select.gd"
+      - "src/ui/character_select.gd"
+      - "src/ui/pre_battle_dialogue.gd"
+      - "src/ui/online_battle.gd"
+      - "src/ui/match_result.gd"
+      - "src/ui/friend_match_menu.gd"
+      - "src/ui/friend_room_join.gd"
+      - "src/ui/friend_room_lobby.gd"
+      - "scenes/screens/friend_match/FriendMatchMenu.tscn"
+      - "scenes/screens/friend_room_join/FriendRoomJoin.tscn"
+      - "scenes/screens/friend_room_lobby/FriendRoomLobby.tscn"
       - "src/ui/top_menu.gd"
       - "src/ui/ranking.gd"
       - "scenes/screens/ranking/Ranking.tscn"
@@ -135,6 +168,9 @@ on:
       - "tests/season_smoke.gd"
       - "tests/ranking_screen_smoke.gd"
       - "tests/friend_match_smoke.gd"
+      - "tests/friend_gameflow_smoke.gd"
+      - "tests/friend_saved_match_resume_smoke.gd"
+      - "tests/friend_host_leave_smoke.gd"
       - "tests/ranked_gameflow_smoke.gd"
       - "tools/ranked_hv_opponent.gd"
       - "tests/reconnect_smoke.gd"
@@ -345,6 +381,18 @@ jobs:
       - name: Godot Ranked major GameFlow smoke
         if: matrix.group == 'match'
         run: bash ./scripts/client-ranked-gameflow-smoke.sh
+
+      - name: Godot Friend major GameFlow smoke
+        if: matrix.group == 'match'
+        run: bash ./scripts/client-friend-gameflow-smoke.sh
+
+      - name: Godot Friend saved match resume smoke
+        if: matrix.group == 'match'
+        run: bash ./scripts/client-friend-saved-resume-smoke.sh
+
+      - name: Godot Friend host leave smoke
+        if: matrix.group == 'match'
+        run: bash ./scripts/client-friend-host-leave-smoke.sh
 
       - name: Godot authoritative 85 second timer smoke
         if: matrix.group == 'long'

@@ -284,8 +284,8 @@ func _test_match_resume_router() -> void:
 			"match_mode": "friend",
 			"match_finished": true,
 		}),
-		MatchResumeRouterScript.DESTINATION_FRIEND_CHARACTER_SELECT,
-		"終了済みFriendはCharacter Selectへ戻す"
+		MatchResumeRouterScript.DESTINATION_FRIEND_RESULT,
+		"終了済みFriendはResultへ復帰する"
 	)
 	_expect_equal(
 		MatchResumeRouterScript.resolve({}),

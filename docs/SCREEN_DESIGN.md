@@ -490,7 +490,7 @@ AHOGE LEGEND #3
 └──────────────────────────────────────────────────────────────┘
 ```
 
-無効コード、期限切れ、満員等の理由を識別して表示できる構造とする。
+無効コード、期限切れ、満員等のserver errorをメッセージ領域へ表示する。入力は大文字化し、6文字codeの正当性は最終的にserverで検証する。
 
 ## 13. UI-08 フレンドルームロビー
 
@@ -528,7 +528,11 @@ AHOGE LEGEND #3
 └──────────────────────────────────────────────────────────────┘
 ```
 
-両者がReadyになった場合のみ対戦開始へ進む。
+両者がReadyになった場合のみ対戦開始へ進む。clientは両者Readyを見て独自にmatchを生成せず、server room stateが `IN_MATCH` になった時だけserver確定 `current_match_id` へjoinする。
+
+Lobbyはserver room statusを定期pollしてhost / guest / character / readyを更新する。Character Selectは共通UI-04をFriend modeで再利用する。COPYはroom codeをOS clipboardへコピーする。
+
+Match終了直後はHost / Guestと両者のCharacterをPOST_MATCHで保持し、ResultではHostだけが次戦方針を選択する。REMATCHなら同じ2人・同じCharacterで直接次戦、CHANGE CHARACTERなら同じ2人のまま同room Lobbyへ戻って両者Characterを選び直し、HostのLEAVE ROOMならroomを閉じて両者Top Menuへ戻す。Guestは結果画面から自分だけLEAVE ROOMでき、その場合だけGuest枠が空き、次Guestは先着順となる。
 
 ## 14. UI-09 対戦前掛け合い
 
@@ -771,9 +775,26 @@ Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確
 
 ランキング関連数値は更新しない。
 
+Host表示:
+
 ```text
-[REMATCH] [CHANGE CHARACTER] [EXIT]
+[REMATCH] [CHANGE CHARACTER] [LEAVE ROOM]
 ```
+
+- REMATCH: 同じGuest・同じCharacterのまま次Friend Battleを開始
+- CHANGE CHARACTER: 同じHost / GuestのままLobbyへ戻り、両者のCharacterを選び直す
+- LEAVE ROOM: roomを閉じ、Host / GuestともTop Menuへ戻る
+
+Guest表示:
+
+```text
+WAITING FOR HOST...
+[LEAVE ROOM]
+```
+
+GuestはREMATCH / CHANGE CHARACTER / room全体終了を選択できず、Hostがserverへ確定した選択へ自動追従する。ただしLEAVE ROOMだけは自分自身の退出として操作可能。Guestが退出した場合はGuestだけTop Menuへ戻り、Hostは同roomのLobbyへ戻って次Guestを待つ。
+
+Match Resultは勝敗確定後すぐ表示し、Friend roomのPOST_MATCH同期待ちで別のLoading画面へ固定しない。room同期中はResult画面内に同期状態を表示し、操作ボタンを一時非活性にする。旧match IDのIN_MATCHは同期遅延として待機し、新しいmatch IDのIN_MATCHだけREMATCH開始として扱う。
 
 ## 17. UI-12 ランキング
 

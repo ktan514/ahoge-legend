@@ -47,6 +47,7 @@ const FRIEND_ROOM_RPC_JOIN: String = "ahoge_friend_room_join"
 const FRIEND_ROOM_RPC_STATUS: String = "ahoge_friend_room_status"
 const FRIEND_ROOM_RPC_CHARACTER: String = "ahoge_friend_room_character"
 const FRIEND_ROOM_RPC_READY: String = "ahoge_friend_room_ready"
+const FRIEND_ROOM_RPC_RESULT_ACTION: String = "ahoge_friend_room_result_action"
 const FRIEND_ROOM_RPC_LEAVE: String = "ahoge_friend_room_leave"
 
 const RANKED_CHARACTER_LONG_TEST: String = "LONG_TEST"
