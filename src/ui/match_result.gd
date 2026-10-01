@@ -199,7 +199,24 @@ func _build_friend_result(root: VBoxContainer) -> void:
 		actions.add_child(leave_room)
 		return
 
+		var timer := Timer.new()
+		timer.wait_time = FRIEND_RESULT_REFRESH_SECONDS
+		timer.one_shot = false
+		timer.autostart = true
+		timer.timeout.connect(func() -> void:
+			friend_result_refresh_requested.emit()
+		)
+		add_child(timer)
+		return
+
 	_status_label.text = "WAITING FOR HOST..."
+	var leave_room := Button.new()
+	leave_room.text = "LEAVE ROOM"
+	leave_room.pressed.connect(func() -> void:
+		leave_room_requested.emit()
+	)
+	root.add_child(leave_room)
+
 	var timer := Timer.new()
 	timer.wait_time = FRIEND_RESULT_REFRESH_SECONDS
 	timer.one_shot = false
