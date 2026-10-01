@@ -23,7 +23,7 @@ func _run() -> void:
 		return
 
 	var top = app.get_child(0)
-	var ranking_button: Button = _find_button(top, "RANKING") as Button
+	var ranking_button: Button = _find_button(top, "ランキング") as Button
 	if ranking_button == null:
 		_fail("Top MenuにRANKING buttonがありません。", app)
 		return
