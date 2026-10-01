@@ -472,6 +472,7 @@ func _show_friend_result(summary: Dictionary) -> void:
 	)
 	screen.call("set_friend_result_actions_enabled", false)
 	screen.set_meta("friend_result_ack_completed", false)
+	screen.set_meta("friend_result_match_id", result_match_id)
 	call_deferred("_synchronize_friend_result", screen, result_match_id)
 
 
@@ -498,6 +499,7 @@ func _synchronize_friend_result(screen: Control, result_match_id: String) -> voi
 func _on_friend_result_rematch_requested(screen: Control) -> void:
 	if _friend_last_role != "host" or not is_instance_valid(screen) or _current_screen != screen:
 		return
+	screen.call("set_friend_result_actions_enabled", false)
 	screen.call("set_status", "REMATCHをserverへ送信中...")
 	var room: Dictionary = await _online_session.submit_friend_result_action(
 		_friend_room_code,
@@ -507,6 +509,10 @@ func _on_friend_result_rematch_requested(screen: Control) -> void:
 		return
 	if not bool(room.get("ok", false)):
 		screen.call("set_status", str(room.get("message", "REMATCHを開始できませんでした。")))
+		await _refresh_friend_result(
+			screen,
+			str(screen.get_meta("friend_result_match_id", ""))
+		)
 		return
 	_set_friend_room(room)
 	await _join_friend_match(room)
@@ -515,6 +521,7 @@ func _on_friend_result_rematch_requested(screen: Control) -> void:
 func _on_friend_result_change_character_requested(screen: Control) -> void:
 	if _friend_last_role != "host" or not is_instance_valid(screen) or _current_screen != screen:
 		return
+	screen.call("set_friend_result_actions_enabled", false)
 	screen.call("set_status", "LOBBYへ戻しています...")
 	var room: Dictionary = await _online_session.submit_friend_result_action(
 		_friend_room_code,
@@ -524,6 +531,10 @@ func _on_friend_result_change_character_requested(screen: Control) -> void:
 		return
 	if not bool(room.get("ok", false)):
 		screen.call("set_status", str(room.get("message", "Lobbyへ戻れませんでした。")))
+		await _refresh_friend_result(
+			screen,
+			str(screen.get_meta("friend_result_match_id", ""))
+		)
 		return
 	_set_friend_room(room)
 	_show_friend_lobby()
@@ -534,6 +545,7 @@ func _on_friend_result_leave_requested(screen: Control) -> void:
 		return
 
 	if _friend_last_role == "guest":
+		screen.call("set_friend_result_actions_enabled", false)
 		screen.call("set_status", "Friend roomから退出しています...")
 		var guest_result: Dictionary = await _online_session.leave_friend_room(_friend_room_code)
 		if not is_instance_valid(screen) or _current_screen != screen:
@@ -544,6 +556,10 @@ func _on_friend_result_leave_requested(screen: Control) -> void:
 				_show_top_menu()
 				return
 			screen.call("set_status", str(guest_result.get("message", "Friend roomから退出できませんでした。")))
+			await _refresh_friend_result(
+				screen,
+				str(screen.get_meta("friend_result_match_id", ""))
+			)
 			return
 		_clear_friend_room_context()
 		_show_top_menu()
@@ -551,6 +567,7 @@ func _on_friend_result_leave_requested(screen: Control) -> void:
 
 	if _friend_last_role != "host":
 		return
+	screen.call("set_friend_result_actions_enabled", false)
 	screen.call("set_status", "Friend roomを終了しています...")
 	var result: Dictionary = await _online_session.submit_friend_result_action(
 		_friend_room_code,
@@ -560,6 +577,10 @@ func _on_friend_result_leave_requested(screen: Control) -> void:
 		return
 	if not bool(result.get("ok", false)):
 		screen.call("set_status", str(result.get("message", "Friend roomを終了できませんでした。")))
+		await _refresh_friend_result(
+			screen,
+			str(screen.get_meta("friend_result_match_id", ""))
+		)
 		return
 	_clear_friend_room_context()
 	_show_top_menu()
