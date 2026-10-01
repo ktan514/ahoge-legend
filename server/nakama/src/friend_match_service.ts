@@ -11,6 +11,10 @@ const FRIEND_ROOM_STATE_STARTING = "STARTING";
 const FRIEND_ROOM_STATE_IN_MATCH = "IN_MATCH";
 const FRIEND_ROOM_STATE_POST_MATCH = "POST_MATCH";
 
+const FRIEND_RESULT_ACTION_REMATCH = "rematch";
+const FRIEND_RESULT_ACTION_CHANGE_CHARACTER = "change_character";
+const FRIEND_RESULT_ACTION_LEAVE = "leave";
+
 interface FriendRoomValue {
   room_code: string;
   host_user_id: string;
@@ -453,11 +457,11 @@ function friendRoomCharacterRpc(
     ) {
       throw new Error("friend room match is active");
     }
+    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
+      throw new Error("friend result action required");
+    }
 
     setRoomCharacterForRole(room, role, characterId);
-    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
-      room.current_match_id = "";
-    }
     room.state = room.guest_user_id
       ? FRIEND_ROOM_STATE_LOBBY
       : FRIEND_ROOM_STATE_WAITING;
@@ -571,6 +575,9 @@ function friendRoomReadyRpc(
     ) {
       throw new Error("friend room match is active");
     }
+    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
+      throw new Error("friend result action required");
+    }
     if (!room.guest_user_id) {
       throw new Error("friend room is waiting for guest");
     }
@@ -579,11 +586,6 @@ function friendRoomReadyRpc(
       !isSupportedCharacterId(room.guest_character_id)
     ) {
       throw new Error("both players must select character");
-    }
-
-    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
-      room.state = FRIEND_ROOM_STATE_LOBBY;
-      room.current_match_id = "";
     }
 
     const wasReady = roomReadyForRole(room, role);
@@ -651,6 +653,159 @@ function friendRoomReadyRpc(
   throw new Error("friend room ready conflict");
 }
 
+function friendRoomResultActionRpc(
+  ctx: nkruntime.Context,
+  _logger: nkruntime.Logger,
+  nk: nkruntime.Nakama,
+  payload: string
+): string {
+  if (!ctx.userId) {
+    throw new Error("authentication required");
+  }
+
+  const parsed = parseFriendRoomPayload(payload);
+  const roomCode = parseFriendRoomCode(parsed);
+  if (typeof parsed.action !== "string") {
+    throw new Error("invalid result action");
+  }
+  const action = parsed.action;
+  if (
+    action !== FRIEND_RESULT_ACTION_REMATCH &&
+    action !== FRIEND_RESULT_ACTION_CHANGE_CHARACTER &&
+    action !== FRIEND_RESULT_ACTION_LEAVE
+  ) {
+    throw new Error("invalid result action");
+  }
+
+  const now = Date.now();
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const record = requireFriendRoom(nk, roomCode, now);
+    const room = record.value;
+    if (room.host_user_id !== ctx.userId) {
+      throw new Error("friend result action is host only");
+    }
+    if (room.state !== FRIEND_ROOM_STATE_POST_MATCH) {
+      throw new Error("friend room is not waiting for result action");
+    }
+
+    if (action === FRIEND_RESULT_ACTION_LEAVE) {
+      try {
+        deleteFriendRoom(nk, roomCode, record.version);
+        return JSON.stringify({
+          room_code: roomCode,
+          action: action,
+          closed: true
+        });
+      } catch (_error) {
+        continue;
+      }
+    }
+
+    if (action === FRIEND_RESULT_ACTION_CHANGE_CHARACTER) {
+      room.state = FRIEND_ROOM_STATE_WAITING;
+      room.current_match_id = "";
+      room.host_character_id = "";
+      room.host_ready = false;
+      room.guest_user_id = "";
+      room.guest_character_id = "";
+      room.guest_ready = false;
+      touchFriendRoom(room, now);
+      try {
+        const updated = writeFriendRoom(nk, room, record.version);
+        const response = friendRoomResponse(updated.value, ctx.userId);
+        response.action = action;
+        return JSON.stringify(response);
+      } catch (_error) {
+        continue;
+      }
+    }
+
+    if (
+      !room.guest_user_id ||
+      !isSupportedCharacterId(room.host_character_id) ||
+      !isSupportedCharacterId(room.guest_character_id)
+    ) {
+      throw new Error("friend rematch participants are incomplete");
+    }
+
+    requireNoActiveOnlineMatchForUser(nk, room.host_user_id);
+    requireNoActiveOnlineMatchForUser(nk, room.guest_user_id);
+
+    room.state = FRIEND_ROOM_STATE_STARTING;
+    room.current_match_id = "";
+    room.host_ready = false;
+    room.guest_ready = false;
+    room.match_generation += 1;
+    touchFriendRoom(room, now);
+
+    let updated: FriendRoomRecord;
+    try {
+      updated = writeFriendRoom(nk, room, record.version);
+    } catch (_error) {
+      continue;
+    }
+
+    const matchGeneration = updated.value.match_generation;
+    let matchId = "";
+    try {
+      matchId = nk.matchCreate("ahoge_ranked", {
+        matchMode: "friend",
+        expectedUserIds: [
+          updated.value.host_user_id,
+          updated.value.guest_user_id
+        ],
+        characterIds: {
+          [updated.value.host_user_id]: updated.value.host_character_id,
+          [updated.value.guest_user_id]: updated.value.guest_character_id
+        },
+        friendRoomCode: roomCode,
+        friendMatchGeneration: matchGeneration
+      });
+    } catch (error) {
+      for (let rollbackAttempt = 0; rollbackAttempt < 3; rollbackAttempt += 1) {
+        const rollbackRecord = readFriendRoom(nk, roomCode);
+        if (!rollbackRecord) {
+          break;
+        }
+        const rollbackRoom = rollbackRecord.value;
+        if (
+          rollbackRoom.state !== FRIEND_ROOM_STATE_STARTING ||
+          rollbackRoom.match_generation !== matchGeneration
+        ) {
+          break;
+        }
+        rollbackRoom.state = FRIEND_ROOM_STATE_POST_MATCH;
+        rollbackRoom.current_match_id = "";
+        rollbackRoom.host_ready = false;
+        rollbackRoom.guest_ready = false;
+        touchFriendRoom(rollbackRoom, Date.now());
+        try {
+          writeFriendRoom(nk, rollbackRoom, rollbackRecord.version);
+          break;
+        } catch (_rollbackError) {
+          // retry.
+        }
+      }
+      throw error;
+    }
+
+    const started = finalizeStartedFriendMatch(
+      nk,
+      roomCode,
+      updated.version,
+      matchId,
+      matchGeneration,
+      now
+    );
+    const response = friendRoomResponse(started.value, ctx.userId);
+    response.action = action;
+    return JSON.stringify(response);
+  }
+
+  throw new Error("friend result action conflict");
+}
+
+
 function friendRoomLeaveRpc(
   ctx: nkruntime.Context,
   _logger: nkruntime.Logger,
@@ -675,6 +830,9 @@ function friendRoomLeaveRpc(
       room.state === FRIEND_ROOM_STATE_IN_MATCH
     ) {
       throw new Error("active friend match must be resolved first");
+    }
+    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
+      throw new Error("friend result action required");
     }
 
     if (role === "host") {
@@ -741,13 +899,10 @@ function markFriendRoomMatchFinished(
       return true;
     }
 
-    // Friendの次対戦Guest枠は前Match参加者へ予約しない。
-    // Match終了時にHost roomだけ維持し、Guest枠を先着JOINへ解放する。
-    room.state = FRIEND_ROOM_STATE_WAITING;
-    room.current_match_id = "";
+    // Result選択はHostだけが行うため、POST_MATCH中は対戦参加者とCharacterを保持する。
+    room.state = FRIEND_ROOM_STATE_POST_MATCH;
+    room.current_match_id = matchId;
     room.host_ready = false;
-    room.guest_user_id = "";
-    room.guest_character_id = "";
     room.guest_ready = false;
     touchFriendRoom(room, Date.now());
 
