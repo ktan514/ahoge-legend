@@ -454,6 +454,10 @@ func _show_friend_result(summary: Dictionary) -> void:
 	_friend_room_code = str(summary.get("friend_room_code", _friend_room_code))
 	var completed_summary := summary.duplicate(true)
 
+	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
+
 	if not _friend_room_code.is_empty():
 		var room: Dictionary = await _wait_for_friend_room_post_match(_friend_room_code)
 		if room.is_empty():
@@ -462,10 +466,16 @@ func _show_friend_result(summary: Dictionary) -> void:
 			return
 		_set_friend_room(room)
 		completed_summary["friend_role"] = _friend_last_role
-
-	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
-	if not bool(ack_result.get("ok", false)):
-		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
+		var room_state := str(room.get("state", ""))
+		if room_state == "LOBBY":
+			_show_friend_lobby()
+			return
+		if room_state == "WAITING" and _friend_last_role == "host":
+			_show_friend_lobby()
+			return
+		if room_state == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
+			await _join_friend_match(room)
+			return
 
 	var screen = MATCH_RESULT_SCENE.instantiate()
 	screen.call("configure", completed_summary)
