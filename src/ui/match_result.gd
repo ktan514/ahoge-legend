@@ -11,6 +11,10 @@ const FRIEND_RESULT_REFRESH_SECONDS := 0.5
 
 var _summary: Dictionary = {}
 var _status_label: Label
+var _friend_host_actions: HBoxContainer
+var _friend_host_buttons: Array[Button] = []
+var _friend_guest_leave: Button
+var _friend_role: String = ""
 
 
 func configure(summary: Dictionary) -> void:
@@ -170,41 +174,44 @@ func _build_friend_result(root: VBoxContainer) -> void:
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(_status_label)
 
-	var role := str(_summary.get("friend_role", ""))
-	if role == "host":
-		var actions := HBoxContainer.new()
-		actions.alignment = BoxContainer.ALIGNMENT_CENTER
-		actions.add_theme_constant_override("separation", 12)
-		root.add_child(actions)
+	_friend_host_actions = HBoxContainer.new()
+	_friend_host_actions.alignment = BoxContainer.ALIGNMENT_CENTER
+	_friend_host_actions.add_theme_constant_override("separation", 12)
+	root.add_child(_friend_host_actions)
 
-		var rematch := Button.new()
-		rematch.text = "REMATCH"
-		rematch.pressed.connect(func() -> void:
-			rematch_requested.emit()
-		)
-		actions.add_child(rematch)
+	var rematch := Button.new()
+	rematch.text = "REMATCH"
+	rematch.pressed.connect(func() -> void:
+		rematch_requested.emit()
+	)
+	_friend_host_actions.add_child(rematch)
+	_friend_host_buttons.append(rematch)
 
-		var character_select := Button.new()
-		character_select.text = "CHANGE CHARACTER"
-		character_select.pressed.connect(func() -> void:
-			character_select_requested.emit()
-		)
-		actions.add_child(character_select)
+	var character_select := Button.new()
+	character_select.text = "CHANGE CHARACTER"
+	character_select.pressed.connect(func() -> void:
+		character_select_requested.emit()
+	)
+	_friend_host_actions.add_child(character_select)
+	_friend_host_buttons.append(character_select)
 
-		var leave_room := Button.new()
-		leave_room.text = "LEAVE ROOM"
-		leave_room.pressed.connect(func() -> void:
-			leave_room_requested.emit()
-		)
-		actions.add_child(leave_room)
-	else:
-		_status_label.text = "WAITING FOR HOST..."
-		var guest_leave := Button.new()
-		guest_leave.text = "LEAVE ROOM"
-		guest_leave.pressed.connect(func() -> void:
-			leave_room_requested.emit()
-		)
-		root.add_child(guest_leave)
+	var leave_room := Button.new()
+	leave_room.text = "LEAVE ROOM"
+	leave_room.pressed.connect(func() -> void:
+		leave_room_requested.emit()
+	)
+	_friend_host_actions.add_child(leave_room)
+	_friend_host_buttons.append(leave_room)
+
+	_friend_guest_leave = Button.new()
+	_friend_guest_leave.text = "LEAVE ROOM"
+	_friend_guest_leave.pressed.connect(func() -> void:
+		leave_room_requested.emit()
+	)
+	root.add_child(_friend_guest_leave)
+
+	set_friend_role(str(_summary.get("friend_role", "")))
+	set_friend_result_actions_enabled(false)
 
 	var timer := Timer.new()
 	timer.wait_time = FRIEND_RESULT_REFRESH_SECONDS
@@ -214,6 +221,30 @@ func _build_friend_result(root: VBoxContainer) -> void:
 		friend_result_refresh_requested.emit()
 	)
 	add_child(timer)
+
+
+func set_friend_role(role: String) -> void:
+	_friend_role = role
+	if _friend_host_actions != null:
+		_friend_host_actions.visible = role == "host"
+	if _friend_guest_leave != null:
+		_friend_guest_leave.visible = role == "guest"
+
+	if _status_label == null:
+		return
+	if role == "guest":
+		_status_label.text = "WAITING FOR HOST..."
+	elif role == "host":
+		_status_label.text = "SYNCING FRIEND ROOM..."
+	else:
+		_status_label.text = "SYNCING FRIEND ROOM..."
+
+
+func set_friend_result_actions_enabled(enabled: bool) -> void:
+	for button in _friend_host_buttons:
+		button.disabled = not enabled
+	if _friend_guest_leave != null:
+		_friend_guest_leave.disabled = not enabled
 
 
 func set_status(message: String) -> void:
