@@ -167,6 +167,7 @@ func _run() -> void:
 	var p1_hit_count := [0]
 	var p1_states: Array[Dictionary] = []
 	var round_one_started := [false]
+	var match_result_seen_at := [0]
 	online_session.round_hit_count_changed.connect(
 		func(user_id: String, hit_count: int, _server_tick: int, _input_sequence: int) -> void:
 			if user_id == p1_user_id:
@@ -181,6 +182,17 @@ func _run() -> void:
 		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
 			if round_number == 1:
 				round_one_started[0] = true
+	)
+	online_session.match_result.connect(
+		func(
+			_winner_user_id: String,
+			_loser_user_id: String,
+			_round_wins: Dictionary,
+			_final_round: int,
+			_finish_cause: String,
+			_server_tick: int
+		) -> void:
+			match_result_seen_at[0] = Time.get_ticks_msec()
 	)
 
 	_second_socket = nakama.create_socket_from(second_client)
@@ -240,8 +252,14 @@ func _run() -> void:
 	if not await _p1_finish_friend_round(online_session, app, p1_hit_count, p1_states):
 		return
 
-	if not await _wait_screen(app, "MatchResult", 26000):
-		_fail("Friend Match Resultへ遷移しません。", app)
+	var result_event_deadline := Time.get_ticks_msec() + 26000
+	while Time.get_ticks_msec() < result_event_deadline and int(match_result_seen_at[0]) <= 0:
+		await create_timer(0.05).timeout
+	if int(match_result_seen_at[0]) <= 0:
+		_fail("Friend Match Result eventを受信できませんでした。", app)
+		return
+	if not await _wait_screen(app, "MatchResult", 1000):
+		_fail("Friend Match Result受信後1秒以内にResult画面を表示できませんでした。", app)
 		return
 	var result_screen = app.get_child(0)
 	if not _has_label_text(result_screen, "NO RATING CHANGE (FRIEND MATCH)"):
