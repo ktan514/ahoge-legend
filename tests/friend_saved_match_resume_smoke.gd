@@ -237,12 +237,12 @@ func _run() -> void:
 		return
 
 	# 終了済み状態でも同じDevice IDで再起動する。
-	# AppRootはRESULT_PENDINGをserver snapshotから解決し、ack後に元roomのCharacter Selectへ戻す。
+	# 戦闘は終了済みなので旧Guest枠は予約せず、active resultを解決してFriend Menuへ戻る。
 	online_session.clear_runtime_session_preserving_match()
 	var finished_app = AppRootScene.instantiate()
 	get_root().add_child(finished_app)
-	if not await _wait_screen(finished_app, "CharacterSelect", 15000):
-		_fail("終了済みFriend matchのP2再起動後に元room Character Selectへ復帰しませんでした。")
+	if not await _wait_screen(finished_app, "FriendMatchMenu", 15000):
+		_fail("終了済みFriend matchのP2再起動後にFriend Menuへ戻りませんでした。")
 		return
 	if online_session.session == null or str(online_session.session.user_id) != guest_user_id:
 		_fail("終了済みFriend match後のP2再認証でuser_idが変化しました。")
@@ -255,17 +255,12 @@ func _run() -> void:
 	finished_app.queue_free()
 	await process_frame
 
-	var room_after: Dictionary = await online_session.get_friend_room_status(room_code)
-	if not bool(room_after.get("ok", false)) \
-			or str(room_after.get("role", "")) != "guest":
-		_fail("P2再起動後に元Friend roomのGuest membershipを復元できませんでした。")
-		return
-
-	# 同じP2 userの再JOINは満員扱いせず既存Guestとして返す。
+	# Guest枠は解放済み。前MatchのP2も他userと同条件で、空いていれば先着JOINできる。
 	var same_guest_join: Dictionary = await online_session.join_friend_room(room_code)
 	if not bool(same_guest_join.get("ok", false)) \
-			or str(same_guest_join.get("role", "")) != "guest":
-		_fail("同じP2 userの再JOINが既存Guestとして扱われませんでした。")
+			or str(same_guest_join.get("role", "")) != "guest" \
+			or str(same_guest_join.get("guest_user_id", "")) != guest_user_id:
+		_fail("終了済みP2が空いているGuest枠へ再JOINできませんでした。")
 		return
 
 	var guest_leave: Dictionary = await online_session.leave_friend_room(room_code)
