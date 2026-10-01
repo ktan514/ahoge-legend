@@ -271,15 +271,15 @@ func _run() -> void:
 		_fail("Guest LEAVE ROOM後にP2がTopMenuへ戻りませんでした。")
 		return
 
-	var host_room := await _rpc_dict(
+	var host_room_after_guest_leave := await _rpc_dict(
 		host_client,
 		host_session,
 		OnlineConfigScript.FRIEND_ROOM_RPC_STATUS,
 		{"room_code": room_code}
 	)
-	if host_room.is_empty() \
-			or str(host_room.get("state", "")) != "WAITING" \
-			or not str(host_room.get("guest_user_id", "")).is_empty():
+	if host_room_after_guest_leave.is_empty() \
+			or str(host_room_after_guest_leave.get("state", "")) != "WAITING" \
+			or not str(host_room_after_guest_leave.get("guest_user_id", "")).is_empty():
 		_fail("Guest Result退出後にHost roomが次Guest待ちへ戻っていません。")
 		return
 
