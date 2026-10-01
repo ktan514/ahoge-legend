@@ -2007,11 +2007,12 @@ Friend再起動復帰のidentity契約:
 
 - Device認証の `device_id` は同一インストールで永続化し、再起動後も同じ値を使用する
 - 同じ `device_id` で再認証したclientは同じNakama `user_id` として扱う
-- Friend match中にclientが終了してもserver-side `active_online_match/current` とFriend room membershipは解除しない
+- Friend match中にclientが終了してもserver-side `active_online_match/current` とそのMatch参加資格は解除しない。再起動後は元authoritative matchへ復帰する
 - 再起動時は新規Friend導線へ進む前に `active_online_match/current` を確認し、ACTIVEなら元authoritative matchへ強制復帰する
-- RESULT_PENDINGならserver result snapshotの `friend_room_code` から元roomを復元してack後にFriend Character Select / Lobbyへ戻す
-- Friend roomのhost / guest membershipはNakama `user_id` を正本とする。同じGuest userが再度JOINした場合は既存Guestとしてroomを返し、満員扱いにしない
-- 別 `device_id` は別userであり、旧Guest membershipを自動的に乗っ取らない
+- RESULT_PENDINGならserver result snapshotを表示・ackする。終了後のFriend room Guest枠は前Match参加者へ予約しない
+- Friend roomのhost / guest membershipはNakama `user_id` を正本とするが、Match終了時にGuest membershipを解放する
+- 次MatchのGuest枠はroom code JOINの成功順で確定する。前MatchのGuestだったかどうかは優先条件にしない
+- 別 `device_id` は別userであり、進行中Matchの参加資格を引き継がない
 
 ローカル2client Human VerificationではP1/P2が同一 `user://` を共有し得るため、P2専用helperで別Device IDを一度だけ生成・保存し、再起動時も必ず同じP2 Device IDを再利用する。これにより実製品の「同一インストール再起動」を再現する。
 
@@ -2029,9 +2030,16 @@ Friend Result:
 - CHANGE CHARACTER
 - LEAVE ROOM
 
-Match終了後は `active_online_match` のRESULT_PENDINGをackした後、同じroomの `POST_MATCH` / `LOBBY` へ戻る。REMATCHは即match生成ではなくLobbyへ戻る操作であり、両者が再度Readyした時だけserverが新matchを生成する。
+Match終了後はHostのroom自体は維持するが、Guest membership / Guest character / Guest Readyを解放し、roomを次Guest待ちのWAITINGへ戻す。前MatchのGuestへ席を予約しない。
 
-終了済みFriend matchから再ログインした場合も、snapshotの `friend_room_code` から元roomを取得し、active resultをackした後にFriend Character Select / Lobbyへ戻す。
+REMATCH:
+- HostがREMATCH → 同じroomのLobbyへ戻り、Guest待ち
+- GuestがREMATCH → snapshotのroom codeへJOINを試みる。空席ならGuestを取得し、他userが先にJOIN済みならfull
+- CHANGE CHARACTERもGuestの場合は先に同じJOIN競争へ参加し、Guest枠を取得できた場合だけCharacter Selectへ進む
+- 次Matchは新Guestを含む両者がCharacter選択・Readyした時だけserverが生成する
+- Guest選定は常にroom code JOINの先着順であり、前Matchの対戦相手かどうかは考慮しない
+
+終了済みFriend matchから再ログインした場合、進行中Matchへの復帰は行わない。server result snapshotを解決後、前MatchのGuest枠を自動予約せずFriend Menu / 再JOIN導線へ戻す。
 
 ## 16. ランキング
 
