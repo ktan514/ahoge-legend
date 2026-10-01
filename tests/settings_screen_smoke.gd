@@ -55,11 +55,13 @@ func _run() -> void:
 	se.value = 33
 	voice.value = 22
 	mode.select(1)
+	mode.emit_signal("item_selected", 1)
 	await process_frame
 	if not resolution.disabled:
 		_fail("Fullscreen選択時にResolutionが非活性になりません。", app)
 		return
 	mode.select(0)
+	mode.emit_signal("item_selected", 0)
 	await process_frame
 	if resolution.disabled:
 		_fail("Window選択時にResolutionが活性化しません。", app)
