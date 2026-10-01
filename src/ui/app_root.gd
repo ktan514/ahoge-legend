@@ -302,7 +302,7 @@ func _show_friend_lobby() -> void:
 	screen.call("configure", _friend_room, local_user_id)
 	_replace_screen_instance(screen)
 	screen.connect("refresh_requested", Callable(self, "_refresh_friend_lobby").bind(screen))
-	screen.connect("character_select_requested", Callable(self, "_on_friend_result_change_character_requested"))
+	screen.connect("character_select_requested", Callable(self, "_show_friend_character_select"))
 	screen.connect("ready_requested", Callable(self, "_set_friend_ready").bind(screen))
 	screen.connect("leave_requested", Callable(self, "_leave_friend_room").bind(screen))
 	call_deferred("_refresh_friend_lobby", screen)
@@ -473,7 +473,7 @@ func _show_friend_result(summary: Dictionary) -> void:
 	screen.call("configure", summary)
 	_replace_screen_instance(screen)
 	screen.connect("rematch_requested", Callable(self, "_on_friend_rematch_requested"))
-	screen.connect("character_select_requested", Callable(self, "_show_friend_character_select"))
+	screen.connect("character_select_requested", Callable(self, "_on_friend_result_change_character_requested"))
 	screen.connect("leave_room_requested", Callable(self, "_leave_friend_room").bind(screen))
 
 
