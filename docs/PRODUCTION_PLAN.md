@@ -7,14 +7,15 @@
 - 目的: Steam公開候補までの製造順序・工程・完了条件を一元管理する
 - 上位仕様: `docs/BASIC_DESIGN.md`
 - 詳細仕様: `docs/DETAILED_DESIGN.md`
-- 画面仕様: `docs/SCREEN_DESIGN.md`
+- 画面機能仕様: `docs/SCREEN_DESIGN.md`
+- UI/UX最終デザイン仕様: `docs/UI_UX_DESIGN.md`
 
 この文書は「何をどの順序で完成させるか」の正本とする。
 仕様そのものは各設計書を正とし、未決事項をこの文書だけで確定しない。
 
 ## 2. 現在地
 
-2026-09-30時点では工程3まで完了し、**工程4: GameFlow・主要12画面 #25** を進行中である。M2 Ranked主要導線 #54 / #86 / #89 / #90 はmain採用・Human Verificationまで完了し、現在は工程4後半 #88 Ahoge Rating方式への移行を実施する。
+2026-10-02時点で工程4の機能優先GameFlow・主要12画面はmainへ揃った。これらは最終UIではなく機能プロトタイプである。現在は **工程4.5: UI/UXデザイン・最終画面化 #98** を実施し、主要12画面の見た目・文言・操作感・画面遷移を製品版として設計し直す。
 
 完了済みの主要基盤:
 
@@ -45,7 +46,8 @@ M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181
 | 1 | オンライン戦闘コア | #22 | 完了 |
 | 2 | authoritativeラウンド・BO3 | #23 | 完了 |
 | 3 | オンラインサービス | #24 | 完了 |
-| 4 | GameFlow・主要12画面 | #25 | 進行中 |
+| 4 | GameFlow・主要12画面（機能プロトタイプ） | #25 | 完了相当 |
+| 4.5 | UI/UXデザイン・最終画面化 | #98 | 進行中 |
 | 5 | 正式キャラクター・演出・素材 | #26 | 未着手 |
 | 6 | AWS・Steam・Windows・WAN QA | #27 | 未着手 |
 | 7 | Release Candidate | #28 | 未着手 |
@@ -71,7 +73,7 @@ M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181
 | --- | --- | --- | --- |
 | M1 Battle Core | 工程2完了直後 | UI-10 Battle、戦闘操作、HUD、85秒、Hit、Round / BO3、Overtime | #53 |
 | M2 Ranked主要導線 | 工程4前半 | TOP → Ranked → Character Select → Matching → Battle → Result | #54 |
-| M3 主要12画面 | 工程4完了時 | UI-01〜UI-12、Ranked / Friend全導線、Loading / Error | #55 |
+| M3 主要12画面 UI/UX | 工程4.5完了時 | UI-01〜UI-12の最終UI/UX、Ranked / Friend全導線、Loading / Error / Waiting、Battle HUD | #55 |
 | M4 正式キャラクター初回品質 | 工程5前半 | 最初の正式キャラ、頭部・アホ毛、Motion、VFX、SE | #56 |
 | M5 実配布環境 | 工程6完了時 | Windows x86_64、AWS、Steam、WAN、実解像度・実通信 | #57 |
 
@@ -214,6 +216,48 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - Friend authoritative snapshotへroom codeを含め、再ログイン復帰でも元roomを復元する
 - UI-02 SettingsはAudio 4系統 / Window・Fullscreen / Resolution / VSync / Control説明を実画面化し、端末ローカル `user://settings.cfg` へAPPLY時だけ保存する
 
+## 7.5 工程4.5: UI/UXデザイン・最終画面化
+
+統括Issue: #98
+
+工程4で完成したUI-01〜UI-12は、GameFlowとオンライン機能を成立させるための**機能優先プロトタイプ**である。現状のボタン、テキスト、サイズ、配置、文言、色、余白、画面遷移、Loading / Error / Waiting表現を最終デザインとして採用しない。
+
+工程4.5では、`docs/UI_UX_DESIGN.md` をUI/UX最終デザインの正本として、以下を設計してからGodotへ実装する。
+
+1. visual direction / tone
+2. typography hierarchy
+3. color / contrast
+4. spacing / grid / safe area
+5. common component system
+6. button / selector / slider / tab等のinteraction
+7. copy / button wording / state wording
+8. Back / Decide / Cancel / Leaveの操作規則
+9. Loading / Waiting / Error / Reconnect
+10. screen transition / animation
+11. UI-01〜UI-12のscreen-by-screen design
+12. Battle HUD / 5:4戦闘領域 / 16:9 wide layout
+13. Window / Fullscreen / resolutionごとのresponsive layout
+
+進め方:
+
+```text
+Design foundation
+→ common components / copy rules
+→ screen-by-screen design
+→ transition / state design
+→ Godot implementation
+→実画面反復調整
+→ #55 M3
+```
+
+blocking rules:
+
+- 工程4.5完了前に工程5の正式素材を量産しない
+- prototypeの見た目をそのまま製品版へ昇格させない
+- 各画面の実装修正前に対応するUI/UX設計を更新する
+- #55 M3では工程4.5で定義した最終デザインとの一致と操作感をHuman Verificationする
+- #55 PASSまでは工程5へ進まない
+
 ## 8. 工程5: 正式キャラクター・演出・素材
 
 実装・制作対象:
@@ -291,31 +335,29 @@ RC1
 
 現在からの優先順は次とする。
 
-1. #89で未解決matchをNakama user_id単位のserver-side Storage正本へ移行
-2. #86 Ranked主要GameFlowのCI / fresh review / #54 Human Verification完了
-3. #54 M2 PASS
-4. #88 Ahoge Rating計算・storage・settlement・ranking backend移行
-5. UI-11 Ahoge Rating表示接続
-6. UI-12 AHOGE LEGEND Rating Ranking接続
-7. Friend残画面 / UI-02 / UI-06 / UI-07 / UI-08
-8. 共通Loading / Error / Back / Decide / Cancel
-9. #55 M3主要12画面Human Verification
-10. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
-11. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
-12. 演出・音・台詞
-13. Steam認証
-14. AWS本番
-15. Windows実機・WAN試験
-16. balance / performance調整
-17. Release Candidate
+1. #98 工程4.5 UI/UX design foundation
+2. visual direction / typography / color / spacing / component system / copy rule確定
+3. UI-01〜UI-12のscreen-by-screen最終設計
+4. Loading / Waiting / Error / Reconnect / transition設計
+5. Battle HUD / 5:4領域 / wide layout最終設計
+6. GodotへUI/UX実装
+7. 実画面で反復調整
+8. #55 M3主要12画面 UI/UX Human Verification
+9. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
+10. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
+11. 演出・音・台詞
+12. Steam認証
+13. AWS本番
+14. Windows実機・WAN試験
+15. balance / performance調整
+16. Release Candidate
 
-Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件は、#88でシミュレーション可能な構造を用意したうえでbalance検証により確定する。実装担当判断だけで固定しない。
-
+Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件は、balance検証により確定する。実装担当判断だけで固定しない。
 
 ## 12. 計画変更ルール
 
 - 依存工程を飛ばして後工程を先行しない
-- UIの見た目だけを戦闘・GameFlowより先に作り込まない
+- UIの見た目だけを戦闘・GameFlowより先に作り込まない。GameFlow完成後は工程4.5でUI/UXを独立して設計・実装する
 - 未決事項を実装都合で確定しない
 - 計画変更はIssueで理由を記録し、この文書を先に更新する
 - 各実装はIssue → 設計更新 → commit → 実装 → 自動検証 → Human Verification → PR → main採用の順で進める
