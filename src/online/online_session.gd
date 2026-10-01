@@ -1176,6 +1176,19 @@ func set_friend_room_ready(room_code: String, ready: bool) -> Dictionary:
 	)
 
 
+func submit_friend_result_action(room_code: String, action: String) -> Dictionary:
+	if action not in ["rematch", "change_character", "leave"]:
+		return _friend_room_fail("result_action", "不正なFriend Result操作です。")
+	return await _friend_room_rpc(
+		OnlineConfigScript.FRIEND_ROOM_RPC_RESULT_ACTION,
+		{
+			"room_code": room_code,
+			"action": action,
+		},
+		"result_action"
+	)
+
+
 func leave_friend_room(room_code: String) -> Dictionary:
 	return await _friend_room_rpc(
 		OnlineConfigScript.FRIEND_ROOM_RPC_LEAVE,
