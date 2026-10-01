@@ -111,8 +111,6 @@ func _draw() -> void:
 		-length
 	)
 
-	var hair_color := Color("#3f86ff") if facing > 0.0 else Color("#ff4f58")
-	var ink := Color("#151515")
 	draw_line(root, middle, ink, 14.0, true)
 	draw_line(middle, tip, ink, 12.0, true)
 	draw_line(root, middle, hair_color.lightened(0.12), 8.0, true)
