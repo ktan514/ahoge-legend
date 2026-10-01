@@ -575,15 +575,10 @@ function friendRoomReadyRpc(
       throw new Error("friend room is waiting for guest");
     }
     if (
-      !isSupportedCharacterId(room.host_character_id) ||
-      !isSupportedCharacterId(room.guest_character_id)
+      requestedReady &&
+      !isSupportedCharacterId(roomCharacterForRole(room, role))
     ) {
-      throw new Error("both players must select character");
-    }
-
-    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
-      room.state = FRIEND_ROOM_STATE_LOBBY;
-      room.current_match_id = "";
+      throw new Error("select character before ready");
     }
 
     const wasReady = roomReadyForRole(room, role);
@@ -595,7 +590,9 @@ function friendRoomReadyRpc(
     const shouldStart =
       requestedReady &&
       room.host_ready &&
-      room.guest_ready;
+      room.guest_ready &&
+      isSupportedCharacterId(room.host_character_id) &&
+      isSupportedCharacterId(room.guest_character_id);
 
     if (shouldStart) {
       room.state = FRIEND_ROOM_STATE_STARTING;
