@@ -168,12 +168,9 @@ func _render() -> void:
 		not str(_room.get("host_user_id", "")).is_empty()
 		and not str(_room.get("guest_user_id", "")).is_empty()
 	)
-	var both_selected := (
-		not str(_room.get("host_character_id", "")).is_empty()
-		and not str(_room.get("guest_character_id", "")).is_empty()
-	)
+	var local_selected := not local_character_id().is_empty()
 	_ready_button.text = "CANCEL READY" if local_ready() else "READY"
-	_ready_button.disabled = active or not both_present or not both_selected
+	_ready_button.disabled = active or not both_present or not local_selected
 	_character_button.disabled = active
 	_leave_button.disabled = active
 
