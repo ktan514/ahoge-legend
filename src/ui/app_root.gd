@@ -218,6 +218,10 @@ func _force_resume_unresolved_online_match() -> void:
 				return
 			var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
 			if not bool(room.get("ok", false)):
+				if _online_session.is_friend_room_terminal_failure(room):
+					_clear_friend_room_context()
+					_show_friend_menu("前のFriend Matchは終了しています。")
+					return
 				_show_friend_menu(str(room.get("message", "Friend roomを復元できませんでした。")))
 				return
 			_set_friend_room(room)
