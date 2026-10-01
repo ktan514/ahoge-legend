@@ -1942,6 +1942,14 @@ LEAVE ROOM
 
 Host / GuestともResult表示中は500ms程度でroom statusをpollする。
 
+Result表示とroom同期の順序契約:
+
+- authoritative Match Resultを受信した時点でResult画面を即表示する。Friend roomのPOST_MATCH反映完了を画面表示の前提にしない
+- Result画面表示直後はroom同期中として操作ボタンを一時非活性にしてよいが、Loading専用画面で待機し続けない
+- roomが終了した旧match IDのまま `IN_MATCH` の場合はsettlement反映待ちとしてResult画面を維持する
+- `IN_MATCH` をREMATCH確定と判断するのは、roomの `current_match_id` がResultの旧 `match_id` と異なる場合だけ
+- `POST_MATCH` を確認したらHostの3択とGuestのLEAVE ROOMを活性化する
+
 - `POST_MATCH` → Host選択待ちを継続
 - `IN_MATCH + current_match_id` → REMATCH確定として新Friend matchへjoin
 - `LOBBY` → CHANGE CHARACTER確定として両者Lobbyへ戻る
