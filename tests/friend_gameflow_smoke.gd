@@ -269,9 +269,9 @@ func _run() -> void:
 			or _has_label_text(result_screen, "AHOGE RATING"):
 		_fail("Friend ResultにRating変動が表示されています。", app)
 		return
-	var rematch_button = _find_button(result_screen, "REMATCH")
-	var change_character_button = _find_button(result_screen, "CHANGE CHARACTER")
-	var leave_room_button = _find_button(result_screen, "LEAVE ROOM")
+	var rematch_button = _find_button(result_screen, "再戦する")
+	var change_character_button = _find_button(result_screen, "キャラクターを選び直す")
+	var leave_room_button = _find_button(result_screen, "ルームを終了")
 	if rematch_button == null or change_character_button == null or leave_room_button == null:
 		_fail("Host Friend Resultの3ボタンが揃っていません。", app)
 		return
