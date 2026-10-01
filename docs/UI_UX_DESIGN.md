@@ -174,3 +174,965 @@ M3ではprototypeとの比較ではなく、本書で確定した最終UI/UXに�
 - overall visual consistency
 
 M3 PASSまでは工程5の正式素材量産へ進まない。
+
+
+## 7. Visual Direction候補
+
+### 7.1 全候補で共通する非交渉条件
+
+AHOGE LEGENDのUI/UXは次を必ず満たす。
+
+- 主役はキャラクター全身ではなく「頭頂部 + アホ毛」
+- 画面を見た瞬間にコミカルな1対1対戦ゲームだと理解できる
+- 85秒 / Hit数 / Round取得数など、対戦中の重要情報を一瞬で読める
+- マウスだけで遊ぶゲームとして、hover / pressed / disabledのfeedbackを明確にする
+- 配信切り抜きやSNS動画でもUIが読める
+- キャラクター素材が増えてもUIの色がキャラクターを食わない
+- Ranked / Friend / Result / Ranking / Settingsまで同じvisual languageで統一する
+- prototypeの灰色panel / default Godot buttonを最終見た目として残さない
+- 技術エラー文をそのままユーザーへ露出しない
+- 16:9を基本としつつ、Battleの中央戦闘領域は視認性を優先して設計する
+
+### 7.2 Direction A: POP ARCADE / AHOGE STICKER
+
+#### 狙い
+
+「一目でバカゲーっぽく、でも対戦UIは読みやすい」方向。
+
+アホ毛そのものをロゴ・アイコン・separator・cursor・rank badge等へ反復利用し、AHOGE LEGEND固有のvisual identityを作る。
+
+#### visual
+
+- dark neutral background + vivid accent
+- 大きく太い見出し
+- sticker / badge / rounded panel
+- 重要ボタンは大きく、primary / secondary / destructiveを明確に分ける
+- 直線だけでなく、わずかな傾き・切り欠き・アホ毛形状をcomponentへ取り込む
+- キャラクター色はplayer / character accentとして限定使用
+
+#### draft palette
+
+| token | draft |
+| --- | --- |
+| Background | #11131A |
+| Surface | #1C202B |
+| Surface Raised | #252B39 |
+| Text Primary | #F7F8FC |
+| Text Secondary | #B8C0D0 |
+| Primary | #FF4F9A |
+| Secondary | #38D8FF |
+| Accent | #FFD84D |
+| Success | #55DF91 |
+| Danger | #FF6262 |
+
+色値は方向比較用のdraftであり、採用後にcontrast検証して確定する。
+
+#### typography
+
+- title: 極太 / compact / 角丸寄り
+- heading: 太字
+- body: 可読性優先のsans
+- 数値: Battle timer / Hit / Ratingはtabular数字相当の揃った見え方
+- 英字タイトルは強く、日本語説明は読みやすく抑える
+
+#### component
+
+- Primary Button: 大きいpill / rounded rectangle、hoverで浮き、pressedで沈む
+- Secondary: outlineまたは低彩度surface
+- Destructive: 赤系、通常操作と明確に分離
+- Tab: sticker label風
+- Rank Badge: medal / sticker
+- Character Card: 大きなアホ毛silhouette + name + archetype
+- Loading: アホ毛が左右へしなる短いloop
+
+#### motion
+
+- 120〜180ms: hover / pressed
+- 180〜260ms: panel enter / exit
+- Result / Matching等は少し強いovershootを許容
+- Battle中HUDはほぼ静的にし、重要eventだけ短く反応
+
+#### 長所
+
+- SNS / Steam screenshotで内容を理解しやすい
+- コミカルさと対戦ゲームらしさを両立しやすい
+- キャラクター素材が主役になりやすい
+- 全12画面へ展開しやすい
+
+#### リスク
+
+- 彩度を上げすぎると安っぽく見える
+- sticker感を使いすぎると情報密度の高いRanking / Settingsで騒がしくなる
+
+### 7.3 Direction B: LIVE BROADCAST / VTUBER MATCH
+
+#### 狙い
+
+「配信番組の対戦コーナー」をそのままゲームUIへ持ち込む方向。
+
+対戦前 / Matching / Ranking / Resultをbroadcast packageとして見せ、hololive fan gameらしい配信文脈を強くする。
+
+#### visual
+
+- dark navy / near black
+- cyan / magenta / live red
+- lower-third / ticker / live indicator
+- thin line + glow + glass panel
+- player sideをLEFT / RIGHTでbroadcast graphic化
+
+#### typography
+
+- title: condensed bold
+- body: clean sans
+- numbers: broadcast scoreboard風
+- status wordingは短くuppercaseを多用
+
+#### component
+
+- Button: broadcast control panel風
+- Tab: on-air channel selector風
+- Player Badge: nameplate / lower third
+- Ranking: tournament / sports standings風
+- Loading: signal scan / connecting indicator
+
+#### motion
+
+- wipe
+- slide
+- ticker
+- scanline的transition
+- Resultはscoreboard切替風
+
+#### 長所
+
+- VTuber / 配信文化との親和性が高い
+- Online Battle / Rankingと非常に相性が良い
+- HUD設計を統一しやすい
+
+#### リスク
+
+- generic esports UIに寄りすぎる可能性
+- コミカルな「アホ毛だけで戦う」馬鹿馬鹿しさが弱くなる
+- glass / glowを多用するとキャラクターよりUIが目立つ
+
+### 7.4 Direction C: MANGA BOUT / COMIC IMPACT
+
+#### 狙い
+
+「アホ毛同士の小競り合いを漫画の1コマとして見せる」方向。
+
+対戦前掛け合い・攻撃・Parry・Resultを吹き出し / impact text / speed lineで強く見せる。
+
+#### visual
+
+- warm off-white / ink blackをbase
+- player accentにred / blue
+- yellowをimpact accent
+- manga panel / speech balloon / speed line
+- UIの輪郭は太く、shadowよりoutline重視
+
+#### draft palette
+
+| token | draft |
+| --- | --- |
+| Paper | #FFF6E4 |
+| Ink | #181818 |
+| Red | #FF5A4E |
+| Blue | #438EFF |
+| Impact Yellow | #FFD43B |
+| Muted Gray | #D7D0C3 |
+
+#### typography
+
+- title: 太いdisplay
+- speech / result: comic caption
+- body / settings: 通常sansで読みやすさを維持
+
+#### component
+
+- Button: manga caption box
+- Modal: speech balloon
+- Result: full-frame impact panel
+- PreBattle: left / right speech panels
+- Battle event: JUST / PARRY / HIT等を短いimpact typographyで表示
+
+#### motion
+
+- panel snap
+- impact scale
+- speed-line reveal
+- screen-shakeはごく限定的
+- 通常menuは静かにし、Battle eventへ演出を集中
+
+#### 長所
+
+- AHOGE LEGENDの馬鹿馬鹿しさを最も強く表現できる
+- PreBattle / Battle / Resultに強い個性が出る
+- SNS短尺で印象に残りやすい
+
+#### リスク
+
+- Settings / Ranking等の静的画面へ展開する際に整理が必要
+- 演出過多だと対戦中の可読性を損ねやすい
+- キャラクター本体のアートstyleとの整合が重要
+
+### 7.5 比較
+
+| 観点 | A POP ARCADE | B LIVE BROADCAST | C MANGA BOUT |
+| --- | --- | --- | --- |
+| コミカルさ | 高 | 中 | 最高 |
+| 対戦ゲームらしさ | 高 | 最高 | 高 |
+| VTuber文脈 | 中 | 最高 | 中 |
+| アホ毛固有性 | 最高 | 中 | 高 |
+| Menu / Settings展開 | 最高 | 高 | 中 |
+| Battle演出 | 高 | 高 | 最高 |
+| Ranking適性 | 高 | 最高 | 中 |
+| SNS screenshot | 最高 | 高 | 最高 |
+| 実装複雑度 | 中 | 中 | 高 |
+| 全12画面の統一しやすさ | 最高 | 高 | 中 |
+
+### 7.6 暫定推奨
+
+現時点の第一候補は **Direction A: POP ARCADE / AHOGE STICKER** とする。
+
+理由:
+
+- AHOGE LEGEND固有の「アホ毛そのもの」をUI identityへ使いやすい
+- コミカルさを維持しながらRanked / Ranking / Settingsの情報UIも破綻しにくい
+- 正式キャラクター素材を主役にできる
+- 12画面全体へ同じcomponent systemを展開しやすい
+- Steam screenshot / SNS短尺の双方で理解されやすい
+
+ただしBattle / Result / PreBattleのimpact表現はDirection Cのcomic要素を部分採用できる。
+
+暫定hybrid案:
+
+```text
+Base UI / Menu / Settings / Ranking
+    = Direction A POP ARCADE
+
+Battle event / PreBattle / Result impact
+    = Direction C MANGA BOUTを限定採用
+
+Broadcast的なscoreboard可読性
+    = Direction Bから一部採用
+```
+
+最終方向はHuman Decisionで確定する。確定前にGodot本実装へ進まない。
+
+## 8. #100 Human Decision項目
+
+Human Decisionが必要な項目:
+
+1. visual direction:
+   - A POP ARCADE
+   - B LIVE BROADCAST
+   - C MANGA BOUT
+   - AをbaseにB/Cを限定採用するhybrid
+2. UIの主言語:
+   - 日本語中心
+   - 英語中心
+   - title / short labelは英語、説明は日本語
+3. 全体の明るさ:
+   - dark base
+   - light base
+   - screenごとに使い分け
+4. corner / component:
+   - rounded
+   - angular
+   - mixed
+5. motion:
+   - restrained
+   - playful
+   - highly animated
+
+## 9. 採用Visual Direction
+
+Human Decisionにより、Direction C: MANGA BOUT / COMIC IMPACT を正式採用する。
+
+採用理由:
+
+- AHOGE LEGENDの「アホ毛同士が本気で戦う馬鹿馬鹿しさ」を最も強く表現できる
+- PreBattle / Battle / Resultで画面映えする
+- 漫画的なコマ割り・吹き出し・擬音・集中線を、ゲームの読み合いと相性よく使える
+- SNS短尺 / Steam screenshotで一目で個性を出しやすい
+- 頭頂部 + アホ毛だけというBattle構図を、漫画コマの切り取りとして自然に見せられる
+
+### 9.1 採用時の制約
+
+C案を採用するが、「常時うるさい漫画演出」にはしない。
+
+- Menu / Settings / Rankingは整理された漫画誌面として静的・読みやすくする
+- PreBattle / Battle event / Resultだけimpactを強くする
+- Battle中は攻撃予備動作・アホ毛・timer・Hit数を最優先し、装飾が戦闘を邪魔しない
+- 擬音や集中線は短時間表示とし、常時画面を覆わない
+- character colorは補助色として使い、基本UIはPaper / Ink / Impact Yellowを軸にする
+- 顔全体・全身をBattle画面へ表示しない
+
+### 9.2 Design System draft
+
+Human Decision済み:
+- visual direction: MANGA BOUT / COMIC IMPACT
+
+現時点のdraft。実画面mockup確認後に確定する。
+
+#### Color
+
+| Token | Draft | 用途 |
+| --- | --- | --- |
+| Paper | #FFF6E4 | menu / panel base |
+| Ink | #181818 | text / border / comic frame |
+| Impact Yellow | #FFD43B | primary action / emphasis |
+| Player 1 Blue | #438EFF | P1 / left-side identity |
+| Player 2 Red | #FF5A4E | P2 / right-side identity |
+| Muted Paper | #E8E0D2 | disabled / secondary surface |
+| Error | #D93434 | destructive / error |
+| Success | #2E9F5B | success state |
+
+色値は方向確認用draftであり、contrast検証後に確定する。
+
+#### Shape
+
+- 角丸を基本形にしない
+- comic panel / caption box / cut-cornerを基本とする
+- borderは2〜4px相当のInk線
+- shadowは柔らかいdrop shadowより、ずらしたInk影・offset shadowを優先
+- Primary ActionはImpact Yellow + Ink border
+- Destructiveは白地 + Error border、またはError fill
+- disabledはMuted Paper + 低contrast Ink
+
+#### Spacing
+
+8px基準のspacing scaleを使用する。
+
+4 / 8 / 16 / 24 / 32 / 48 / 64
+
+- minimum safe margin: 32px
+- primary content gap: 24〜32px
+- section gap: 32〜48px
+- click target最小高: 44px
+- primary button標準高: 56px前後
+
+#### Typography roles
+
+フォントfamily自体は後続で権利確認して確定する。
+
+- Display XL: logo / WIN / LOSE / comic impact
+- Display L: screen title
+- Heading: section title / character name
+- Body: 説明 / setting label
+- Caption: 状態補足 / secondary info
+- Number XL: Battle timer
+- Number L: Hit / Round / Rating
+
+方針:
+- displayは太い漫画見出し風
+- bodyは可読性優先
+- 数字は桁幅が暴れない見え方を優先
+- 長文をdisplay書体で読ませない
+
+#### Motion draft
+
+- hover: 80〜120ms
+- pressed: 60〜100ms
+- screen transition: 180〜240ms
+- result impact: 250〜400ms
+- comic impact text: 180〜300ms
+- Battle HUD常時animationは禁止
+- screen shakeは重大eventだけ、2〜4px程度の短時間に限定
+
+## 10. 代表4画面 具体デザイン
+
+この節は#101へ渡す先行screen designとする。機能prototypeの座標・文言をそのまま踏襲しない。
+
+### 10.1 UI-01 Top Menu
+
+#### Purpose
+
+ゲームの入口。数秒で「アホ毛で戦う対戦ゲーム」と理解でき、主要機能へ迷わず移動できること。
+
+#### Layout
+
+16:9基準。
+
+    ┌──────────────────────────────────────────────┐
+    │ AHOGE LEGEND logo                 version / notice │
+    │──────────────────────────────────────────────│
+    │                                              │
+    │  ┌────────────┐      large hero manga panel │
+    │  │ ONLINE     │      character / ahoge art  │
+    │  │ BATTLE     │      speech / tagline       │
+    │  ├────────────┤                             │
+    │  │ RANKING    │                             │
+    │  ├────────────┤                             │
+    │  │ SETTINGS   │                             │
+    │  └────────────┘                             │
+    │                                              │
+    │ small secondary footer / fan-game notice     │
+    └──────────────────────────────────────────────┘
+
+#### Information hierarchy
+
+1. AHOGE LEGEND logo
+2. ONLINE BATTLE
+3. hero visual
+4. RANKING
+5. SETTINGS
+6. secondary legal / version
+
+#### Visual
+
+- 背景はPaperを全面ベタ塗りではなく、薄いhalftone / manga panel texture
+- 左側の主要menuはInkの斜めcaption box
+- 現在hover中のitemだけImpact Yellowで塗る
+- hero panelは漫画の大コマ
+- comic decorationは右側へ寄せ、menu文字の可読性を邪魔しない
+- title logo周囲に過剰な吹き出しを置かない
+
+#### Draft copy
+
+- ONLINE BATTLE
+- RANKING
+- SETTINGS
+- EXIT
+
+補足日本語はhover時または小captionとして出す。button本体は短い英語labelを基本候補とする。
+
+#### Interaction
+
+- hover: 黄色markerが左→右へ走る
+- pressed: button panelが2〜3px沈む
+- screen exit: 選択panel方向へcomic wipe
+- mouse cursorが乗っただけで大きくUI全体を動かさない
+
+#### Responsive
+
+- 1280x720でもmenuが縦に潰れない
+- hero artはcrop可
+- logo / menuはsafe area内で固定
+- Fullscreen / Windowでrelative位置を維持
+
+### 10.2 UI-04 Character Select
+
+#### Purpose
+
+キャラクターの「見た目のアホ毛」と「戦闘個性」を比較して決める。
+
+#### Layout
+
+    ┌──────────────────────────────────────────────┐
+    │ CHARACTER SELECT                  mode badge │
+    │──────────────────────────────────────────────│
+    │                                              │
+    │  [card] [card] [selected large card] [card]  │
+    │                                              │
+    │  ┌───────────────────────────┐  ┌─────────┐ │
+    │  │ selected character        │  │ AHOGE   │ │
+    │  │ name / type / attack      │  │ preview │ │
+    │  │ short description         │  │ motion  │ │
+    │  └───────────────────────────┘  └─────────┘ │
+    │                                              │
+    │  BACK                         [ DECIDE ]      │
+    └──────────────────────────────────────────────┘
+
+#### Character card
+
+- 縦長manga panel
+- 顔写真一覧ではなく、頭頂部 + アホ毛形状が一目で比較できるcropを優先
+- name
+- Ahoge Type
+- Attack Type
+- selected cardのみImpact Yellow frame
+- hoverでpanelが3〜5px前へ出る
+- locked / unavailableはhalftone overlay
+
+#### Selected detail
+
+最低情報:
+- Character Name
+- AHOGE TYPE: LONG / NORMAL / SHORT
+- ATTACK TYPE
+- 1行の特徴
+- Ahoge preview
+
+数値parameterを大量表示しない。ゲーム開始前に理解が必要な差だけ見せる。
+
+#### Draft actions
+
+- BACK
+- DECIDE
+
+Friend Lobbyから来た場合も基本layoutは共通化し、上部mode badgeだけ変更する。
+
+#### Transition
+
+- card変更: 120〜180ms
+- Ahoge preview: card選択時に1回だけ小さくしなる
+- DECIDE: selected cardをcomic panel zoomして次画面へ
+
+### 10.3 UI-10 Battle / HUD
+
+#### Non-negotiable composition
+
+Battle画面では顔・目・全身を表示しない。
+
+表示するのは各playerの:
+- 頭頂部
+- 髪
+- アホ毛
+- 必要最小限の髪飾り
+
+だけ。
+
+crop lineは原則として眉・目が画面へ入らない位置とする。
+
+#### Composition
+
+    ┌──────────────────────────────────────────────┐
+    │ P1 name / rounds / hits    85    P2 hits / rounds / name │
+    │──────────────────────────────────────────────│
+    │                                              │
+    │              COMBAT / AHOGE SPACE            │
+    │                                              │
+    │           ← ahoge reach / clash →            │
+    │                                              │
+    │  P1 head-top                     P2 head-top │
+    │  ╭──────╮                       ╭──────╮     │
+    │  │ hair │╲                     ╱│ hair │     │
+    │  ╰──────╯ ahoge             ahoge╰──────╯     │
+    └──────────────────────────────────────────────┘
+
+#### Head crop
+
+- 左player頭頂部は画面左下
+- 右player頭頂部は画面右下
+- 頭部の見える高さはBattle field高の20〜30%程度から検証開始
+- 目・鼻・口は表示しない
+- アホ毛根元と髪型でキャラクター識別できること
+- 頭部は攻撃・parry・dodgeに必要な範囲だけ動く
+- full character portraitはHUDにも置かない方向を第一候補とする
+
+#### HUD
+
+Top barは漫画scoreboardとして整理する。
+
+中央:
+- 85 timerを最大
+- 下に ROUND 1
+
+左右:
+- player name
+- round wins
+- hit count
+- connection状態は通常時非表示
+
+例:
+
+    P1 PEKORA   ●○   HIT 3      85      HIT 2   ○○   MIKO P2
+                                  ROUND 1
+
+#### Comic effects
+
+常時表示しない。
+
+event時のみ:
+- HIT!
+- PARRY!
+- JUST!
+- DODGE!
+- CLASH!
+
+表示時間は短く、attack trajectoryを隠さない。
+
+effect位置:
+- 衝突点から少し外側
+- character head / ahoge rootを覆わない
+- timerを覆わない
+
+#### Background
+
+- background artは低contrast
+- speed line / halftoneはevent時に一時追加
+- Battle中の主役は常にアホ毛
+- ステージ観客・看板等を置く場合も中央combat spaceを散らかさない
+
+#### 5:4 / 16:9
+
+現時点では5:4を確定しない。
+
+C案での候補:
+- 16:9全面を一つの漫画pageとして使用
+- 中央combat spaceだけ約5:4の視覚的な主コマとして構成
+- 左右余白には常設情報を詰めず、impact effect / subtle stage artに使う
+
+#101で実画面mockup比較後に最終採否する。
+
+### 10.4 UI-11 Match Result
+
+#### Purpose
+
+勝敗を一瞬で理解し、次の行動を迷わず選べること。
+
+#### Layout
+
+    ┌──────────────────────────────────────────────┐
+    │                                              │
+    │            YOU WIN / YOU LOSE / DRAW         │
+    │           large comic impact title           │
+    │                                              │
+    │        character / score summary panel       │
+    │                                              │
+    │            primary next action               │
+    │        secondary / tertiary actions          │
+    │                                              │
+    └──────────────────────────────────────────────┘
+
+#### Result impact
+
+- WIN / LOSE / DRAWは画面最大級のdisplay type
+- 勝者側accent colorを部分使用
+- backgroundに1回だけimpact line
+- 連続flashは禁止
+- 0.3〜0.5秒で通常Result layoutへ落ち着く
+
+#### Ranked actions
+
+既存機能契約を維持しつつcopyは#101で最終確定する。
+
+候補:
+- NEXT MATCH
+- CHANGE CHARACTER
+- TOP MENU
+
+Rating変動はscore summary内へ整理し、buttonより上に表示する。
+
+#### Friend Host actions
+
+- REMATCH
+- CHANGE CHARACTER
+- LEAVE ROOM
+
+REMATCHをPrimary、CHANGE CHARACTERをSecondary、LEAVE ROOMをDestructiveとする。
+
+#### Friend Guest
+
+- WAITING FOR HOST...
+- LEAVE ROOM
+
+Hostの選択待ちはspeech balloonではなくstatus captionとして明確にする。
+
+#### Transition
+
+- result enter: impact 250〜400ms
+- button操作可能になる前に長いLoading専用画面を挟まない
+- network同期中は同じResult画面上でstatus表示
+- Host選択後はcomic panel wipeで次状態へ
+
+## 11. #100 残Human Decision
+
+visual directionは確定済み。
+
+残りはdesign systemの詳細として、以下をmockup確認後に確定する。
+
+1. UI主言語
+   - 英語short label + 日本語補足
+   - 日本語中心
+2. Paper基調の明るさ
+   - warm light
+   - neutral light
+3. component角度
+   - strong angular
+   - moderate angular
+4. motion強度
+   - moderate
+   - strong
+
+#100ではこれらをcommon component mockupと合わせて確定する。
+
+
+## 12. Design System v1
+
+C: MANGA BOUT / COMIC IMPACTをGodotへ実装できる粒度まで数値化する。
+
+### 12.1 Language / Copy
+
+UIの主言語は**日本語中心**とする。
+
+- 製品名・短い演出語・対戦イベントは英語を許可する
+- 通常操作buttonは日本語を第一候補とする
+- technical error / RPC名 / stack traceはユーザーへ直接表示しない
+- buttonは「名詞」より「次に起きる動作」が分かる表現を優先する
+- 破壊的操作は曖昧語を避ける
+
+基本例:
+
+| 意味 | 採用候補 |
+| --- | --- |
+| battle entry | 対戦する |
+| ranked | ランクマッチ |
+| friend | フレンド対戦 |
+| confirm | 決定 |
+| back | 戻る |
+| cancel | キャンセル |
+| rematch | 再戦する |
+| change character | キャラクターを選び直す |
+| leave room | ルームを抜ける |
+| close room | ルームを終了 |
+| settings apply | 適用 |
+| defaults | 初期設定に戻す |
+
+短いimpact textは英語を使用してよい。
+
+- HIT!
+- PARRY!
+- JUST!
+- DODGE!
+- CLASH!
+- WIN!
+- LOSE
+- DRAW
+
+### 12.2 Color Tokens
+
+| Token | Hex | Purpose |
+| --- | --- | --- |
+| paper_0 | #FFF8E8 | page / light surface |
+| paper_1 | #F3E9D4 | secondary surface |
+| paper_2 | #DED2BA | disabled surface |
+| ink_0 | #151515 | primary ink |
+| ink_1 | #2A2A2A | raised dark surface |
+| ink_2 | #4A4A4A | secondary text on light |
+| impact_yellow | #FFD43B | primary action / highlight |
+| p1_blue | #3F86FF | player 1 |
+| p2_red | #FF4F58 | player 2 |
+| danger | #D73535 | destructive |
+| success | #2D9B59 | success |
+| info | #2E73D2 | info / reconnect |
+| white | #FFFFFF | reverse text |
+
+Contrast rule:
+- body textは背景とのWCAG AA相当を目安にする
+- Impact Yellow上の文字はInk固定
+- P1/P2色だけで状態を伝えず、label / iconを併用する
+
+### 12.3 Typography Scale
+
+フォントファイルは別途選定するが、roleとsizeを先に固定する。
+
+1280x720基準:
+
+| Role | Size | Weight | Usage |
+| --- | ---: | --- | --- |
+| display_xl | 64 | 800-900 | WIN / LOSE / major impact |
+| display_l | 40 | 800 | screen title |
+| heading_l | 28 | 700 | section title |
+| heading_m | 22 | 700 | card / panel title |
+| body_l | 18 | 500 | main body |
+| body_m | 16 | 500 | labels |
+| caption | 13 | 500 | secondary info |
+| number_xl | 72 | 800-900 | Battle timer |
+| number_l | 28 | 700 | Hit / Rating |
+
+1600x900以上では1.125〜1.25倍まで拡大可能。1920x1080で2倍にはしない。
+
+### 12.4 Spacing / Layout Tokens
+
+基準unitは8px。
+
+| Token | px |
+| --- | ---: |
+| xs | 4 |
+| s | 8 |
+| m | 16 |
+| l | 24 |
+| xl | 32 |
+| 2xl | 48 |
+| 3xl | 64 |
+
+- safe margin: 32px
+- wide screen max content width: 1440px
+- modal max width: 720px
+- primary column width: 320〜420px
+- minimum interactive height: 44px
+- standard button height: 52px
+- primary button height: 60px
+
+### 12.5 Shape / Border
+
+- radius 0〜6pxを基本とし、大きなpillは使用しない
+- cut-corner: 8〜16px
+- border: 2px standard / 4px impact
+- offset shadow: 4px 4px 0 Ink
+- selected state: 4px Impact Yellow frame + Ink outline
+- focus ring: 3px P1 BlueまたはImpact Yellow
+- panel tiltは最大1.5deg相当まで。読みやすさを崩す角度は禁止
+
+### 12.6 Button Variants
+
+#### Primary
+
+- Impact Yellow fill
+- Ink border 3px
+- Ink text
+- standard height 60px
+- hover: y -2px / offset shadow +2px
+- pressed: y +2px / shadow縮小
+- disabled: paper_2 + ink_2
+
+#### Secondary
+
+- paper_0 fill
+- Ink border 2px
+- Ink text
+- hover: paper_1
+
+#### Destructive
+
+- danger fill
+- white text
+- Ink border 2px
+- 使用対象: room終了 / 明確な破壊操作
+- Guest自身の「ルームを抜ける」はSecondary寄りでよく、room全体終了と視覚区別する
+
+#### Back
+
+- small Secondary
+- 左下またはheader左
+- 画面によって位置を変えない
+
+### 12.7 Form Components
+
+#### Dropdown
+
+- height 48px
+- Ink border 2px
+- selected rowはImpact Yellow
+- arrow iconはInk
+- disabledはpaper_2
+
+#### Slider
+
+- track 6px
+- knob 18px
+- active fill Inkまたはaccent
+- valueは右側へ数値表示
+
+#### Toggle
+
+- 48x26px
+- ON: Impact Yellow + Ink knob
+- OFF: paper_2 + Ink
+- label textでもON/OFFを併記する
+
+#### Text Input
+
+- height 52px
+- uppercase code入力はletter spacingを広めにする
+- invalidはDanger border + 1行error
+- technical messageを表示しない
+
+### 12.8 Manga Panel
+
+共通panel component。
+
+- Paper fill
+- Ink border 3px
+- optional cut-corner
+- optional halftone background
+- title captionを上端へ重ねられる
+- decorative line / burstはcontent layerと分離する
+
+Panel variants:
+- standard
+- selected
+- impact
+- dark
+- error
+
+### 12.9 State Feedback
+
+#### Loading
+
+- full-screen blockingは必要時だけ
+- 既存画面を維持できる場合はinline statusを優先
+- animationはアホ毛がしなる2〜3frame風loop
+- copy例: 「読み込み中…」
+
+#### Waiting
+
+- user actionが不要なら状態と理由を明示
+- copy例: 「対戦相手を探しています…」
+- Cancel可能なら同じ画面にCancelを残す
+
+#### Error
+
+- title: 「接続できませんでした」
+- body: 人間が取れる次actionだけ書く
+- Retry / Top Menu等を明示
+- stack trace / RPC名 / source line禁止
+
+#### Reconnect
+
+- Battle画面を可能な限り維持
+- status stripで「再接続中…」
+- countdownがある場合だけ秒数表示
+- reconnect成功時は短い「復帰しました」feedback
+
+### 12.10 Transition
+
+| Transition | Duration | Usage |
+| --- | ---: | --- |
+| hover | 100ms | component |
+| press | 80ms | component |
+| menu panel in/out | 200ms | menu |
+| comic wipe | 220ms | screen |
+| character card change | 160ms | character select |
+| result impact | 360ms | result |
+| status toast | 180ms | status |
+
+easing:
+- UI normal: ease-out
+- impact: back/overshootを弱く
+- Battle中に長いtransitionを入れない
+
+### 12.11 Battle Specific Tokens
+
+- top HUD height: 88〜104px
+- timer hitbox-free safe zone: center top 160px幅
+- timer size: 64〜72px
+- head-top visible height: battle content高の20〜30%
+- eye lineより上だけを表示
+- impact text max width: battle areaの24%
+- impact text表示: 180〜300ms
+- screen shake: 2〜4px / 80〜140ms / major event限定
+
+### 12.12 Responsive Breakpoints
+
+- 1280x720: minimum reference
+- 1600x900: standard
+- 1920x1080: standard large
+
+Rules:
+- UIを単純scale-upしない
+- max content widthを設ける
+- hero art / manga backgroundはcropする
+- body text sizeは極端に増やさない
+- Battle combat spaceを最優先で確保する
+- Fullscreen / Windowでnavigation位置を変えない
+
+## 13. #100 Design System確定
+
+C案採用画像をHuman Reviewで「いいデザイン」と確認済み。
+
+以下をv1 design systemとして採用し、#101へ渡す。
+
+- visual direction: C MANGA BOUT / COMIC IMPACT
+- language: 日本語中心 + impact textのみ英語
+- base: warm Paper + Ink
+- shape: moderate angular / comic panel
+- motion: moderate、impact eventだけstrong
+- color tokens: §12.2
+- typography roles: §12.3
+- spacing / component tokens: §12.4〜12.8
+- feedback / transition: §12.9〜12.10
+- Battle composition: 頭頂部 + アホ毛のみ
