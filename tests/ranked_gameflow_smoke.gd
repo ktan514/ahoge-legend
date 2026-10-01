@@ -239,10 +239,10 @@ func _run() -> void:
 		return
 
 	var result_screen = app.get_child(0)
-	if _has_button_text(result_screen, "REMATCH"):
+	if _has_button_text(result_screen, "再戦する"):
 		_fail("Ranked ResultにREMATCHが表示されています。", app)
 		return
-	if not _has_button_text(result_screen, "NEXT MATCH"):
+	if not _has_button_text(result_screen, "次のランクマッチ"):
 		_fail("Ranked ResultにNEXT MATCHがありません。", app)
 		return
 
