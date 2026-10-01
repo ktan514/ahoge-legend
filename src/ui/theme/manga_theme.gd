@@ -44,7 +44,7 @@ static func build_theme() -> Theme:
 	value.set_stylebox("focus", "LineEdit", line_focus)
 	value.set_color("font_color", "LineEdit", INK_0)
 	value.set_color("caret_color", "LineEdit", INK_0)
-	value.set_color("selection_color", "LineEdit", Color(IMPACT_YELLOW, 0.6))
+	value.set_color("selection_color", "LineEdit", Color(IMPACT_YELLOW.r, IMPACT_YELLOW.g, IMPACT_YELLOW.b, 0.6))
 
 	var slider := StyleBoxFlat.new()
 	slider.bg_color = INK_2
@@ -144,12 +144,12 @@ static func _apply_button_theme(theme: Theme, type_name: String) -> void:
 	theme.set_color("font_color", type_name, INK_0)
 	theme.set_color("font_hover_color", type_name, INK_0)
 	theme.set_color("font_pressed_color", type_name, INK_0)
-	theme.set_color("font_disabled_color", type_name, Color(INK_2, 0.6))
+	theme.set_color("font_disabled_color", type_name, Color(INK_2.r, INK_2.g, INK_2.b, 0.6))
 	theme.set_font_size("font_size", type_name, 18)
 	theme.set_stylebox("normal", type_name, _button_style(PAPER_0, INK_0, 2, Vector2(4, 4)))
 	theme.set_stylebox("hover", type_name, _button_style(IMPACT_YELLOW, INK_0, 3, Vector2(5, 5)))
 	theme.set_stylebox("pressed", type_name, _button_style(IMPACT_YELLOW, INK_0, 3, Vector2(1, 1)))
-	theme.set_stylebox("disabled", type_name, _button_style(PAPER_2, Color(INk_2 if false else INK_2, 0.55), 2, Vector2.ZERO))
+	theme.set_stylebox("disabled", type_name, _button_style(PAPER_2, Color(INK_2.r, INK_2.g, INK_2.b, 0.55), 2, Vector2.ZERO))
 	theme.set_stylebox("focus", type_name, _button_style(PAPER_0, IMPACT_YELLOW, 4, Vector2(4, 4)))
 
 
@@ -163,11 +163,11 @@ static func _apply_button_override(
 	button.add_theme_stylebox_override("normal", _button_style(normal_color, INK_0, 3, Vector2(5, 5)))
 	button.add_theme_stylebox_override("hover", _button_style(hover_color, INK_0, 4, Vector2(6, 6)))
 	button.add_theme_stylebox_override("pressed", _button_style(hover_color, INK_0, 4, Vector2(1, 1)))
-	button.add_theme_stylebox_override("disabled", _button_style(PAPER_2, Color(INK_2, 0.6), 2, Vector2.ZERO))
+	button.add_theme_stylebox_override("disabled", _button_style(PAPER_2, Color(INK_2.r, INK_2.g, INK_2.b, 0.6), 2, Vector2.ZERO))
 	button.add_theme_color_override("font_color", font_color)
 	button.add_theme_color_override("font_hover_color", font_color)
 	button.add_theme_color_override("font_pressed_color", font_color)
-	button.add_theme_color_override("font_disabled_color", Color(INK_2, 0.65))
+	button.add_theme_color_override("font_disabled_color", Color(INK_2.r, INK_2.g, INK_2.b, 0.65))
 	if normal_color == DANGER:
 		button.add_theme_color_override("font_color", reverse_font_color)
 		button.add_theme_color_override("font_hover_color", reverse_font_color)
