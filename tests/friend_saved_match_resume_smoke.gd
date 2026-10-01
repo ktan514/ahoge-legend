@@ -136,6 +136,13 @@ func _run() -> void:
 		_fail("P2のserver-side active Friend matchが保存されていません。")
 		return
 
+	var resumed_round_ready := [false]
+	online_session.round_started.connect(
+		func(round_number: int, _round_wins: Dictionary, _server_tick: int) -> void:
+			if round_number == 1:
+				resumed_round_ready[0] = true
+	)
+
 	# アプリ再起動相当。AppRoot起動時に同じDevice IDで再認証し、
 	# ONLINE BATTLEの新規導線へ入る前に元Friend Battleへ自動復帰する。
 	online_session.clear_runtime_session_preserving_match()
@@ -162,11 +169,17 @@ func _run() -> void:
 		_fail("未解決Friend matchがあるP2で新しいFriend roomを作成できてしまいました。")
 		return
 
-	resumed_app.queue_free()
-	await process_frame
-	if not await _wait_round_ready(online_session, 5000):
+	var current_resume_snapshot: Dictionary = online_session.latest_match_snapshot
+	if not bool(current_resume_snapshot.get("round_countdown_active", false)) \
+			and not bool(current_resume_snapshot.get("round_finished", false)) \
+			and not bool(current_resume_snapshot.get("match_finished", false)):
+		resumed_round_ready[0] = true
+	if not await _wait_bool_flag(resumed_round_ready, 7000):
 		_fail("P2復帰後に元Friend Roundを再開できませんでした。")
 		return
+
+	resumed_app.queue_free()
+	await process_frame
 
 	# 元P1を切断し、P2の通常攻撃5Hit + Round境界timeoutでserver Resultまで進める。
 	var guest_hit_count := [0]
@@ -288,14 +301,10 @@ func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
 	return false
 
 
-func _wait_round_ready(online_session, timeout_ms: int) -> bool:
+func _wait_bool_flag(flag: Array, timeout_ms: int) -> bool:
 	var deadline := Time.get_ticks_msec() + timeout_ms
 	while Time.get_ticks_msec() < deadline:
-		var snapshot: Dictionary = online_session.latest_match_snapshot
-		if not snapshot.is_empty() \
-				and not bool(snapshot.get("match_finished", false)) \
-				and not bool(snapshot.get("round_finished", false)) \
-				and not bool(snapshot.get("round_countdown_active", false)):
+		if bool(flag[0]):
 			return true
 		await create_timer(0.05).timeout
 	return false
