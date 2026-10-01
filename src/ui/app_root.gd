@@ -318,6 +318,10 @@ func _refresh_friend_lobby(screen: Control) -> void:
 	if not is_instance_valid(screen) or _current_screen != screen:
 		return
 	if not bool(room.get("ok", false)):
+		if _online_session.is_friend_room_terminal_failure(room):
+			_clear_friend_room_context()
+			_show_friend_menu("Friend roomが終了しました。")
+			return
 		screen.call("set_status", str(room.get("message", "Friend room状態を取得できませんでした。")))
 		return
 	_set_friend_room(room)
@@ -478,6 +482,10 @@ func _on_friend_rematch_requested() -> void:
 		return
 	var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
 	if not bool(room.get("ok", false)):
+		if _online_session.is_friend_room_terminal_failure(room):
+			_clear_friend_room_context()
+			_show_friend_menu("Friend roomが終了しました。")
+			return
 		_show_friend_menu(str(room.get("message", "Friend roomを取得できませんでした。")))
 		return
 	_set_friend_room(room)
@@ -505,6 +513,10 @@ func _leave_friend_room(_screen: Control = null) -> void:
 	_show_loading("LEAVING FRIEND ROOM...")
 	var result: Dictionary = await _online_session.leave_friend_room(_friend_room_code)
 	if not bool(result.get("ok", false)):
+		if _online_session.is_friend_room_terminal_failure(result):
+			_clear_friend_room_context()
+			_show_friend_menu("Friend roomはすでに終了しています。")
+			return
 		_show_friend_lobby()
 		if is_instance_valid(_current_screen):
 			_current_screen.call("set_status", str(result.get("message", "Friend roomから退出できませんでした。")))
