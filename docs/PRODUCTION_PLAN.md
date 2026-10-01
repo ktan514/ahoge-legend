@@ -210,7 +210,7 @@ M1で重大な乖離が見つかった場合、工程3へ進む前に修正す�
 - UI-12初期実装はcurrent Seasonのみ。旧Season非公開時はFINALIZING、公開中0件はNO RANKING DATAを表示する
 - UI-06〜08を既存Friend room backendへ接続し、Create / Join / Lobby / Character / Ready / Leaveを実画面化する
 - Friend MatchはUI-09 / UI-10をRankedと共用し、match_mode=friendではRating settlementを表示しない
-- Friend ResultのREMATCHはHostの同room codeを維持するがMatch終了時にGuest枠を解放し、次Guestはroom code JOINの先着順で決める。新Guestを含む両者が再度Readyした時だけ新matchを生成する
+- Friend Resultの選択はHostのみ。REMATCHは同じGuest・同じCharacterで直接次match、CHANGE CHARACTERはGuest枠を解放してHostを同room Lobbyへ戻す、LEAVE ROOMはroomを閉じて両者Topへ戻す
 - Friend authoritative snapshotへroom codeを含め、再ログイン復帰でも元roomを復元する
 
 ## 8. 工程5: 正式キャラクター・演出・素材
