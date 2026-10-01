@@ -286,18 +286,19 @@ func _run() -> void:
 	var post_match := await _wait_room_state(
 		online_session,
 		room_code,
-		"WAITING",
+		"POST_MATCH",
 		5000
 	)
 	if post_match.is_empty():
-		_fail("Match Result後にFriend roomがGuest待ちWAITINGへ戻りませんでした。")
+		_fail("Match Result後にFriend roomがPOST_MATCHへ戻りませんでした。")
 		return
-	if not str(post_match.get("guest_user_id", "")).is_empty() \
-			or not str(post_match.get("guest_character_id", "")).is_empty() \
-			or not str(post_match.get("current_match_id", "")).is_empty() \
+	if str(post_match.get("guest_user_id", "")) != p2_user_id \
+			or str(post_match.get("host_character_id", "")) != OnlineConfigScript.RANKED_CHARACTER_LONG_TEST \
+			or str(post_match.get("guest_character_id", "")) != OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST \
+			or str(post_match.get("current_match_id", "")) != first_match_id \
 			or bool(post_match.get("host_ready", true)) \
 			or bool(post_match.get("guest_ready", true)):
-		_fail("Friend Match終了後にGuest枠 / Ready / match IDが解放されていません。")
+		_fail("POST_MATCHで前Match参加者 / Character / match IDを保持できていません。")
 		return
 
 	# FriendはPlayer Rating / PLAYER Ranking / AHOGE LEGEND Rankingを更新しない。
@@ -326,7 +327,7 @@ func _run() -> void:
 		_fail("Friend matchでAHOGE LEGEND Rankingが変化しました。")
 		return
 
-	# 終了済みFriendへ再ログインした場合はResult再表示ではなくCharacter Selectへ戻す。
+	# 終了済みFriendへ再ログインした場合はHost選択待ちのResultへ復帰する。
 	online_session.clear_runtime_session_preserving_match()
 	var reauth: Dictionary = await online_session.authenticate_local_device()
 	if not bool(reauth.get("ok", false)) or str(reauth.get("user_id", "")) != p1_user_id:
@@ -334,8 +335,8 @@ func _run() -> void:
 		return
 	var resumed: Dictionary = await online_session.resume_active_match_after_login()
 	if not bool(resumed.get("ok", false)) \
-			or str(resumed.get("destination", "")) != "friend_character_select":
-		_fail("終了済みFriend matchの復帰先がfriend_character_selectではありません。")
+			or str(resumed.get("destination", "")) != "friend_result":
+		_fail("終了済みFriend matchの復帰先がfriend_resultではありません。")
 		return
 	var snapshot: Dictionary = resumed.get("snapshot", {})
 	if not bool(snapshot.get("match_finished", false)) \
@@ -343,13 +344,13 @@ func _run() -> void:
 		_fail("終了済みFriend snapshotが不正です。")
 		return
 
-	var blocked_rematch: Dictionary = await online_session.set_friend_room_ready(
+	var blocked_ready: Dictionary = await online_session.set_friend_room_ready(
 		room_code,
 		true
 	)
-	if bool(blocked_rematch.get("ok", false)) \
-			or str(blocked_rematch.get("step", "")) != "unresolved_match":
-		_fail("終了済みFriendの遷移確定前に再戦Readyできました。")
+	if bool(blocked_ready.get("ok", false)) \
+			or str(blocked_ready.get("step", "")) != "unresolved_match":
+		_fail("Result確定前に通常Ready操作できました。")
 		return
 
 	var p1_ack: Dictionary = await online_session.acknowledge_active_match_destination()
@@ -365,7 +366,30 @@ func _run() -> void:
 		_fail("終了済みFriendのP2 server contextを解除できませんでした。")
 		return
 
-	# 次MatchのGuest枠は前MatchのP2へ予約しない。P3が先にJOINすればP3がGuestになる。
+	# Result選択はHostだけ。GuestからのResult actionは拒否する。
+	var guest_action = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.FRIEND_ROOM_RPC_RESULT_ACTION,
+		JSON.stringify({"room_code": room_code, "action": "change_character"})
+	)
+	if guest_action != null and not guest_action.is_exception():
+		_fail("GuestがFriend Result操作を確定できました。")
+		return
+
+	# HostがCHANGE CHARACTERを選ぶとGuest枠を解放し、同roomをWAITINGへ戻す。
+	var changed: Dictionary = await online_session.submit_friend_result_action(
+		room_code,
+		"change_character"
+	)
+	if not bool(changed.get("ok", false)) \
+			or str(changed.get("state", "")) != "WAITING" \
+			or not str(changed.get("guest_user_id", "")).is_empty() \
+			or not str(changed.get("host_character_id", "")).is_empty() \
+			or not str(changed.get("guest_character_id", "")).is_empty():
+		_fail("Host CHANGE CHARACTERでGuest枠 / Characterを解放できませんでした。")
+		return
+
+	# Guest枠は前MatchのP2へ予約しない。P3が先にJOINすればP3がGuestになる。
 	var third_client = nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
@@ -404,6 +428,13 @@ func _run() -> void:
 		_fail("P3先着後も前MatchのP2がGuest枠を奪えてしまいました。")
 		return
 
+	var p1_character_again: Dictionary = await online_session.set_friend_room_character(
+		room_code,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	if not bool(p1_character_again.get("ok", false)):
+		_fail("CHANGE CHARACTER後にP1 Characterを再選択できませんでした。")
+		return
 	var p3_character := await _rpc_dict(
 		third_client,
 		third_session,
@@ -417,24 +448,24 @@ func _run() -> void:
 		_fail("新Guest P3のCharacterを保存できませんでした。")
 		return
 
-	var rematch_p1: Dictionary = await online_session.set_friend_room_ready(room_code, true)
-	if not bool(rematch_p1.get("ok", false)):
-		_fail("P1が再戦Readyできませんでした。")
+	var next_p1: Dictionary = await online_session.set_friend_room_ready(room_code, true)
+	if not bool(next_p1.get("ok", false)):
+		_fail("P1が次戦Readyできませんでした。")
 		return
-	var rematch_p3 := await _rpc_dict(
+	var next_p3 := await _rpc_dict(
 		third_client,
 		third_session,
 		OnlineConfigScript.FRIEND_ROOM_RPC_READY,
 		{"room_code": room_code, "ready": true}
 	)
-	var second_match_id := str(rematch_p3.get("current_match_id", ""))
-	if rematch_p3.is_empty() \
-			or str(rematch_p3.get("state", "")) != "IN_MATCH" \
+	var second_match_id := str(next_p3.get("current_match_id", ""))
+	if next_p3.is_empty() \
+			or str(next_p3.get("state", "")) != "IN_MATCH" \
 			or second_match_id.is_empty() \
 			or second_match_id == first_match_id:
 		_fail("P3を新Guestにした同じFriend roomで次matchを生成できませんでした。")
 		return
-	if int(rematch_p3.get("match_generation", 0)) != int(post_match.get("match_generation", 0)) + 1:
+	if int(next_p3.get("match_generation", 0)) != int(post_match.get("match_generation", 0)) + 1:
 		_fail("Friend next matchのmatch_generationが増加していません。")
 		return
 
