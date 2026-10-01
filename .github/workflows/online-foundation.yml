@@ -13,6 +13,8 @@ on:
       - "scripts/client-ranking-screen-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
       - "scripts/client-friend-gameflow-smoke.sh"
+      - "scripts/client-friend-saved-resume-smoke.sh"
+      - "scripts/client-friend-hv-p2.sh"
       - "scripts/client-ranked-gameflow-smoke.sh"
       - "scripts/client-ranked-hv-opponent.sh"
       - "scripts/client-reconnect-smoke.sh"
@@ -68,6 +70,7 @@ on:
       - "tests/ranking_screen_smoke.gd"
       - "tests/friend_match_smoke.gd"
       - "tests/friend_gameflow_smoke.gd"
+      - "tests/friend_saved_match_resume_smoke.gd"
       - "tests/ranked_gameflow_smoke.gd"
       - "tools/ranked_hv_opponent.gd"
       - "tests/reconnect_smoke.gd"
@@ -106,6 +109,8 @@ on:
       - "scripts/client-ranking-screen-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
       - "scripts/client-friend-gameflow-smoke.sh"
+      - "scripts/client-friend-saved-resume-smoke.sh"
+      - "scripts/client-friend-hv-p2.sh"
       - "scripts/client-ranked-gameflow-smoke.sh"
       - "scripts/client-ranked-hv-opponent.sh"
       - "scripts/client-reconnect-smoke.sh"
@@ -161,6 +166,7 @@ on:
       - "tests/ranking_screen_smoke.gd"
       - "tests/friend_match_smoke.gd"
       - "tests/friend_gameflow_smoke.gd"
+      - "tests/friend_saved_match_resume_smoke.gd"
       - "tests/ranked_gameflow_smoke.gd"
       - "tools/ranked_hv_opponent.gd"
       - "tests/reconnect_smoke.gd"
@@ -375,6 +381,10 @@ jobs:
       - name: Godot Friend major GameFlow smoke
         if: matrix.group == 'match'
         run: bash ./scripts/client-friend-gameflow-smoke.sh
+
+      - name: Godot Friend saved match resume smoke
+        if: matrix.group == 'match'
+        run: bash ./scripts/client-friend-saved-resume-smoke.sh
 
       - name: Godot authoritative 85 second timer smoke
         if: matrix.group == 'long'
