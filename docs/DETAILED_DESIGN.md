@@ -1912,15 +1912,44 @@ Friend Matchは `matchMode=friend` とし、Match Resultが確定しても次を
 
 Round / BO3 / Reconnect / Match ResultはRankedと同じserver authoritative battle handlerを使用する。
 
-#### 15.2.5 Rematch
+#### 15.2.5 Result / Rematch
 
-Match Result確定時、serverはHostのroom codeを維持したまま `WAITING` へ戻し、Guest membership / Guest character / Guest Ready / current match IDを解放する。Host characterは保持し、Host Readyはfalseへ戻す。
+Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の選択権はHostだけが持ち、Guestは操作ボタンを持たずHostの選択を待つ。
 
-`REMATCH` はHostにとって同じroom Lobbyへ戻る操作とする。前MatchのGuestには次Guest枠を予約しない。Guest側のREMATCHは同じroom codeへのJOINを再試行し、その時点で空席ならGuestを取得する。別userが先にJOIN済みならそのuserを新Guestとして採用する。
+Host Result操作はserver RPCを正本とし、次の3択とする。
 
-次Matchは、新Guestを含む両者がCharacter選択・Readyした時点で新しいauthoritative Friend matchを生成する。前Matchの組み合わせは次Matchの参加優先度へ影響しない。
+```text
+REMATCH
+CHANGE CHARACTER
+LEAVE ROOM
+```
 
-`CHANGE CHARACTER` はHostならroom内Character Selectへ進む。前MatchのGuestなら先に同じGuest枠の先着JOINへ参加し、取得できた場合だけCharacter Selectへ進む。
+- `REMATCH`
+  - 現在のHost / Guestを維持する
+  - 両者のcharacterを変更しない
+  - Lobby / Character Selectを挟まず、同じ2人・同じcharacterで新しいauthoritative Friend matchを生成する
+  - Guest Resultはroom stateが `IN_MATCH` になったことを検知して同じ新matchへjoinする
+- `CHANGE CHARACTER`
+  - Hostだけが選択できる
+  - 前MatchのGuest membership / Guest characterを解放する
+  - Host characterも未選択へ戻す
+  - roomを同じroom codeの `WAITING` へ戻す
+  - HostはFriend Lobbyへ戻る
+  - GuestはTop Menuへ戻る
+  - 以後のGuest枠は前Match参加者かどうかに関係なくroom code JOINの先着順とする
+- `LEAVE ROOM`
+  - Hostだけが選択できる
+  - roomを削除してcodeを無効化する
+  - Host / GuestともTop Menuへ戻る
+
+Guest Resultは500ms程度でroom statusをpollする。
+
+- `POST_MATCH` → Host選択待ちを継続
+- `IN_MATCH + current_match_id` → REMATCH確定として新Friend matchへjoin
+- membership lost → CHANGE CHARACTER確定としてTop Menuへ戻る
+- room not found / expired → LEAVE ROOM確定としてTop Menuへ戻る
+
+GuestからResult操作RPCを送信した場合はserverが拒否する。Host以外のclient判断で再戦・room解放・room終了を確定しない。
 
 #### 15.2.6 Leave / room終了
 
@@ -2027,22 +2056,12 @@ Friend Result:
 - WIN / LOSE / DRAW
 - 最終BO3 score
 - `NO RATING CHANGE (FRIEND MATCH)`
-- ボタン順: `CHANGE CHARACTER` / `REMATCH` / `LEAVE ROOM`
-- `CHANGE CHARACTER` → Character Select
-- `REMATCH` → Characterを維持したままFriend Lobby
-- `LEAVE ROOM` → Friend room退出
+- Host: `REMATCH` / `CHANGE CHARACTER` / `LEAVE ROOM`
+- Guest: 操作ボタンなし / `WAITING FOR HOST...`
 
-Match終了後はHostのroom自体は維持するが、Guest membership / Guest character / Guest Readyを解放し、roomを次Guest待ちのWAITINGへ戻す。前MatchのGuestへ席を予約しない。
+Result操作はHostだけが行い、server room stateを通してGuestへ伝播する。GuestはHostの選択へ追従する。
 
-REMATCH:
-- Result中央のREMATCHはCharacter Selectへ進まず、Characterを維持したままLobbyへ戻る
-- HostがREMATCH → 同じroomのLobbyへ戻り、Guest待ち
-- GuestがREMATCH → snapshotのroom codeへJOINを試みる。空席ならGuestを取得し、他userが先にJOIN済みならfull
-- CHANGE CHARACTERもGuestの場合は先に同じJOIN競争へ参加し、Guest枠を取得できた場合だけCharacter Selectへ進む
-- 次Matchは新Guestを含む両者がCharacter選択・Readyした時だけserverが生成する
-- Guest選定は常にroom code JOINの先着順であり、前Matchの対戦相手かどうかは考慮しない
-
-終了済みFriend matchから再ログインした場合、進行中Matchへの復帰は行わない。server result snapshotを解決後、前MatchのGuest枠を自動予約せずFriend Menu / 再JOIN導線へ戻す。
+終了済みFriend matchから再ログインした場合も、server result snapshotとroom stateを正本にResult文脈を復元し、Host選択待ちまたは確定済み遷移へ接続する。
 
 ## 16. ランキング
 
