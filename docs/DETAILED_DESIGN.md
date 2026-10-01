@@ -217,6 +217,51 @@ Nakama側のカスタムサーバーロジックはTypeScriptを使用する。
 
 端末固有の表示・音量・入力設定など、account正本ではなく端末設定として扱う情報を将来ローカル保存する場合は、ユーザーgameplayデータと明確に分離する。
 
+#### 3.9.1.1 UI-02端末ローカル設定
+
+UI-02 Settingsの値はaccount / gameplay状態ではなく端末設定として扱い、`user://settings.cfg` を正本とする。Nakama Storageへは保存しない。
+
+保存キー:
+
+```text
+[audio]
+master_volume = 0..100
+bgm_volume    = 0..100
+se_volume     = 0..100
+voice_volume  = 0..100
+
+[display]
+mode       = "windowed" | "fullscreen"
+resolution = "1280x720" | "1600x900" | "1920x1080"
+vsync      = true | false
+```
+
+初期値:
+
+```text
+Master = 100
+BGM    = 100
+SE     = 100
+Voice  = 100
+Mode   = windowed
+Resolution = 1280x720
+VSync  = true
+```
+
+契約:
+
+- 起動時にSettingsStoreがConfigFileを読み込み、不正値・未知値は初期値へ正規化する
+- 保存ファイルがない場合は初期値を使用する
+- APPLYだけがruntime反映と保存を行う
+- DEFAULTは編集値を初期値へ戻すだけで、APPLYするまでruntime状態を変更しない
+- BACKは未APPLY編集値を破棄する
+- AUDIOはGodot Audio Bus `Master / BGM / SE / Voice` へ反映する
+- volume 0はmute、1〜100はlinear値をdBへ変換する
+- DISPLAYは `DisplayServer` へ反映する
+- Fullscreen中も選択Resolutionは保存し、Windowへ戻した時にそのsizeを適用する
+- キーコンフィグは初期対象外。CONTROLは固定説明表示のみ
+- SettingsStoreはUIから分離し、後続の入力設定追加でも画面ロジックへ永続化処理を埋め込まない
+
 #### 3.9.2 Active Online Match
 
 未解決online matchはユーザーごとのserver-side Storage objectで管理する。
