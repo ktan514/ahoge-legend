@@ -532,7 +532,9 @@ AHOGE LEGEND #3
 
 Lobbyはserver room statusを定期pollしてhost / guest / character / readyを更新する。Character Selectは共通UI-04をFriend modeで再利用する。COPYはroom codeをOS clipboardへコピーする。
 
-Match終了後は同じroomを維持してPOST_MATCHへ戻り、REMATCH時は両者のReadyを解除した状態から再度Readyを要求する。
+Match終了後はHostのroom codeを維持するが、Guest枠は解放してWAITINGへ戻す。前MatchのGuestは自動予約しない。
+
+REMATCHではHostは同じroomへ戻る。Guestは同じroom codeへのJOINを再試行し、空いていれば参加、別userが先に参加済みならそのuserを新Guestとする。Guest枠は常に先着順で、前Matchの対戦相手かどうかは優先条件にしない。
 
 ## 14. UI-09 対戦前掛け合い
 
