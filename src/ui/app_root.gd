@@ -2,6 +2,8 @@ extends Control
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const TOP_MENU_SCENE := preload("res://scenes/screens/top_menu/TopMenu.tscn")
+const SETTINGS_SCENE := preload("res://scenes/screens/settings/Settings.tscn")
+const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 const BATTLE_MODE_SCENE := preload("res://scenes/screens/battle_mode/BattleModeSelect.tscn")
 const CHARACTER_SELECT_SCENE := preload("res://scenes/screens/character_select/CharacterSelect.tscn")
 const RANKED_MATCHING_SCENE := preload("res://scenes/screens/ranked_matching/RankedMatching.tscn")
@@ -16,6 +18,7 @@ const FRIEND_ROOM_JOIN_SCENE := preload("res://scenes/screens/friend_room_join/F
 const FRIEND_ROOM_LOBBY_SCENE := preload("res://scenes/screens/friend_room_lobby/FriendRoomLobby.tscn")
 
 var _online_session = null
+var _settings_store = null
 
 var _current_screen: Control
 var _last_player_one_id: String = "LONG_TEST"
@@ -33,6 +36,9 @@ var _m1_direct_mode: bool = false
 
 func _ready() -> void:
 	_online_session = get_node("/root/OnlineSession")
+	var settings_path := OS.get_environment("AHOGE_SETTINGS_PATH")
+	_settings_store = SettingsStoreScript.new(settings_path)
+	_settings_store.load_and_apply()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_m1_direct_mode = OS.get_cmdline_user_args().has("--m1-battle")
 	if _m1_direct_mode:
@@ -65,7 +71,32 @@ func _show_top_menu() -> void:
 	screen.connect("local_test_requested", Callable(self, "_show_local_character_select"))
 	screen.connect("online_battle_requested", Callable(self, "_on_online_battle_requested"))
 	screen.connect("ranking_requested", Callable(self, "_show_ranking").bind("player"))
+	screen.connect("settings_requested", Callable(self, "_show_settings"))
 	screen.connect("exit_requested", Callable(self, "_on_exit_requested"))
+
+
+func _show_settings() -> void:
+	var screen = SETTINGS_SCENE.instantiate()
+	screen.call(
+		"configure",
+		_settings_store.load_settings(),
+		_settings_store.defaults()
+	)
+	_replace_screen_instance(screen)
+	screen.connect("apply_requested", Callable(self, "_apply_settings").bind(screen))
+	screen.connect("back_requested", Callable(self, "_show_top_menu"))
+
+
+func _apply_settings(settings: Dictionary, screen: Control) -> void:
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+	var result: Dictionary = _settings_store.apply_and_save(settings)
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+	if not bool(result.get("ok", false)):
+		screen.call("set_status", "設定を保存できませんでした。")
+		return
+	screen.call("set_status", "APPLIED")
 
 
 func _show_ranking(tab: String = "player") -> void:

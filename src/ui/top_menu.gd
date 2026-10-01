@@ -3,6 +3,7 @@ extends Control
 signal local_test_requested
 signal online_battle_requested
 signal ranking_requested
+signal settings_requested
 signal exit_requested
 
 
@@ -53,8 +54,10 @@ func _ready() -> void:
 	menu.add_child(ranking_button)
 
 	var settings_button := Button.new()
-	settings_button.text = "SETTINGS（後続Issue）"
-	settings_button.disabled = true
+	settings_button.text = "SETTINGS"
+	settings_button.pressed.connect(func() -> void:
+		settings_requested.emit()
+	)
 	menu.add_child(settings_button)
 
 	var exit_button := Button.new()
