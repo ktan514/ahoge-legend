@@ -2068,7 +2068,7 @@ Friend Result:
 - 最終BO3 score
 - `NO RATING CHANGE (FRIEND MATCH)`
 - Host: `REMATCH` / `CHANGE CHARACTER` / `LEAVE ROOM`
-- Guest: `WAITING FOR HOST...` / `LEAVE ROOM` のみ
+- Guest: `WAITING FOR HOST...` / `LEAVE ROOM` のみ。Host専用のREMATCH / CHANGE CHARACTER / room全体LEAVEはGuest画面ではvisibleにしない
 
 Result操作はHostだけが行い、server room stateを通してGuestへ伝播する。GuestはHostの選択へ追従する。
 
