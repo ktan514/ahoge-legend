@@ -782,16 +782,17 @@ Host表示:
 ```
 
 - REMATCH: 同じGuest・同じCharacterのまま次Friend Battleを開始
-- CHANGE CHARACTER: Hostは同じroom codeのLobbyへ戻る。Guest枠を解放し、次Guestは先着JOIN
+- CHANGE CHARACTER: 同じHost / GuestのままLobbyへ戻り、両者のCharacterを選び直す
 - LEAVE ROOM: roomを閉じ、Host / GuestともTop Menuへ戻る
 
 Guest表示:
 
 ```text
 WAITING FOR HOST...
+[LEAVE ROOM]
 ```
 
-GuestはResult選択を行わず、Hostがserverへ確定した選択へ自動追従する。
+GuestはREMATCH / CHANGE CHARACTER / room全体終了を選択できず、Hostがserverへ確定した選択へ自動追従する。ただしLEAVE ROOMだけは自分自身の退出として操作可能。Guestが退出した場合はGuestだけTop Menuへ戻り、Hostは同roomのLobbyへ戻って次Guestを待つ。
 
 ## 17. UI-12 ランキング
 
