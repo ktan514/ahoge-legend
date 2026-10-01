@@ -1985,6 +1985,13 @@ Lobbyのclient操作:
 - LEAVE ROOM → `ahoge_friend_room_leave`
 - COPY → OS clipboardへroom codeをコピーするだけでserver状態は変更しない
 
+Host / Guest退出契約:
+
+- HostがWAITING / LOBBY / POST_MATCHでLEAVEするとroomを閉じる
+- GuestはLobby pollでserverから `friend room not found` / `friend room expired` / `friend room membership required` を受けた場合、roomが継続不能になったterminal状態として扱い、local room contextを破棄してFriend Menuへ戻る
+- Host closeとGuestのLEAVE操作が競合し、Guestのleave RPCが同じterminal状態を返した場合も「すでに退出済み」とみなしFriend Menuへ戻る
+- timeout / network error / parse errorなどroom存在有無を確定できない失敗ではlocal room contextを破棄せずLobbyに留まり、pollを継続する
+
 clientは「両者Readyだから開始」と独自判定しない。server responseが `state=IN_MATCH` かつ `current_match_id` を持った時だけ `join_friend_match_from_room` を実行する。
 
 Friend matchの `MATCH_SNAPSHOT` とserver-side result snapshotには次を追加する。
