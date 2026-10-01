@@ -794,6 +794,8 @@ WAITING FOR HOST...
 
 GuestはREMATCH / CHANGE CHARACTER / room全体終了を選択できず、Hostがserverへ確定した選択へ自動追従する。ただしLEAVE ROOMだけは自分自身の退出として操作可能。Guestが退出した場合はGuestだけTop Menuへ戻り、Hostは同roomのLobbyへ戻って次Guestを待つ。
 
+Match Resultは勝敗確定後すぐ表示し、Friend roomのPOST_MATCH同期待ちで別のLoading画面へ固定しない。room同期中はResult画面内に同期状態を表示し、操作ボタンを一時非活性にする。旧match IDのIN_MATCHは同期遅延として待機し、新しいmatch IDのIN_MATCHだけREMATCH開始として扱う。
+
 ## 17. UI-12 ランキング
 
 ### 17.1 目的
