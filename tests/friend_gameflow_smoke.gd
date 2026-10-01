@@ -275,6 +275,9 @@ func _run() -> void:
 	if rematch_button == null or change_character_button == null or leave_room_button == null:
 		_fail("Host Friend Resultの3ボタンが揃っていません。", app)
 		return
+	if not await _wait_button_enabled(rematch_button, 7000):
+		_fail("Host Friend ResultのREMATCHが同期完了後も有効になりません。", app)
+		return
 	if rematch_button.get_parent() != change_character_button.get_parent() \
 			or change_character_button.get_parent() != leave_room_button.get_parent() \
 			or not (
@@ -441,6 +444,15 @@ func _has_label_text(root: Node, text: String) -> bool:
 	for child in root.get_children():
 		if _has_label_text(child, text):
 			return true
+	return false
+
+
+func _wait_button_enabled(button: Button, timeout_ms: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if is_instance_valid(button) and not button.disabled:
+			return true
+		await create_timer(0.05).timeout
 	return false
 
 
