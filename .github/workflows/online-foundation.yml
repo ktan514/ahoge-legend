@@ -11,6 +11,7 @@ on:
       - "scripts/client-realtime-smoke.sh"
       - "scripts/client-season-smoke.sh"
       - "scripts/client-ranking-screen-smoke.sh"
+      - "scripts/client-settings-screen-smoke.sh"
       - "scripts/client-friend-match-smoke.sh"
       - "scripts/client-friend-gameflow-smoke.sh"
       - "scripts/client-friend-saved-resume-smoke.sh"
@@ -55,6 +56,9 @@ on:
       - "scenes/screens/friend_room_join/FriendRoomJoin.tscn"
       - "scenes/screens/friend_room_lobby/FriendRoomLobby.tscn"
       - "src/ui/top_menu.gd"
+      - "src/ui/settings.gd"
+      - "src/settings/settings_store.gd"
+      - "scenes/screens/settings/Settings.tscn"
       - "src/ui/ranking.gd"
       - "scenes/screens/ranking/Ranking.tscn"
       - "src/ui/battle_hud.gd"
@@ -69,6 +73,7 @@ on:
       - "tests/realtime_smoke.gd"
       - "tests/season_smoke.gd"
       - "tests/ranking_screen_smoke.gd"
+      - "tests/settings_screen_smoke.gd"
       - "tests/friend_match_smoke.gd"
       - "tests/friend_gameflow_smoke.gd"
       - "tests/friend_saved_match_resume_smoke.gd"
@@ -266,6 +271,10 @@ jobs:
       - name: Godot Ranking screen smoke
         if: matrix.group == 'foundation'
         run: bash ./scripts/client-ranking-screen-smoke.sh
+
+      - name: Godot Settings screen smoke
+        if: matrix.group == 'foundation'
+        run: bash ./scripts/client-settings-screen-smoke.sh
 
       - name: Godot Friend Match 2-client smoke
         if: matrix.group == 'foundation'
