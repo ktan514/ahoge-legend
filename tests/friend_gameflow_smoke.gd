@@ -146,37 +146,6 @@ func _run() -> void:
 		_fail("Friend Character決定後にLobbyへ戻りません。", app)
 		return
 
-	# 相手が未選択でも、自分のCharacterが選択済みならREADY操作できる。
-	lobby = app.get_child(0)
-	var host_ready_button = _find_button(lobby, "READY")
-	if host_ready_button == null or bool(host_ready_button.disabled):
-		_fail("P1 Character選択済みなのにREADYボタンが非活性です。", app)
-		return
-	lobby.emit_signal("ready_requested", true)
-	if not await _wait_room_flag(online_session, room_code, "host_ready", true, 5000):
-		_fail("P2 Character未選択時のP1 Readyがserverへ反映されません。", app)
-		return
-	var waiting_room: Dictionary = await online_session.get_friend_room_status(room_code)
-	if not bool(waiting_room.get("ok", false)) \
-			or str(waiting_room.get("state", "")) == "IN_MATCH" \
-			or not str(waiting_room.get("guest_character_id", "")).is_empty():
-		_fail("片側ReadyだけでFriend matchが開始されています。", app)
-		return
-	var p2_early_ready := await _rpc_dict(
-		second_client,
-		second_session,
-		OnlineConfigScript.FRIEND_ROOM_RPC_READY,
-		{"room_code": room_code, "ready": true}
-	)
-	if not p2_early_ready.is_empty():
-		_fail("Character未選択のP2がREADYできました。", app)
-		return
-	lobby = app.get_child(0)
-	lobby.emit_signal("ready_requested", false)
-	if not await _wait_room_flag(online_session, room_code, "host_ready", false, 5000):
-		_fail("P1 CANCEL READYがserverへ反映されません。", app)
-		return
-
 	var p2_character := await _rpc_dict(
 		second_client,
 		second_session,
