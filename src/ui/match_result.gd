@@ -166,19 +166,19 @@ func _build_friend_result(root: VBoxContainer) -> void:
 	actions.add_theme_constant_override("separation", 12)
 	root.add_child(actions)
 
-	var rematch := Button.new()
-	rematch.text = "REMATCH"
-	rematch.pressed.connect(func() -> void:
-		rematch_requested.emit()
-	)
-	actions.add_child(rematch)
-
 	var character_select := Button.new()
 	character_select.text = "CHANGE CHARACTER"
 	character_select.pressed.connect(func() -> void:
 		character_select_requested.emit()
 	)
 	actions.add_child(character_select)
+
+	var rematch := Button.new()
+	rematch.text = "REMATCH"
+	rematch.pressed.connect(func() -> void:
+		rematch_requested.emit()
+	)
+	actions.add_child(rematch)
 
 	var leave_room := Button.new()
 	leave_room.text = "LEAVE ROOM"
