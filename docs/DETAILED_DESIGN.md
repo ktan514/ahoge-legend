@@ -1895,8 +1895,9 @@ IN_MATCH # Friend authoritative match進行中
 - roomにはhost 1名、guest 1名だけ参加できる
 - host/guestは自分の `character_id` だけ更新できる
 - character変更時は自分のReadyを解除する
-- 両者が入室し、両者が対応characterを選択した後にReady可能とする
-- 両者Readyが成立した1回の状態遷移だけがauthoritative match生成を開始する
+- host/guestは相手のcharacter選択状態に依存せず、自分の対応characterが選択済みならReady / Cancel Readyを操作できる
+- Ready RPCは操作user自身のcharacterだけを必須とする。相手未選択でも自分のReady状態はserverへ保存できる
+- authoritative match生成は、両者が入室済み・両者character選択済み・両者Readyのすべてが成立した1回の状態遷移だけで開始する
 - match生成中は `STARTING` とし、重複Readyによる二重match生成を防止する
 - 生成するmatchは既存 `ahoge_ranked` handlerを戦闘コアとして再利用し、`matchMode=friend` を渡す
 - expected user ID / character IDはroom Storageを正本としてmatch init paramsへ渡す
