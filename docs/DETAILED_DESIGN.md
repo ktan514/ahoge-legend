@@ -1931,25 +1931,26 @@ LEAVE ROOM
   - Guest Resultはroom stateが `IN_MATCH` になったことを検知して同じ新matchへjoinする
 - `CHANGE CHARACTER`
   - Hostだけが選択できる
-  - 前MatchのGuest membership / Guest characterを解放する
-  - Host characterも未選択へ戻す
-  - roomを同じroom codeの `WAITING` へ戻す
-  - HostはFriend Lobbyへ戻る
-  - GuestはTop Menuへ戻る
-  - 以後のGuest枠は前Match参加者かどうかに関係なくroom code JOINの先着順とする
+  - 現在のHost / Guest membershipは維持する
+  - 両者のcharacterを未選択へ戻す
+  - roomを同じroom codeの `LOBBY` へ戻す
+  - Host / GuestともFriend Lobbyへ戻り、両者がCharacterを選び直す
 - `LEAVE ROOM`
   - Hostだけが選択できる
   - roomを削除してcodeを無効化する
   - Host / GuestともTop Menuへ戻る
 
-Guest Resultは500ms程度でroom statusをpollする。
+Host / GuestともResult表示中は500ms程度でroom statusをpollする。
 
 - `POST_MATCH` → Host選択待ちを継続
 - `IN_MATCH + current_match_id` → REMATCH確定として新Friend matchへjoin
-- membership lost → CHANGE CHARACTER確定としてTop Menuへ戻る
-- room not found / expired → LEAVE ROOM確定としてTop Menuへ戻る
+- `LOBBY` → CHANGE CHARACTER確定として両者Lobbyへ戻る
+- `WAITING` → GuestがResultから退出した状態。HostはLobbyへ戻って次Guest待ち
+- room not found / expired → Host LEAVE ROOM確定としてTop Menuへ戻る
 
-GuestからResult操作RPCを送信した場合はserverが拒否する。Host以外のclient判断で再戦・room解放・room終了を確定しない。
+GuestはResultの選択操作RPCを送信できない。ただしGuest自身の `LEAVE ROOM` は許可し、Guestだけをroomから外してTop Menuへ戻す。その場合Host roomは `WAITING` へ戻り、HostはLobbyへ遷移する。空いたGuest枠は前Match参加者かどうかに関係なくroom code JOINの先着順とする。
+
+Host以外のclient判断でREMATCH / CHANGE CHARACTER / room全体終了を確定しない。
 
 #### 15.2.6 Leave / room終了
 
@@ -2057,7 +2058,7 @@ Friend Result:
 - 最終BO3 score
 - `NO RATING CHANGE (FRIEND MATCH)`
 - Host: `REMATCH` / `CHANGE CHARACTER` / `LEAVE ROOM`
-- Guest: 操作ボタンなし / `WAITING FOR HOST...`
+- Guest: `WAITING FOR HOST...` / `LEAVE ROOM` のみ
 
 Result操作はHostだけが行い、server room stateを通してGuestへ伝播する。GuestはHostの選択へ追従する。
 
