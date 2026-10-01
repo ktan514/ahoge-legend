@@ -1136,3 +1136,437 @@ C案採用画像をHuman Reviewで「いいデザイン」と確認済み。
 - spacing / component tokens: §12.4〜12.8
 - feedback / transition: §12.9〜12.10
 - Battle composition: 頭頂部 + アホ毛のみ
+
+
+## 14. UI-01〜UI-12 最終Screen Design v1
+
+本節は #101 の正本とする。機能contractは `SCREEN_DESIGN.md` / `DETAILED_DESIGN.md` を維持し、見た目・copy・interaction・transitionを本節で確定する。
+
+### 14.1 UI-01 Top Menu
+
+Purpose:
+- ゲームの入口
+- 3秒以内に「アホ毛で戦う対戦ゲーム」と理解できる
+- 最も強いactionは対戦開始
+
+Final copy:
+- 対戦する
+- ランキング
+- 設定
+- ゲームを終了
+
+Layout:
+- 左: menu caption panels
+- 右: 大きなhero manga panel
+- 上: AHOGE LEGEND logo
+- 下: version / fan-game notice等のsecondary information
+
+Primary:
+- 対戦する
+
+Transition:
+- 選択方向へcomic wipe 220ms
+
+### 14.2 UI-02 Settings
+
+Purpose:
+- 端末設定を安全に変更・保存する
+
+Final sections:
+- オーディオ
+- 画面
+- 操作
+
+Final copy:
+- マスター音量
+- BGM音量
+- SE音量
+- ボイス音量
+- 表示モード
+- 解像度
+- VSync
+- 初期設定に戻す
+- 適用
+- 戻る
+
+Interaction:
+- Window時のみResolution有効
+- Fullscreen時Resolution disabled
+- DEFAULTは未適用
+- APPLYでruntime反映 + local保存
+- BACKで未APPLY変更破棄
+
+Visual:
+- 漫画誌面の設定表
+- 装飾は少なめ
+- section captionをInk帯で統一
+
+### 14.3 UI-03 Battle Mode Select
+
+Purpose:
+- Ranked / Friendの違いを一目で理解して選ぶ
+
+Final copy:
+- ランクマッチ
+- フレンド対戦
+- 戻る
+
+Supporting copy:
+- ランクマッチ: 「レートが変動するオンライン対戦」
+- フレンド対戦: 「ルームコードで友だちと対戦」
+
+Layout:
+- 2枚の大型manga panelを左右または上下に配置
+- Ranked: trophy / rating motif
+- Friend: room code / two-player motif
+
+Primary action:
+- hovered card全体をclick targetにする
+
+### 14.4 UI-04 Character Select
+
+Purpose:
+- アホ毛の見た目と戦闘特性を比較して選ぶ
+
+Final copy:
+- キャラクターを選ぶ
+- 戻る
+- 決定
+- アホ毛タイプ
+- 攻撃タイプ
+
+Card:
+- 頭頂部 + アホ毛cropを主役にする
+- character name
+- Ahoge Type
+- Attack Type
+- selectedはImpact Yellow frame
+
+Selected detail:
+- キャラクター名
+- 1行特徴
+- アホ毛タイプ
+- 攻撃タイプ
+- 動くAhoge preview
+
+Transition:
+- card change 160ms
+- DECIDEでselected panel zoom → next
+
+### 14.5 UI-05 Ranked Matching
+
+Purpose:
+- 対戦相手を探していること、待機を続けてよいこと、キャンセル可能なことを明確にする
+
+Final copy:
+- 対戦相手を探しています…
+- 検索範囲を広げています…
+- キャンセル
+
+Layout:
+- center manga panel
+- ahoge line art 2本が互いを探すloop
+- elapsed / technical rangeは通常ユーザーへ出さない
+
+State:
+- searching
+- match found
+- connecting
+- error
+
+Match found:
+- 「対戦相手が見つかりました」
+- 0.5〜1.0秒程度の短いimpact transitionでPreBattleへ
+
+### 14.6 UI-06 Friend Match Menu
+
+Purpose:
+- room作成 / room参加を迷わず選ぶ
+
+Final copy:
+- ルームを作る
+- ルームに参加
+- 戻る
+
+Layout:
+- 2枚の大panel
+- create: code ticket motif
+- join: input / arrow motif
+
+No technical wording.
+
+### 14.7 UI-07 Friend Room Join
+
+Purpose:
+- 6文字room codeを入力して参加する
+
+Final copy:
+- ルームコードを入力
+- 参加
+- 戻る
+
+Input:
+- uppercase
+- 6文字
+- letter spacing大
+- 入力枠は漫画caption
+- pasteを許可
+
+Error examples:
+- 「ルームが見つかりません」
+- 「このルームには参加できません」
+- 「ルームは満員です」
+
+RPC / source line / stack trace禁止。
+
+### 14.8 UI-08 Friend Room Lobby
+
+Purpose:
+- Host / Guest / Character / Readyを一目で把握
+- 次のactionを迷わない
+
+Layout:
+- 左: Host panel
+- 右: Guest panel
+- 中央上: room code
+- 中央下: primary action
+- room codeはCOPY可能
+
+Final labels:
+- ホスト
+- ゲスト
+- 待機中…
+- キャラクター未選択
+- 準備OK
+- 準備中
+- キャラクターを選ぶ
+- 準備OKにする
+- 準備を取り消す
+- ルームを抜ける
+
+Host close:
+- destructive wordingは「ルームを終了」
+
+Guest absent:
+- Guest panelを空席ticketとして表示
+- 「参加を待っています…」
+
+### 14.9 UI-09 PreBattle Dialogue
+
+Purpose:
+- Battle前にキャラクターらしさを短く見せ、テンポを壊さない
+
+Composition:
+- 左右に頭頂部 + アホ毛 + 必要に応じて顔の一部を含む会話用portraitは許可
+- Battle本編の「顔を出さない」制約はUI-10固有
+- 2〜3コマ程度
+- 1character 1〜2行
+- voiceなし
+
+Visual:
+- speech balloon
+- VS impact
+- panel cut transition
+
+Duration:
+- manual skip可能
+- auto進行する場合は全体2〜4秒程度を目安
+-長文は禁止
+
+### 14.10 UI-10 Battle / HUD
+
+Non-negotiable:
+- 顔・目・鼻・口・全身を表示しない
+- 頭頂部 + 髪 + アホ毛 + 必要最小限の髪飾りのみ
+- crop lineは目より上
+
+HUD:
+- center: 85 timer / ROUND
+- left: P1 name / round / hit
+- right: P2 name / round / hit
+- normal connection indicatorは非表示
+- reconnect時だけstatus strip
+
+Final labels:
+- ROUND 1 / 2 / 3
+- HIT
+- 再接続中…
+- 相手を待っています…
+
+Event impact:
+- HIT!
+- PARRY!
+- JUST!
+- DODGE!
+- CLASH!
+
+Rules:
+- 180〜300ms
+- timer / attack trajectoryを覆わない
+- root/head-topを覆わない
+
+Battle field:
+- 16:9全面をpageとして使う
+- central combat spaceを視覚的な主コマとして確保
+- 5:4固定はしない
+- head-top visible height 20〜30%を初期基準
+- wide余白へ常設情報を詰めない
+
+### 14.11 UI-11 Match Result
+
+Purpose:
+- 結果を即理解
+- 次のactionを迷わず選ぶ
+- network syncでLoading専用画面へ戻さない
+
+Impact:
+- WIN!
+- LOSE
+- DRAW
+
+Ranked copy:
+- 次のランクマッチ
+- キャラクターを変える
+- トップへ戻る
+
+Rating:
+- 「レート +18」
+- 「レート -14」
+- Draw時もserver確定deltaを表示
+
+Friend Host copy:
+- 再戦する
+- キャラクターを選び直す
+- ルームを終了
+
+Friend Guest:
+- 「ホストの選択を待っています…」
+- 「ルームを抜ける」
+
+Hierarchy:
+1. Result
+2. score / rating
+3. primary action
+4. secondary
+5. destructive
+
+### 14.12 UI-12 Ranking
+
+Purpose:
+- PLAYERとAHOGE LEGENDを明確に切替
+- 自分 / 推しキャラの位置をすぐ確認
+
+Final tabs:
+- プレイヤー
+- アホ毛レジェンド
+
+Common:
+- シーズン
+- 順位
+- 名前
+- レート
+- 戻る
+
+PLAYER:
+- player rank
+- player name
+- Rating / rank tier
+
+AHOGE LEGEND:
+- character rank
+- character name
+- Ahoge Rating
+- 1位は「伝説のアホ毛」special badge
+
+Layout:
+- 左: ranking list
+- 右: selected / top ahoge manga panel
+- row heightは読みやすさ優先
+- top 3だけ色 / badgeで強調
+- 4位以下は静かなlist
+
+Season:
+- current / pastを明確に分ける
+- 非公開時間帯は理由を人間語で表示
+
+### 14.13 Common Loading / Waiting / Error / Reconnect
+
+Loading:
+- 「読み込み中…」
+- ahoge loop
+- 既存画面を維持できる場合はinline優先
+
+Waiting:
+- 何を待っているかを明示
+- Cancel可能なら常に表示
+
+Error:
+- user action可能な表現だけ
+- Retry / Back / Top Menu
+- technical details禁止
+
+Reconnect:
+- Battle画面を維持
+- strip: 「再接続中…」
+- Round境界deadlineがある場合だけ秒数を出す
+
+### 14.14 Navigation Rule
+
+Back:
+- header左または左下で統一
+- destructiveではない
+
+Decide:
+- 右下 / center-bottomのPrimary
+
+Cancel:
+- 現在処理の中断
+- Backと意味を混ぜない
+
+Leave:
+- Guest自身退出はSecondary
+- room全体終了はDestructive
+
+Top:
+- 「トップへ戻る」
+- 「終了」と混同しない
+
+### 14.15 Responsive Rule
+
+1280x720:
+- minimum target
+- button / body textを縮小しない
+- artをcropする
+
+1600x900:
+- reference standard
+
+1920x1080:
+- whitespace増加
+- content width max 1440
+- componentを単純1.5倍にしない
+
+Fullscreen:
+- layout hierarchy維持
+
+Window:
+- same navigation positions
+
+### 14.16 #101 Design Status
+
+| ID | Screen | Status |
+| --- | --- | --- |
+| UI-01 | Top Menu | DESIGN v1 |
+| UI-02 | Settings | DESIGN v1 |
+| UI-03 | Battle Mode Select | DESIGN v1 |
+| UI-04 | Character Select | DESIGN v1 |
+| UI-05 | Ranked Matching | DESIGN v1 |
+| UI-06 | Friend Match Menu | DESIGN v1 |
+| UI-07 | Friend Room Join | DESIGN v1 |
+| UI-08 | Friend Room Lobby | DESIGN v1 |
+| UI-09 | PreBattle Dialogue | DESIGN v1 |
+| UI-10 | Battle / HUD | DESIGN v1 |
+| UI-11 | Match Result | DESIGN v1 |
+| UI-12 | Ranking | DESIGN v1 |
+
+Godot実装時にpixel-level調整は行うが、information hierarchy / copy / interaction / visual directionを無断変更しない。
