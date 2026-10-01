@@ -237,47 +237,50 @@ func _run() -> void:
 		return
 
 	# 終了済み状態でも同じDevice IDで再起動する。
-	# 戦闘は終了済みなので旧Guest枠は予約せず、active resultを解決してFriend Menuへ戻る。
+	# GuestはHost専用Resultへ復帰し、操作ボタンを持たずHostの選択を待つ。
 	online_session.clear_runtime_session_preserving_match()
 	var finished_app = AppRootScene.instantiate()
 	get_root().add_child(finished_app)
-	if not await _wait_screen(finished_app, "FriendMatchMenu", 15000):
-		_fail("終了済みFriend matchのP2再起動後にFriend Menuへ戻りませんでした。")
+	if not await _wait_screen(finished_app, "MatchResult", 15000):
+		_fail("終了済みFriend matchのP2再起動後にMatchResultへ復帰しませんでした。")
 		return
 	if online_session.session == null or str(online_session.session.user_id) != guest_user_id:
 		_fail("終了済みFriend match後のP2再認証でuser_idが変化しました。")
 		return
+	var guest_result = finished_app.get_child(0)
+	for button_text in ["REMATCH", "CHANGE CHARACTER", "LEAVE ROOM"]:
+		if _find_button(guest_result, button_text) != null:
+			_fail("Guest Friend Resultに操作ボタン%sが表示されています。" % button_text)
+			return
+	if not _has_label_text(guest_result, "WAITING FOR HOST..."):
+		_fail("Guest Friend ResultにHOST選択待ち表示がありません。")
+		return
+
 	var active_after_app: Dictionary = await online_session.refresh_active_online_match()
 	if not bool(active_after_app.get("ok", false)) or bool(active_after_app.get("active", false)):
 		_fail("Friend Result復帰後もP2のactive match lockが残っています。")
 		return
 
-	finished_app.queue_free()
-	await process_frame
-
-	# Guest枠は解放済み。前MatchのP2も他userと同条件で、空いていれば先着JOINできる。
-	var same_guest_join: Dictionary = await online_session.join_friend_room(room_code)
-	if not bool(same_guest_join.get("ok", false)) \
-			or str(same_guest_join.get("role", "")) != "guest" \
-			or str(same_guest_join.get("guest_user_id", "")) != guest_user_id:
-		_fail("終了済みP2が空いているGuest枠へ再JOINできませんでした。")
+	# HostのResult contextをackした後、Host LEAVE ROOMでroomを閉じる。
+	# Guestはserver room消滅をpollして自動的にTopMenuへ戻る。
+	if not await _ack_host_result(host_client, host_session, match_id, 5000):
+		_fail("P1 Friend Result contextをackできませんでした。")
 		return
-
-	var guest_leave: Dictionary = await online_session.leave_friend_room(room_code)
-	if not bool(guest_leave.get("ok", false)):
-		_fail("P2をFriend roomから退出できませんでした。")
-		return
-
-	await _ack_host_result(host_client, host_session, match_id, 5000)
 	var host_leave := await _rpc_dict(
 		host_client,
 		host_session,
-		OnlineConfigScript.FRIEND_ROOM_RPC_LEAVE,
-		{"room_code": room_code}
+		OnlineConfigScript.FRIEND_ROOM_RPC_RESULT_ACTION,
+		{"room_code": room_code, "action": "leave"}
 	)
 	if not bool(host_leave.get("closed", false)):
-		_fail("P1 Friend roomをcleanupできませんでした。")
+		_fail("Host ResultのLEAVE ROOMでFriend roomを閉じられませんでした。")
 		return
+	if not await _wait_screen(finished_app, "TopMenu", 5000):
+		_fail("Host LEAVE ROOM後にGuestがTopMenuへ追従しませんでした。")
+		return
+
+	finished_app.queue_free()
+	await process_frame
 
 	online_session.clear_session()
 	print(
@@ -285,6 +288,25 @@ func _run() -> void:
 		% [room_code, match_id, guest_user_id]
 	)
 	quit(0)
+
+
+func _find_button(node: Node, button_text: String) -> Button:
+	if node is Button and (node as Button).text == button_text:
+		return node as Button
+	for child in node.get_children():
+		var found := _find_button(child, button_text)
+		if found != null:
+			return found
+	return null
+
+
+func _has_label_text(node: Node, expected: String) -> bool:
+	if node is Label and (node as Label).text == expected:
+		return true
+	for child in node.get_children():
+		if _has_label_text(child, expected):
+			return true
+	return false
 
 
 func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
