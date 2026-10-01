@@ -256,6 +256,9 @@ func _run() -> void:
 	if guest_leave_button == null:
 		_fail("Guest Friend ResultにLEAVE ROOMがありません。")
 		return
+	if not await _wait_button_enabled(guest_leave_button, 7000):
+		_fail("Guest Friend ResultのLEAVE ROOMが同期完了後も有効になりません。")
+		return
 	if not _has_label_text(guest_result, "WAITING FOR HOST..."):
 		_fail("Guest Friend ResultにHOST選択待ち表示がありません。")
 		return
@@ -305,6 +308,15 @@ func _run() -> void:
 		% [room_code, match_id, guest_user_id]
 	)
 	quit(0)
+
+
+func _wait_button_enabled(button: Button, timeout_ms: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if is_instance_valid(button) and not button.disabled:
+			return true
+		await create_timer(0.05).timeout
+	return false
 
 
 func _find_button(node: Node, button_text: String) -> Button:
