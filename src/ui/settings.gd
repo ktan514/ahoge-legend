@@ -74,6 +74,9 @@ func _ready() -> void:
 	_mode.name = "DisplayMode"
 	_mode.add_item("Window", 0)
 	_mode.add_item("Fullscreen", 1)
+	_mode.item_selected.connect(func(_index: int) -> void:
+		_update_resolution_enabled()
+	)
 	_add_control_row(display, "Mode", _mode)
 
 	_resolution = OptionButton.new()
@@ -188,7 +191,14 @@ func _set_values(settings: Dictionary) -> void:
 
 	_vsync.button_pressed = bool(display.get("vsync", true))
 	_vsync.text = "ON" if _vsync.button_pressed else "OFF"
+	_update_resolution_enabled()
 	_update_volume_labels()
+
+
+func _update_resolution_enabled() -> void:
+	if _mode == null or _resolution == null:
+		return
+	_resolution.disabled = _mode.selected == 1
 
 
 func _add_section_title(parent: VBoxContainer, text: String) -> void:
