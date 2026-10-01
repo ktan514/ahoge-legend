@@ -24,6 +24,7 @@ var _ranked_character_id: String = "LONG_TEST"
 var _ranked_rating_before: Dictionary = {}
 var _friend_room_code: String = ""
 var _friend_room: Dictionary = {}
+var _friend_last_role: String = ""
 var _friend_character_id: String = "LONG_TEST"
 var _friend_join_in_progress: bool = false
 var _friend_refresh_in_progress: bool = false
@@ -301,7 +302,7 @@ func _show_friend_lobby() -> void:
 	screen.call("configure", _friend_room, local_user_id)
 	_replace_screen_instance(screen)
 	screen.connect("refresh_requested", Callable(self, "_refresh_friend_lobby").bind(screen))
-	screen.connect("character_select_requested", Callable(self, "_show_friend_character_select"))
+	screen.connect("character_select_requested", Callable(self, "_on_friend_result_change_character_requested"))
 	screen.connect("ready_requested", Callable(self, "_set_friend_ready").bind(screen))
 	screen.connect("leave_requested", Callable(self, "_leave_friend_room").bind(screen))
 	call_deferred("_refresh_friend_lobby", screen)
@@ -480,6 +481,11 @@ func _on_friend_rematch_requested() -> void:
 	if _friend_room_code.is_empty():
 		_show_friend_menu("Friend room情報がありません。")
 		return
+
+	if _friend_last_role == "guest":
+		await _rejoin_friend_room_as_guest(false)
+		return
+
 	var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
 	if not bool(room.get("ok", false)):
 		if _online_session.is_friend_room_terminal_failure(room):
@@ -492,6 +498,30 @@ func _on_friend_rematch_requested() -> void:
 	_show_friend_lobby()
 
 
+func _on_friend_result_change_character_requested() -> void:
+	if _friend_room_code.is_empty():
+		_show_friend_menu("Friend room情報がありません。")
+		return
+	if _friend_last_role == "guest":
+		await _rejoin_friend_room_as_guest(true)
+		return
+	_show_friend_character_select()
+
+
+func _rejoin_friend_room_as_guest(open_character_select: bool) -> void:
+	_show_loading("REJOINING FRIEND ROOM...")
+	var room: Dictionary = await _online_session.join_friend_room(_friend_room_code)
+	if not bool(room.get("ok", false)):
+		_clear_friend_room_context()
+		_show_friend_menu(str(room.get("message", "Friend roomのGuest枠を取得できませんでした。")))
+		return
+	_set_friend_room(room)
+	if open_character_select:
+		_show_friend_character_select()
+	else:
+		_show_friend_lobby()
+
+
 func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
 	var deadline := Time.get_ticks_msec() + 5000
 	var latest: Dictionary = {}
@@ -501,6 +531,8 @@ func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
 			latest = room.duplicate(true)
 			if str(room.get("state", "")) in ["POST_MATCH", "LOBBY", "WAITING"]:
 				return latest
+		elif _online_session.is_friend_room_terminal_failure(room):
+			return {}
 		await get_tree().create_timer(0.05).timeout
 	return latest
 
@@ -529,6 +561,8 @@ func _set_friend_room(room: Dictionary) -> void:
 	_friend_room = room.duplicate(true)
 	_friend_room_code = str(room.get("room_code", _friend_room_code))
 	var role := str(room.get("role", ""))
+	if role in ["host", "guest"]:
+		_friend_last_role = role
 	var selected := ""
 	if role == "host":
 		selected = str(room.get("host_character_id", ""))
@@ -549,6 +583,7 @@ func _update_friend_character_from_snapshot(snapshot: Dictionary) -> void:
 func _clear_friend_room_context() -> void:
 	_friend_room_code = ""
 	_friend_room = {}
+	_friend_last_role = ""
 	_friend_join_in_progress = false
 	_friend_refresh_in_progress = false
 
