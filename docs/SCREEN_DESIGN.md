@@ -528,7 +528,7 @@ AHOGE LEGEND #3
 └──────────────────────────────────────────────────────────────┘
 ```
 
-READY操作は各playerが自分のCharacterを選択済みなら個別に行える。相手が未選択でも自分をREADYにできる。対戦開始は両者Character選択済みかつ両者Readyになった場合のみとし、clientは独自にmatchを生成せず、server room stateが `IN_MATCH` になった時だけserver確定 `current_match_id` へjoinする。
+両者がReadyになった場合のみ対戦開始へ進む。clientは両者Readyを見て独自にmatchを生成せず、server room stateが `IN_MATCH` になった時だけserver確定 `current_match_id` へjoinする。
 
 Lobbyはserver room statusを定期pollしてhost / guest / character / readyを更新する。Character Selectは共通UI-04をFriend modeで再利用する。COPYはroom codeをOS clipboardへコピーする。
 
