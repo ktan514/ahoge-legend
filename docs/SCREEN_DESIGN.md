@@ -532,9 +532,7 @@ AHOGE LEGEND #3
 
 Lobbyはserver room statusを定期pollしてhost / guest / character / readyを更新する。Character Selectは共通UI-04をFriend modeで再利用する。COPYはroom codeをOS clipboardへコピーする。
 
-Match終了後はHostのroom codeを維持するが、Guest枠は解放してWAITINGへ戻す。前MatchのGuestは自動予約しない。
-
-REMATCHではHostは同じroomへ戻る。Guestは同じroom codeへのJOINを再試行し、空いていれば参加、別userが先に参加済みならそのuserを新Guestとする。Guest枠は常に先着順で、前Matchの対戦相手かどうかは優先条件にしない。
+Match終了直後はHost / Guestと両者のCharacterをPOST_MATCHで保持し、ResultではHostだけが次操作を選択する。REMATCHなら同じ2人・同じCharacterで直接次戦、CHANGE CHARACTERならGuest枠を解放してHostを同room Lobbyへ戻し、LEAVE ROOMならroomを閉じて両者Top Menuへ戻す。CHANGE CHARACTER後のGuest枠は前Match参加者かどうかに関係なく先着順とする。
 
 ## 14. UI-09 対戦前掛け合い
 
@@ -777,14 +775,23 @@ Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確
 
 ランキング関連数値は更新しない。
 
+Host表示:
+
 ```text
-[CHANGE CHARACTER] [REMATCH] [LEAVE ROOM]
+[REMATCH] [CHANGE CHARACTER] [LEAVE ROOM]
 ```
 
-- 左 `CHANGE CHARACTER`: Character Selectへ進む
-- 中央 `REMATCH`: Characterを変更せず、次戦のためFriend Lobbyへ戻る
-- 右 `LEAVE ROOM`: Friend roomを退出する
-- `REMATCH` はCharacter Selectへ遷移しない
+- REMATCH: 同じGuest・同じCharacterのまま次Friend Battleを開始
+- CHANGE CHARACTER: Hostは同じroom codeのLobbyへ戻る。Guest枠を解放し、次Guestは先着JOIN
+- LEAVE ROOM: roomを閉じ、Host / GuestともTop Menuへ戻る
+
+Guest表示:
+
+```text
+WAITING FOR HOST...
+```
+
+GuestはResult選択を行わず、Hostがserverへ確定した選択へ自動追従する。
 
 ## 17. UI-12 ランキング
 
