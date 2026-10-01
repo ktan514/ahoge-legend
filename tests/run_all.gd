@@ -11,6 +11,7 @@ const MatchResumeRouterScript := preload("res://src/online/match_resume_router.g
 const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker_query.gd")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
+const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -33,6 +34,7 @@ func _init() -> void:
 	_test_short_throw_detach_and_regrow()
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
+	_test_settings_store_contract()
 	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
 	_test_ranked_recovery_policy()
@@ -260,6 +262,43 @@ func _test_device_identity_persists() -> void:
 	if FileAccess.file_exists(test_path):
 		DirAccess.remove_absolute(absolute_path)
 
+
+
+func _test_settings_store_contract() -> void:
+	var store = SettingsStoreScript.new("user://settings-unit-unused.cfg")
+	var defaults: Dictionary = store.defaults()
+	var default_audio: Dictionary = defaults.get("audio", {})
+	var default_display: Dictionary = defaults.get("display", {})
+	_expect_equal(default_audio.get("master_volume"), 100.0, "Settings Master初期値は100")
+	_expect_equal(default_audio.get("bgm_volume"), 100.0, "Settings BGM初期値は100")
+	_expect_equal(default_audio.get("se_volume"), 100.0, "Settings SE初期値は100")
+	_expect_equal(default_audio.get("voice_volume"), 100.0, "Settings Voice初期値は100")
+	_expect_equal(default_display.get("mode"), "windowed", "Settings Mode初期値はwindowed")
+	_expect_equal(default_display.get("resolution"), "1280x720", "Settings解像度初期値は1280x720")
+	_expect_true(bool(default_display.get("vsync", false)), "Settings VSync初期値はON")
+
+	var normalized: Dictionary = store.normalize({
+		"audio": {
+			"master_volume": 150,
+			"bgm_volume": -10,
+			"se_volume": 42,
+			"voice_volume": 75,
+		},
+		"display": {
+			"mode": "invalid",
+			"resolution": "999x999",
+			"vsync": false,
+		},
+	})
+	var audio: Dictionary = normalized.get("audio", {})
+	var display: Dictionary = normalized.get("display", {})
+	_expect_equal(audio.get("master_volume"), 100.0, "Settings volume上限を100へ正規化する")
+	_expect_equal(audio.get("bgm_volume"), 0.0, "Settings volume下限を0へ正規化する")
+	_expect_equal(audio.get("se_volume"), 42.0, "Settings有効volumeを維持する")
+	_expect_equal(audio.get("voice_volume"), 75.0, "Settings Voice volumeを維持する")
+	_expect_equal(display.get("mode"), "windowed", "未知Modeは初期値へ戻す")
+	_expect_equal(display.get("resolution"), "1280x720", "未知Resolutionは初期値へ戻す")
+	_expect_false(bool(display.get("vsync", true)), "Settings VSync OFFを維持する")
 
 
 func _test_match_resume_router() -> void:
