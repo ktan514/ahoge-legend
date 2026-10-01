@@ -1948,7 +1948,7 @@ Result表示とroom同期の順序契約:
 - Result画面表示直後はroom同期中として操作ボタンを一時非活性にしてよいが、Loading専用画面で待機し続けない
 - roomが終了した旧match IDのまま `IN_MATCH` の場合はsettlement反映待ちとしてResult画面を維持する
 - `IN_MATCH` をREMATCH確定と判断するのは、roomの `current_match_id` がResultの旧 `match_id` と異なる場合だけ
-- `POST_MATCH` を確認したらHostの3択とGuestのLEAVE ROOMを活性化する
+- `POST_MATCH` と自分のactive result ack完了を確認したらHostの3択とGuestのLEAVE ROOMを活性化する。room settlementだけ先行した瞬間にREMATCHを送らない
 
 - `POST_MATCH` → Host選択待ちを継続
 - `IN_MATCH + current_match_id` → REMATCH確定として新Friend matchへjoin
