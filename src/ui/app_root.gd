@@ -1,6 +1,7 @@
 extends Control
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
 const TOP_MENU_SCENE := preload("res://scenes/screens/top_menu/TopMenu.tscn")
 const SETTINGS_SCENE := preload("res://scenes/screens/settings/Settings.tscn")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
@@ -35,6 +36,7 @@ var _m1_direct_mode: bool = false
 
 
 func _ready() -> void:
+	theme = MangaThemeScript.build_theme()
 	_online_session = get_node("/root/OnlineSession")
 	var settings_path := OS.get_environment("AHOGE_SETTINGS_PATH")
 	_settings_store = SettingsStoreScript.new(settings_path)
