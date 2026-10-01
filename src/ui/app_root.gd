@@ -600,8 +600,6 @@ func _refresh_friend_result(screen: Control) -> void:
 		return
 	if _friend_last_role == "guest":
 		screen.call("set_status", "WAITING FOR HOST...")
-	else:
-		screen.call("set_status", "")
 
 
 func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
