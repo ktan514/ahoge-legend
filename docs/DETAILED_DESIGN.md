@@ -258,6 +258,7 @@ VSync  = true
 - AUDIOはGodot Audio Bus `Master / BGM / SE / Voice` へ反映する
 - volume 0はmute、1〜100はlinear値をdBへ変換する
 - DISPLAYは `DisplayServer` へ反映する
+- Resolution UIはWindow時だけ有効、Fullscreen時は非活性とする
 - Fullscreen中も選択Resolutionは保存し、Windowへ戻した時にそのsizeを適用する
 - キーコンフィグは初期対象外。CONTROLは固定説明表示のみ
 - SettingsStoreはUIから分離し、後続の入力設定追加でも画面ロジックへ永続化処理を埋め込まない
