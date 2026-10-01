@@ -1681,12 +1681,32 @@ func _combat_input_fail(message: String) -> Dictionary:
 	}
 
 
+func is_friend_room_terminal_failure(result: Dictionary) -> bool:
+	return str(result.get("reason", "")) in [
+		"room_not_found",
+		"room_expired",
+		"membership_lost",
+	]
+
+
+func _friend_room_failure_reason(message: String) -> String:
+	var normalized := message.to_lower()
+	if normalized.contains("friend room not found"):
+		return "room_not_found"
+	if normalized.contains("friend room expired"):
+		return "room_expired"
+	if normalized.contains("friend room membership required"):
+		return "membership_lost"
+	return ""
+
+
 func _friend_room_fail(step: String, message: String) -> Dictionary:
 	printerr("Nakama friend room failed: step=%s message=%s" % [step, message])
 	friend_room_failed.emit(step, message)
 	return {
 		"ok": false,
 		"step": step,
+		"reason": _friend_room_failure_reason(message),
 		"message": message,
 	}
 
