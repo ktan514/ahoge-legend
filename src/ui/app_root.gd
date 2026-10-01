@@ -517,7 +517,26 @@ func _on_friend_result_change_character_requested(screen: Control) -> void:
 
 
 func _on_friend_result_leave_requested(screen: Control) -> void:
-	if _friend_last_role != "host" or not is_instance_valid(screen) or _current_screen != screen:
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+
+	if _friend_last_role == "guest":
+		screen.call("set_status", "Friend roomから退出しています...")
+		var guest_result: Dictionary = await _online_session.leave_friend_room(_friend_room_code)
+		if not is_instance_valid(screen) or _current_screen != screen:
+			return
+		if not bool(guest_result.get("ok", false)):
+			if _online_session.is_friend_room_terminal_failure(guest_result):
+				_clear_friend_room_context()
+				_show_top_menu()
+				return
+			screen.call("set_status", str(guest_result.get("message", "Friend roomから退出できませんでした。")))
+			return
+		_clear_friend_room_context()
+		_show_top_menu()
+		return
+
+	if _friend_last_role != "host":
 		return
 	screen.call("set_status", "Friend roomを終了しています...")
 	var result: Dictionary = await _online_session.submit_friend_result_action(
@@ -536,7 +555,7 @@ func _on_friend_result_leave_requested(screen: Control) -> void:
 func _refresh_friend_result(screen: Control) -> void:
 	if _friend_refresh_in_progress or not is_instance_valid(screen) or _current_screen != screen:
 		return
-	if _friend_last_role != "guest" or _friend_room_code.is_empty():
+	if _friend_room_code.is_empty():
 		return
 	_friend_refresh_in_progress = true
 	var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
@@ -548,13 +567,24 @@ func _refresh_friend_result(screen: Control) -> void:
 			_clear_friend_room_context()
 			_show_top_menu()
 			return
-		screen.call("set_status", str(room.get("message", "HOSTの選択を確認できませんでした。")))
+		screen.call("set_status", str(room.get("message", "Friend Result状態を確認できませんでした。")))
 		return
+
 	_set_friend_room(room)
-	if str(room.get("state", "")) == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
+	var state := str(room.get("state", ""))
+	if state == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
 		await _join_friend_match(room)
 		return
-	screen.call("set_status", "WAITING FOR HOST...")
+	if state == "LOBBY":
+		_show_friend_lobby()
+		return
+	if state == "WAITING" and _friend_last_role == "host":
+		_show_friend_lobby()
+		return
+	if _friend_last_role == "guest":
+		screen.call("set_status", "WAITING FOR HOST...")
+	else:
+		screen.call("set_status", "")
 
 
 func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
