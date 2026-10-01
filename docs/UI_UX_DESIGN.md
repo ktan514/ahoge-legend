@@ -848,3 +848,291 @@ visual directionは確定済み。
    - strong
 
 #100ではこれらをcommon component mockupと合わせて確定する。
+
+
+## 12. Design System v1
+
+C: MANGA BOUT / COMIC IMPACTをGodotへ実装できる粒度まで数値化する。
+
+### 12.1 Language / Copy
+
+UIの主言語は**日本語中心**とする。
+
+- 製品名・短い演出語・対戦イベントは英語を許可する
+- 通常操作buttonは日本語を第一候補とする
+- technical error / RPC名 / stack traceはユーザーへ直接表示しない
+- buttonは「名詞」より「次に起きる動作」が分かる表現を優先する
+- 破壊的操作は曖昧語を避ける
+
+基本例:
+
+| 意味 | 採用候補 |
+| --- | --- |
+| battle entry | 対戦する |
+| ranked | ランクマッチ |
+| friend | フレンド対戦 |
+| confirm | 決定 |
+| back | 戻る |
+| cancel | キャンセル |
+| rematch | 再戦する |
+| change character | キャラクターを選び直す |
+| leave room | ルームを抜ける |
+| close room | ルームを終了 |
+| settings apply | 適用 |
+| defaults | 初期設定に戻す |
+
+短いimpact textは英語を使用してよい。
+
+- HIT!
+- PARRY!
+- JUST!
+- DODGE!
+- CLASH!
+- WIN!
+- LOSE
+- DRAW
+
+### 12.2 Color Tokens
+
+| Token | Hex | Purpose |
+| --- | --- | --- |
+| paper_0 | #FFF8E8 | page / light surface |
+| paper_1 | #F3E9D4 | secondary surface |
+| paper_2 | #DED2BA | disabled surface |
+| ink_0 | #151515 | primary ink |
+| ink_1 | #2A2A2A | raised dark surface |
+| ink_2 | #4A4A4A | secondary text on light |
+| impact_yellow | #FFD43B | primary action / highlight |
+| p1_blue | #3F86FF | player 1 |
+| p2_red | #FF4F58 | player 2 |
+| danger | #D73535 | destructive |
+| success | #2D9B59 | success |
+| info | #2E73D2 | info / reconnect |
+| white | #FFFFFF | reverse text |
+
+Contrast rule:
+- body textは背景とのWCAG AA相当を目安にする
+- Impact Yellow上の文字はInk固定
+- P1/P2色だけで状態を伝えず、label / iconを併用する
+
+### 12.3 Typography Scale
+
+フォントファイルは別途選定するが、roleとsizeを先に固定する。
+
+1280x720基準:
+
+| Role | Size | Weight | Usage |
+| --- | ---: | --- | --- |
+| display_xl | 64 | 800-900 | WIN / LOSE / major impact |
+| display_l | 40 | 800 | screen title |
+| heading_l | 28 | 700 | section title |
+| heading_m | 22 | 700 | card / panel title |
+| body_l | 18 | 500 | main body |
+| body_m | 16 | 500 | labels |
+| caption | 13 | 500 | secondary info |
+| number_xl | 72 | 800-900 | Battle timer |
+| number_l | 28 | 700 | Hit / Rating |
+
+1600x900以上では1.125〜1.25倍まで拡大可能。1920x1080で2倍にはしない。
+
+### 12.4 Spacing / Layout Tokens
+
+基準unitは8px。
+
+| Token | px |
+| --- | ---: |
+| xs | 4 |
+| s | 8 |
+| m | 16 |
+| l | 24 |
+| xl | 32 |
+| 2xl | 48 |
+| 3xl | 64 |
+
+- safe margin: 32px
+- wide screen max content width: 1440px
+- modal max width: 720px
+- primary column width: 320〜420px
+- minimum interactive height: 44px
+- standard button height: 52px
+- primary button height: 60px
+
+### 12.5 Shape / Border
+
+- radius 0〜6pxを基本とし、大きなpillは使用しない
+- cut-corner: 8〜16px
+- border: 2px standard / 4px impact
+- offset shadow: 4px 4px 0 Ink
+- selected state: 4px Impact Yellow frame + Ink outline
+- focus ring: 3px P1 BlueまたはImpact Yellow
+- panel tiltは最大1.5deg相当まで。読みやすさを崩す角度は禁止
+
+### 12.6 Button Variants
+
+#### Primary
+
+- Impact Yellow fill
+- Ink border 3px
+- Ink text
+- standard height 60px
+- hover: y -2px / offset shadow +2px
+- pressed: y +2px / shadow縮小
+- disabled: paper_2 + ink_2
+
+#### Secondary
+
+- paper_0 fill
+- Ink border 2px
+- Ink text
+- hover: paper_1
+
+#### Destructive
+
+- danger fill
+- white text
+- Ink border 2px
+- 使用対象: room終了 / 明確な破壊操作
+- Guest自身の「ルームを抜ける」はSecondary寄りでよく、room全体終了と視覚区別する
+
+#### Back
+
+- small Secondary
+- 左下またはheader左
+- 画面によって位置を変えない
+
+### 12.7 Form Components
+
+#### Dropdown
+
+- height 48px
+- Ink border 2px
+- selected rowはImpact Yellow
+- arrow iconはInk
+- disabledはpaper_2
+
+#### Slider
+
+- track 6px
+- knob 18px
+- active fill Inkまたはaccent
+- valueは右側へ数値表示
+
+#### Toggle
+
+- 48x26px
+- ON: Impact Yellow + Ink knob
+- OFF: paper_2 + Ink
+- label textでもON/OFFを併記する
+
+#### Text Input
+
+- height 52px
+- uppercase code入力はletter spacingを広めにする
+- invalidはDanger border + 1行error
+- technical messageを表示しない
+
+### 12.8 Manga Panel
+
+共通panel component。
+
+- Paper fill
+- Ink border 3px
+- optional cut-corner
+- optional halftone background
+- title captionを上端へ重ねられる
+- decorative line / burstはcontent layerと分離する
+
+Panel variants:
+- standard
+- selected
+- impact
+- dark
+- error
+
+### 12.9 State Feedback
+
+#### Loading
+
+- full-screen blockingは必要時だけ
+- 既存画面を維持できる場合はinline statusを優先
+- animationはアホ毛がしなる2〜3frame風loop
+- copy例: 「読み込み中…」
+
+#### Waiting
+
+- user actionが不要なら状態と理由を明示
+- copy例: 「対戦相手を探しています…」
+- Cancel可能なら同じ画面にCancelを残す
+
+#### Error
+
+- title: 「接続できませんでした」
+- body: 人間が取れる次actionだけ書く
+- Retry / Top Menu等を明示
+- stack trace / RPC名 / source line禁止
+
+#### Reconnect
+
+- Battle画面を可能な限り維持
+- status stripで「再接続中…」
+- countdownがある場合だけ秒数表示
+- reconnect成功時は短い「復帰しました」feedback
+
+### 12.10 Transition
+
+| Transition | Duration | Usage |
+| --- | ---: | --- |
+| hover | 100ms | component |
+| press | 80ms | component |
+| menu panel in/out | 200ms | menu |
+| comic wipe | 220ms | screen |
+| character card change | 160ms | character select |
+| result impact | 360ms | result |
+| status toast | 180ms | status |
+
+easing:
+- UI normal: ease-out
+- impact: back/overshootを弱く
+- Battle中に長いtransitionを入れない
+
+### 12.11 Battle Specific Tokens
+
+- top HUD height: 88〜104px
+- timer hitbox-free safe zone: center top 160px幅
+- timer size: 64〜72px
+- head-top visible height: battle content高の20〜30%
+- eye lineより上だけを表示
+- impact text max width: battle areaの24%
+- impact text表示: 180〜300ms
+- screen shake: 2〜4px / 80〜140ms / major event限定
+
+### 12.12 Responsive Breakpoints
+
+- 1280x720: minimum reference
+- 1600x900: standard
+- 1920x1080: standard large
+
+Rules:
+- UIを単純scale-upしない
+- max content widthを設ける
+- hero art / manga backgroundはcropする
+- body text sizeは極端に増やさない
+- Battle combat spaceを最優先で確保する
+- Fullscreen / Windowでnavigation位置を変えない
+
+## 13. #100 Design System確定
+
+C案採用画像をHuman Reviewで「いいデザイン」と確認済み。
+
+以下をv1 design systemとして採用し、#101へ渡す。
+
+- visual direction: C MANGA BOUT / COMIC IMPACT
+- language: 日本語中心 + impact textのみ英語
+- base: warm Paper + Ink
+- shape: moderate angular / comic panel
+- motion: moderate、impact eventだけstrong
+- color tokens: §12.2
+- typography roles: §12.3
+- spacing / component tokens: §12.4〜12.8
+- feedback / transition: §12.9〜12.10
+- Battle composition: 頭頂部 + アホ毛のみ
