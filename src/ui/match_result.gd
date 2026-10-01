@@ -5,8 +5,12 @@ signal next_match_requested
 signal character_select_requested
 signal leave_room_requested
 signal top_requested
+signal friend_result_refresh_requested
+
+const FRIEND_RESULT_REFRESH_SECONDS := 0.5
 
 var _summary: Dictionary = {}
+var _status_label: Label
 
 
 func configure(summary: Dictionary) -> void:
@@ -161,31 +165,54 @@ func _build_friend_result(root: VBoxContainer) -> void:
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(note)
 
-	var actions := HBoxContainer.new()
-	actions.alignment = BoxContainer.ALIGNMENT_CENTER
-	actions.add_theme_constant_override("separation", 12)
-	root.add_child(actions)
+	_status_label = Label.new()
+	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(_status_label)
 
-	var character_select := Button.new()
-	character_select.text = "CHANGE CHARACTER"
-	character_select.pressed.connect(func() -> void:
-		character_select_requested.emit()
-	)
-	actions.add_child(character_select)
+	var role := str(_summary.get("friend_role", ""))
+	if role == "host":
+		var actions := HBoxContainer.new()
+		actions.alignment = BoxContainer.ALIGNMENT_CENTER
+		actions.add_theme_constant_override("separation", 12)
+		root.add_child(actions)
 
-	var rematch := Button.new()
-	rematch.text = "REMATCH"
-	rematch.pressed.connect(func() -> void:
-		rematch_requested.emit()
-	)
-	actions.add_child(rematch)
+		var rematch := Button.new()
+		rematch.text = "REMATCH"
+		rematch.pressed.connect(func() -> void:
+			rematch_requested.emit()
+		)
+		actions.add_child(rematch)
 
-	var leave_room := Button.new()
-	leave_room.text = "LEAVE ROOM"
-	leave_room.pressed.connect(func() -> void:
-		leave_room_requested.emit()
+		var character_select := Button.new()
+		character_select.text = "CHANGE CHARACTER"
+		character_select.pressed.connect(func() -> void:
+			character_select_requested.emit()
+		)
+		actions.add_child(character_select)
+
+		var leave_room := Button.new()
+		leave_room.text = "LEAVE ROOM"
+		leave_room.pressed.connect(func() -> void:
+			leave_room_requested.emit()
+		)
+		actions.add_child(leave_room)
+		return
+
+	_status_label.text = "WAITING FOR HOST..."
+	var timer := Timer.new()
+	timer.wait_time = FRIEND_RESULT_REFRESH_SECONDS
+	timer.one_shot = false
+	timer.autostart = true
+	timer.timeout.connect(func() -> void:
+		friend_result_refresh_requested.emit()
 	)
-	actions.add_child(leave_room)
+	add_child(timer)
+
+
+func set_status(message: String) -> void:
+	if _status_label != null:
+		_status_label.text = message
 
 
 func _build_local_result(root: VBoxContainer) -> void:
