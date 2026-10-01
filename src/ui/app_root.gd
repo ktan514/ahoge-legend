@@ -453,29 +453,36 @@ func _show_friend_result(summary: Dictionary) -> void:
 	_show_loading("SYNCING FRIEND RESULT...")
 	_friend_room_code = str(summary.get("friend_room_code", _friend_room_code))
 	var completed_summary := summary.duplicate(true)
+	var room: Dictionary = {}
+
+	if not _friend_room_code.is_empty():
+		room = await _wait_for_friend_room_post_match(_friend_room_code)
+		if not room.is_empty():
+			_set_friend_room(room)
+			completed_summary["friend_role"] = _friend_last_role
+			var early_state := str(room.get("state", ""))
+			# Hostが先にREMATCHを確定した場合、active contextは既に新matchへ差し替わっている。
+			# 旧Resultをackせず、そのまま新matchへjoinする。
+			if early_state == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
+				await _join_friend_match(room)
+				return
 
 	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
 	if not bool(ack_result.get("ok", false)):
 		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
 
-	if not _friend_room_code.is_empty():
-		var room: Dictionary = await _wait_for_friend_room_post_match(_friend_room_code)
-		if room.is_empty():
-			_clear_friend_room_context()
-			_show_top_menu()
-			return
-		_set_friend_room(room)
-		completed_summary["friend_role"] = _friend_last_role
-		var room_state := str(room.get("state", ""))
-		if room_state == "LOBBY":
-			_show_friend_lobby()
-			return
-		if room_state == "WAITING" and _friend_last_role == "host":
-			_show_friend_lobby()
-			return
-		if room_state == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
-			await _join_friend_match(room)
-			return
+	if room.is_empty():
+		_clear_friend_room_context()
+		_show_top_menu()
+		return
+
+	var room_state := str(room.get("state", ""))
+	if room_state == "LOBBY":
+		_show_friend_lobby()
+		return
+	if room_state == "WAITING" and _friend_last_role == "host":
+		_show_friend_lobby()
+		return
 
 	var screen = MATCH_RESULT_SCENE.instantiate()
 	screen.call("configure", completed_summary)
@@ -604,7 +611,7 @@ func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
 		var room: Dictionary = await _online_session.get_friend_room_status(room_code)
 		if bool(room.get("ok", false)):
 			latest = room.duplicate(true)
-			if str(room.get("state", "")) in ["POST_MATCH", "LOBBY", "WAITING"]:
+			if str(room.get("state", "")) in ["POST_MATCH", "LOBBY", "WAITING", "IN_MATCH"]:
 				return latest
 		elif _online_session.is_friend_room_terminal_failure(room):
 			return {}
