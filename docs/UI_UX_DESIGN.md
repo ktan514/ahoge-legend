@@ -445,3 +445,406 @@ Human Decisionが必要な項目:
    - restrained
    - playful
    - highly animated
+
+## 9. 採用Visual Direction
+
+Human Decisionにより、Direction C: MANGA BOUT / COMIC IMPACT を正式採用する。
+
+採用理由:
+
+- AHOGE LEGENDの「アホ毛同士が本気で戦う馬鹿馬鹿しさ」を最も強く表現できる
+- PreBattle / Battle / Resultで画面映えする
+- 漫画的なコマ割り・吹き出し・擬音・集中線を、ゲームの読み合いと相性よく使える
+- SNS短尺 / Steam screenshotで一目で個性を出しやすい
+- 頭頂部 + アホ毛だけというBattle構図を、漫画コマの切り取りとして自然に見せられる
+
+### 9.1 採用時の制約
+
+C案を採用するが、「常時うるさい漫画演出」にはしない。
+
+- Menu / Settings / Rankingは整理された漫画誌面として静的・読みやすくする
+- PreBattle / Battle event / Resultだけimpactを強くする
+- Battle中は攻撃予備動作・アホ毛・timer・Hit数を最優先し、装飾が戦闘を邪魔しない
+- 擬音や集中線は短時間表示とし、常時画面を覆わない
+- character colorは補助色として使い、基本UIはPaper / Ink / Impact Yellowを軸にする
+- 顔全体・全身をBattle画面へ表示しない
+
+### 9.2 Design System draft
+
+Human Decision済み:
+- visual direction: MANGA BOUT / COMIC IMPACT
+
+現時点のdraft。実画面mockup確認後に確定する。
+
+#### Color
+
+| Token | Draft | 用途 |
+| --- | --- | --- |
+| Paper | #FFF6E4 | menu / panel base |
+| Ink | #181818 | text / border / comic frame |
+| Impact Yellow | #FFD43B | primary action / emphasis |
+| Player 1 Blue | #438EFF | P1 / left-side identity |
+| Player 2 Red | #FF5A4E | P2 / right-side identity |
+| Muted Paper | #E8E0D2 | disabled / secondary surface |
+| Error | #D93434 | destructive / error |
+| Success | #2E9F5B | success state |
+
+色値は方向確認用draftであり、contrast検証後に確定する。
+
+#### Shape
+
+- 角丸を基本形にしない
+- comic panel / caption box / cut-cornerを基本とする
+- borderは2〜4px相当のInk線
+- shadowは柔らかいdrop shadowより、ずらしたInk影・offset shadowを優先
+- Primary ActionはImpact Yellow + Ink border
+- Destructiveは白地 + Error border、またはError fill
+- disabledはMuted Paper + 低contrast Ink
+
+#### Spacing
+
+8px基準のspacing scaleを使用する。
+
+4 / 8 / 16 / 24 / 32 / 48 / 64
+
+- minimum safe margin: 32px
+- primary content gap: 24〜32px
+- section gap: 32〜48px
+- click target最小高: 44px
+- primary button標準高: 56px前後
+
+#### Typography roles
+
+フォントfamily自体は後続で権利確認して確定する。
+
+- Display XL: logo / WIN / LOSE / comic impact
+- Display L: screen title
+- Heading: section title / character name
+- Body: 説明 / setting label
+- Caption: 状態補足 / secondary info
+- Number XL: Battle timer
+- Number L: Hit / Round / Rating
+
+方針:
+- displayは太い漫画見出し風
+- bodyは可読性優先
+- 数字は桁幅が暴れない見え方を優先
+- 長文をdisplay書体で読ませない
+
+#### Motion draft
+
+- hover: 80〜120ms
+- pressed: 60〜100ms
+- screen transition: 180〜240ms
+- result impact: 250〜400ms
+- comic impact text: 180〜300ms
+- Battle HUD常時animationは禁止
+- screen shakeは重大eventだけ、2〜4px程度の短時間に限定
+
+## 10. 代表4画面 具体デザイン
+
+この節は#101へ渡す先行screen designとする。機能prototypeの座標・文言をそのまま踏襲しない。
+
+### 10.1 UI-01 Top Menu
+
+#### Purpose
+
+ゲームの入口。数秒で「アホ毛で戦う対戦ゲーム」と理解でき、主要機能へ迷わず移動できること。
+
+#### Layout
+
+16:9基準。
+
+    ┌──────────────────────────────────────────────┐
+    │ AHOGE LEGEND logo                 version / notice │
+    │──────────────────────────────────────────────│
+    │                                              │
+    │  ┌────────────┐      large hero manga panel │
+    │  │ ONLINE     │      character / ahoge art  │
+    │  │ BATTLE     │      speech / tagline       │
+    │  ├────────────┤                             │
+    │  │ RANKING    │                             │
+    │  ├────────────┤                             │
+    │  │ SETTINGS   │                             │
+    │  └────────────┘                             │
+    │                                              │
+    │ small secondary footer / fan-game notice     │
+    └──────────────────────────────────────────────┘
+
+#### Information hierarchy
+
+1. AHOGE LEGEND logo
+2. ONLINE BATTLE
+3. hero visual
+4. RANKING
+5. SETTINGS
+6. secondary legal / version
+
+#### Visual
+
+- 背景はPaperを全面ベタ塗りではなく、薄いhalftone / manga panel texture
+- 左側の主要menuはInkの斜めcaption box
+- 現在hover中のitemだけImpact Yellowで塗る
+- hero panelは漫画の大コマ
+- comic decorationは右側へ寄せ、menu文字の可読性を邪魔しない
+- title logo周囲に過剰な吹き出しを置かない
+
+#### Draft copy
+
+- ONLINE BATTLE
+- RANKING
+- SETTINGS
+- EXIT
+
+補足日本語はhover時または小captionとして出す。button本体は短い英語labelを基本候補とする。
+
+#### Interaction
+
+- hover: 黄色markerが左→右へ走る
+- pressed: button panelが2〜3px沈む
+- screen exit: 選択panel方向へcomic wipe
+- mouse cursorが乗っただけで大きくUI全体を動かさない
+
+#### Responsive
+
+- 1280x720でもmenuが縦に潰れない
+- hero artはcrop可
+- logo / menuはsafe area内で固定
+- Fullscreen / Windowでrelative位置を維持
+
+### 10.2 UI-04 Character Select
+
+#### Purpose
+
+キャラクターの「見た目のアホ毛」と「戦闘個性」を比較して決める。
+
+#### Layout
+
+    ┌──────────────────────────────────────────────┐
+    │ CHARACTER SELECT                  mode badge │
+    │──────────────────────────────────────────────│
+    │                                              │
+    │  [card] [card] [selected large card] [card]  │
+    │                                              │
+    │  ┌───────────────────────────┐  ┌─────────┐ │
+    │  │ selected character        │  │ AHOGE   │ │
+    │  │ name / type / attack      │  │ preview │ │
+    │  │ short description         │  │ motion  │ │
+    │  └───────────────────────────┘  └─────────┘ │
+    │                                              │
+    │  BACK                         [ DECIDE ]      │
+    └──────────────────────────────────────────────┘
+
+#### Character card
+
+- 縦長manga panel
+- 顔写真一覧ではなく、頭頂部 + アホ毛形状が一目で比較できるcropを優先
+- name
+- Ahoge Type
+- Attack Type
+- selected cardのみImpact Yellow frame
+- hoverでpanelが3〜5px前へ出る
+- locked / unavailableはhalftone overlay
+
+#### Selected detail
+
+最低情報:
+- Character Name
+- AHOGE TYPE: LONG / NORMAL / SHORT
+- ATTACK TYPE
+- 1行の特徴
+- Ahoge preview
+
+数値parameterを大量表示しない。ゲーム開始前に理解が必要な差だけ見せる。
+
+#### Draft actions
+
+- BACK
+- DECIDE
+
+Friend Lobbyから来た場合も基本layoutは共通化し、上部mode badgeだけ変更する。
+
+#### Transition
+
+- card変更: 120〜180ms
+- Ahoge preview: card選択時に1回だけ小さくしなる
+- DECIDE: selected cardをcomic panel zoomして次画面へ
+
+### 10.3 UI-10 Battle / HUD
+
+#### Non-negotiable composition
+
+Battle画面では顔・目・全身を表示しない。
+
+表示するのは各playerの:
+- 頭頂部
+- 髪
+- アホ毛
+- 必要最小限の髪飾り
+
+だけ。
+
+crop lineは原則として眉・目が画面へ入らない位置とする。
+
+#### Composition
+
+    ┌──────────────────────────────────────────────┐
+    │ P1 name / rounds / hits    85    P2 hits / rounds / name │
+    │──────────────────────────────────────────────│
+    │                                              │
+    │              COMBAT / AHOGE SPACE            │
+    │                                              │
+    │           ← ahoge reach / clash →            │
+    │                                              │
+    │  P1 head-top                     P2 head-top │
+    │  ╭──────╮                       ╭──────╮     │
+    │  │ hair │╲                     ╱│ hair │     │
+    │  ╰──────╯ ahoge             ahoge╰──────╯     │
+    └──────────────────────────────────────────────┘
+
+#### Head crop
+
+- 左player頭頂部は画面左下
+- 右player頭頂部は画面右下
+- 頭部の見える高さはBattle field高の20〜30%程度から検証開始
+- 目・鼻・口は表示しない
+- アホ毛根元と髪型でキャラクター識別できること
+- 頭部は攻撃・parry・dodgeに必要な範囲だけ動く
+- full character portraitはHUDにも置かない方向を第一候補とする
+
+#### HUD
+
+Top barは漫画scoreboardとして整理する。
+
+中央:
+- 85 timerを最大
+- 下に ROUND 1
+
+左右:
+- player name
+- round wins
+- hit count
+- connection状態は通常時非表示
+
+例:
+
+    P1 PEKORA   ●○   HIT 3      85      HIT 2   ○○   MIKO P2
+                                  ROUND 1
+
+#### Comic effects
+
+常時表示しない。
+
+event時のみ:
+- HIT!
+- PARRY!
+- JUST!
+- DODGE!
+- CLASH!
+
+表示時間は短く、attack trajectoryを隠さない。
+
+effect位置:
+- 衝突点から少し外側
+- character head / ahoge rootを覆わない
+- timerを覆わない
+
+#### Background
+
+- background artは低contrast
+- speed line / halftoneはevent時に一時追加
+- Battle中の主役は常にアホ毛
+- ステージ観客・看板等を置く場合も中央combat spaceを散らかさない
+
+#### 5:4 / 16:9
+
+現時点では5:4を確定しない。
+
+C案での候補:
+- 16:9全面を一つの漫画pageとして使用
+- 中央combat spaceだけ約5:4の視覚的な主コマとして構成
+- 左右余白には常設情報を詰めず、impact effect / subtle stage artに使う
+
+#101で実画面mockup比較後に最終採否する。
+
+### 10.4 UI-11 Match Result
+
+#### Purpose
+
+勝敗を一瞬で理解し、次の行動を迷わず選べること。
+
+#### Layout
+
+    ┌──────────────────────────────────────────────┐
+    │                                              │
+    │            YOU WIN / YOU LOSE / DRAW         │
+    │           large comic impact title           │
+    │                                              │
+    │        character / score summary panel       │
+    │                                              │
+    │            primary next action               │
+    │        secondary / tertiary actions          │
+    │                                              │
+    └──────────────────────────────────────────────┘
+
+#### Result impact
+
+- WIN / LOSE / DRAWは画面最大級のdisplay type
+- 勝者側accent colorを部分使用
+- backgroundに1回だけimpact line
+- 連続flashは禁止
+- 0.3〜0.5秒で通常Result layoutへ落ち着く
+
+#### Ranked actions
+
+既存機能契約を維持しつつcopyは#101で最終確定する。
+
+候補:
+- NEXT MATCH
+- CHANGE CHARACTER
+- TOP MENU
+
+Rating変動はscore summary内へ整理し、buttonより上に表示する。
+
+#### Friend Host actions
+
+- REMATCH
+- CHANGE CHARACTER
+- LEAVE ROOM
+
+REMATCHをPrimary、CHANGE CHARACTERをSecondary、LEAVE ROOMをDestructiveとする。
+
+#### Friend Guest
+
+- WAITING FOR HOST...
+- LEAVE ROOM
+
+Hostの選択待ちはspeech balloonではなくstatus captionとして明確にする。
+
+#### Transition
+
+- result enter: impact 250〜400ms
+- button操作可能になる前に長いLoading専用画面を挟まない
+- network同期中は同じResult画面上でstatus表示
+- Host選択後はcomic panel wipeで次状態へ
+
+## 11. #100 残Human Decision
+
+visual directionは確定済み。
+
+残りはdesign systemの詳細として、以下をmockup確認後に確定する。
+
+1. UI主言語
+   - 英語short label + 日本語補足
+   - 日本語中心
+2. Paper基調の明るさ
+   - warm light
+   - neutral light
+3. component角度
+   - strong angular
+   - moderate angular
+4. motion強度
+   - moderate
+   - strong
+
+#100ではこれらをcommon component mockupと合わせて確定する。
