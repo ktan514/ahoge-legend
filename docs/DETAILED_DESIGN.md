@@ -1996,6 +1996,18 @@ friend_match_generation
 
 これによりclient再起動 / reconnect後も、server authoritative snapshotから元Friend roomを復元できる。
 
+Friend再起動復帰のidentity契約:
+
+- Device認証の `device_id` は同一インストールで永続化し、再起動後も同じ値を使用する
+- 同じ `device_id` で再認証したclientは同じNakama `user_id` として扱う
+- Friend match中にclientが終了してもserver-side `active_online_match/current` とFriend room membershipは解除しない
+- 再起動時は新規Friend導線へ進む前に `active_online_match/current` を確認し、ACTIVEなら元authoritative matchへ強制復帰する
+- RESULT_PENDINGならserver result snapshotの `friend_room_code` から元roomを復元してack後にFriend Character Select / Lobbyへ戻す
+- Friend roomのhost / guest membershipはNakama `user_id` を正本とする。同じGuest userが再度JOINした場合は既存Guestとしてroomを返し、満員扱いにしない
+- 別 `device_id` は別userであり、旧Guest membershipを自動的に乗っ取らない
+
+ローカル2client Human VerificationではP1/P2が同一 `user://` を共有し得るため、P2専用helperで別Device IDを一度だけ生成・保存し、再起動時も必ず同じP2 Device IDを再利用する。これにより実製品の「同一インストール再起動」を再現する。
+
 Friend matchのUI-09 / UI-10はRankedと同じSceneを再利用するが、`match_mode` を表示・遷移の正本とする。
 
 - `ranked` → 従来のRating settlement付きUI-11
