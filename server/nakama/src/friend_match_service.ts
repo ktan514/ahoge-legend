@@ -702,12 +702,11 @@ function friendRoomResultActionRpc(
     }
 
     if (action === FRIEND_RESULT_ACTION_CHANGE_CHARACTER) {
-      room.state = FRIEND_ROOM_STATE_WAITING;
+      room.state = FRIEND_ROOM_STATE_LOBBY;
       room.current_match_id = "";
       room.host_character_id = "";
-      room.host_ready = false;
-      room.guest_user_id = "";
       room.guest_character_id = "";
+      room.host_ready = false;
       room.guest_ready = false;
       touchFriendRoom(room, now);
       try {
@@ -831,7 +830,7 @@ function friendRoomLeaveRpc(
     ) {
       throw new Error("active friend match must be resolved first");
     }
-    if (room.state === FRIEND_ROOM_STATE_POST_MATCH) {
+    if (room.state === FRIEND_ROOM_STATE_POST_MATCH && role === "host") {
       throw new Error("friend result action required");
     }
 
