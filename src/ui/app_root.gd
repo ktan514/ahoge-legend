@@ -450,40 +450,13 @@ func _friend_summary_from_snapshot(snapshot: Dictionary) -> Dictionary:
 
 
 func _show_friend_result(summary: Dictionary) -> void:
-	_show_loading("SYNCING FRIEND RESULT...")
 	_friend_room_code = str(summary.get("friend_room_code", _friend_room_code))
 	var completed_summary := summary.duplicate(true)
-	var room: Dictionary = {}
+	completed_summary["friend_role"] = _friend_last_role
+	var result_match_id := str(summary.get("match_id", ""))
 
-	if not _friend_room_code.is_empty():
-		room = await _wait_for_friend_room_post_match(_friend_room_code)
-		if not room.is_empty():
-			_set_friend_room(room)
-			completed_summary["friend_role"] = _friend_last_role
-			var early_state := str(room.get("state", ""))
-			# Hostが先にREMATCHを確定した場合、active contextは既に新matchへ差し替わっている。
-			# 旧Resultをackせず、そのまま新matchへjoinする。
-			if early_state == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
-				await _join_friend_match(room)
-				return
-
-	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
-	if not bool(ack_result.get("ok", false)):
-		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
-
-	if room.is_empty():
-		_clear_friend_room_context()
-		_show_top_menu()
-		return
-
-	var room_state := str(room.get("state", ""))
-	if room_state == "LOBBY":
-		_show_friend_lobby()
-		return
-	if room_state == "WAITING" and _friend_last_role == "host":
-		_show_friend_lobby()
-		return
-
+	# Match Result自体はroom Storageのsettlementを待たず即表示する。
+	# room同期中はResult画面内で操作を一時無効化し、pollで追従する。
 	var screen = MATCH_RESULT_SCENE.instantiate()
 	screen.call("configure", completed_summary)
 	_replace_screen_instance(screen)
@@ -495,8 +468,23 @@ func _show_friend_result(summary: Dictionary) -> void:
 	screen.connect("leave_room_requested", Callable(self, "_on_friend_result_leave_requested").bind(screen))
 	screen.connect(
 		"friend_result_refresh_requested",
-		Callable(self, "_refresh_friend_result").bind(screen)
+		Callable(self, "_refresh_friend_result").bind(screen, result_match_id)
 	)
+	screen.call("set_friend_result_actions_enabled", false)
+	call_deferred("_synchronize_friend_result", screen, result_match_id)
+
+
+func _synchronize_friend_result(screen: Control, result_match_id: String) -> void:
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+
+	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+	if not bool(ack_result.get("ok", false)):
+		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
+
+	if not is_instance_valid(screen) or _current_screen != screen:
+		return
+	await _refresh_friend_result(screen, result_match_id)
 
 
 func _on_friend_result_rematch_requested(screen: Control) -> void:
@@ -569,52 +557,70 @@ func _on_friend_result_leave_requested(screen: Control) -> void:
 	_show_top_menu()
 
 
-func _refresh_friend_result(screen: Control) -> void:
+func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 	if _friend_refresh_in_progress or not is_instance_valid(screen) or _current_screen != screen:
 		return
 	if _friend_room_code.is_empty():
 		return
+
 	_friend_refresh_in_progress = true
 	var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
 	_friend_refresh_in_progress = false
 	if not is_instance_valid(screen) or _current_screen != screen:
 		return
+
 	if not bool(room.get("ok", false)):
 		if _online_session.is_friend_room_terminal_failure(room):
 			_clear_friend_room_context()
 			_show_top_menu()
 			return
-		screen.call("set_status", str(room.get("message", "Friend Result状態を確認できませんでした。")))
+		screen.call("set_friend_result_actions_enabled", false)
+		screen.call("set_status", str(room.get("message", "Friend roomを同期しています...")))
 		return
 
 	_set_friend_room(room)
+	screen.call("set_friend_role", _friend_last_role)
+
 	var state := str(room.get("state", ""))
-	if state == "IN_MATCH" and not str(room.get("current_match_id", "")).is_empty():
-		await _join_friend_match(room)
+	if state == "POST_MATCH":
+		screen.call("set_friend_result_actions_enabled", true)
+		if _friend_last_role == "guest":
+			screen.call("set_status", "WAITING FOR HOST...")
+		else:
+			screen.call("set_status", "")
 		return
+
+	if state == "IN_MATCH":
+		var current_match_id := str(room.get("current_match_id", ""))
+		# 終了した旧matchがまだIN_MATCHの間はroom settlement待ち。
+		# 新しいmatch IDへ変わった場合だけHost REMATCH確定としてjoinする。
+		if not current_match_id.is_empty() and current_match_id != result_match_id:
+			await _join_friend_match(room)
+			return
+		screen.call("set_friend_result_actions_enabled", false)
+		if _friend_last_role == "guest":
+			screen.call("set_status", "WAITING FOR HOST...")
+		else:
+			screen.call("set_status", "SYNCING FRIEND ROOM...")
+		return
+
+	if state == "STARTING":
+		screen.call("set_friend_result_actions_enabled", false)
+		screen.call("set_status", "STARTING REMATCH...")
+		return
+
 	if state == "LOBBY":
 		_show_friend_lobby()
 		return
 	if state == "WAITING" and _friend_last_role == "host":
 		_show_friend_lobby()
 		return
+
+	screen.call("set_friend_result_actions_enabled", false)
 	if _friend_last_role == "guest":
 		screen.call("set_status", "WAITING FOR HOST...")
-
-
-func _wait_for_friend_room_post_match(room_code: String) -> Dictionary:
-	var deadline := Time.get_ticks_msec() + 5000
-	var latest: Dictionary = {}
-	while Time.get_ticks_msec() < deadline:
-		var room: Dictionary = await _online_session.get_friend_room_status(room_code)
-		if bool(room.get("ok", false)):
-			latest = room.duplicate(true)
-			if str(room.get("state", "")) in ["POST_MATCH", "LOBBY", "WAITING", "IN_MATCH"]:
-				return latest
-		elif _online_session.is_friend_room_terminal_failure(room):
-			return {}
-		await get_tree().create_timer(0.05).timeout
-	return latest
+	else:
+		screen.call("set_status", "SYNCING FRIEND ROOM...")
 
 
 func _leave_friend_room(_screen: Control = null) -> void:
