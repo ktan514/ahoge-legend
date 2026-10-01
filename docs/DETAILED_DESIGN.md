@@ -1979,10 +1979,11 @@ ahoge_friend_room_join
 ahoge_friend_room_status
 ahoge_friend_room_character
 ahoge_friend_room_ready
+ahoge_friend_room_result_action
 ahoge_friend_room_leave
 ```
 
-RPCはすべて認証済みuserのみ利用可能とし、room membership / room state / character ID / code形式をserverで検証する。
+RPCはすべて認証済みuserのみ利用可能とし、room membership / room state / character ID / code形式をserverで検証する。`ahoge_friend_room_result_action` はHostだけが `rematch / change_character / leave` を確定できる。Guest自身の退出は従来の `ahoge_friend_room_leave` を使用する。
 
 #### 15.2.9 UI-06〜08 client契約
 
