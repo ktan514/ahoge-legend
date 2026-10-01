@@ -56,9 +56,37 @@ func _draw() -> void:
 	if character == null:
 		return
 
-	var head_center := Vector2(size.x * 0.5, size.y + 54.0) + _head_offset
-	var head_radius := 100.0
-	draw_circle(head_center, head_radius, Color(0.25, 0.25, 0.27))
+	var head_center := Vector2(size.x * 0.5, size.y + 44.0) + _head_offset
+	var head_radius := minf(122.0, maxf(92.0, size.x * 0.28))
+	var hair_color := Color("#3f86ff") if facing > 0.0 else Color("#ff4f58")
+	var ink := Color("#151515")
+	var highlight := hair_color.lightened(0.22)
+
+	# 顔を描かず、画面下端から頭頂部だけを見せる。
+	draw_circle(head_center, head_radius + 5.0, ink)
+	draw_circle(head_center, head_radius, hair_color)
+
+	# 漫画的な髪のハイライト。目・鼻・口などの顔要素は描画しない。
+	var crown_y := head_center.y - head_radius * 0.62
+	draw_arc(
+		head_center + Vector2(-head_radius * 0.16, -head_radius * 0.12),
+		head_radius * 0.62,
+		PI * 1.10,
+		PI * 1.72,
+		24,
+		highlight,
+		9.0,
+		true
+	)
+	for index in range(4):
+		var x := head_center.x - head_radius * 0.48 + float(index) * head_radius * 0.32
+		draw_line(
+			Vector2(x, crown_y),
+			Vector2(x + facing * 12.0, crown_y - 20.0 - float(index % 2) * 10.0),
+			Color(highlight.r, highlight.g, highlight.b, 0.68),
+			5.0,
+			true
+		)
 
 	if combat_state == null or not combat_state.ahoge_available:
 		return
@@ -83,5 +111,9 @@ func _draw() -> void:
 		-length
 	)
 
-	draw_line(root, middle, Color(0.92, 0.92, 0.94), 8.0, true)
-	draw_line(middle, tip, Color(0.92, 0.92, 0.94), 6.0, true)
+	var hair_color := Color("#3f86ff") if facing > 0.0 else Color("#ff4f58")
+	var ink := Color("#151515")
+	draw_line(root, middle, ink, 14.0, true)
+	draw_line(middle, tip, ink, 12.0, true)
+	draw_line(root, middle, hair_color.lightened(0.12), 8.0, true)
+	draw_line(middle, tip, hair_color.lightened(0.12), 6.0, true)
