@@ -1,5 +1,6 @@
 extends SceneTree
 
+const AppRootScene := preload("res://scenes/app/AppRoot.tscn")
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 
@@ -135,15 +136,24 @@ func _run() -> void:
 		_fail("P2のserver-side active Friend matchが保存されていません。")
 		return
 
-	# アプリ再起動相当。Device IDは環境変数で固定されているため同じNakama userへ戻る。
+	# アプリ再起動相当。AppRoot起動時に同じDevice IDで再認証し、
+	# ONLINE BATTLEの新規導線へ入る前に元Friend Battleへ自動復帰する。
 	online_session.clear_runtime_session_preserving_match()
-
-	var reauth: Dictionary = await online_session.authenticate_local_device()
-	if not bool(reauth.get("ok", false)):
-		_fail("P2再起動相当のDevice再認証に失敗しました。")
+	var resumed_app = AppRootScene.instantiate()
+	get_root().add_child(resumed_app)
+	if not await _wait_screen(resumed_app, "OnlineBattle", 15000):
+		_fail("P2アプリ再起動後に元Friend Battleへ自動復帰しませんでした。")
 		return
-	if str(reauth.get("user_id", "")) != guest_user_id:
+	if online_session.session == null or str(online_session.session.user_id) != guest_user_id:
 		_fail("P2再起動後のNakama user_idが変化しました。")
+		return
+	if str(online_session.current_match_id) != match_id \
+			or str(online_session.current_match_mode) != OnlineConfigScript.MATCH_MODE_FRIEND:
+		_fail("P2再起動後のruntime matchが元Friend matchと一致しません。")
+		return
+	var resumed_snapshot: Dictionary = online_session.latest_match_snapshot
+	if str(resumed_snapshot.get("friend_room_code", "")) != room_code:
+		_fail("P2再起動後のFriend snapshotから元roomを復元できませんでした。")
 		return
 
 	# 未解決Friend matchを持つ同一userは新しいroomを開始できない。
@@ -152,19 +162,10 @@ func _run() -> void:
 		_fail("未解決Friend matchがあるP2で新しいFriend roomを作成できてしまいました。")
 		return
 
-	var resumed: Dictionary = await online_session.restore_unresolved_match_with_retry()
-	if not bool(resumed.get("ok", false)) or not bool(resumed.get("repaired", false)):
-		_fail("P2が元Friend matchへ再ログイン復帰できませんでした。")
-		return
-	if str(resumed.get("destination", "")) != "battle":
-		_fail("進行中Friend matchの復帰先がBattleではありません。")
-		return
-
-	var resumed_snapshot: Dictionary = resumed.get("snapshot", {})
-	if str(resumed_snapshot.get("match_mode", "")) != OnlineConfigScript.MATCH_MODE_FRIEND \
-			or str(resumed_snapshot.get("friend_room_code", "")) != room_code \
-			or str(online_session.current_match_id) != match_id:
-		_fail("P2再ログイン後のFriend snapshotが元match / roomと一致しません。")
+	resumed_app.queue_free()
+	await process_frame
+	if not await _wait_round_ready(online_session, 5000):
+		_fail("P2復帰後に元Friend Roundを再開できませんでした。")
 		return
 
 	# 元P1を切断し、P2の通常攻撃5Hit + Round境界timeoutでserver Resultまで進める。
@@ -222,30 +223,24 @@ func _run() -> void:
 		_fail("P2 Friend resultがRESULT_PENDINGへ遷移しませんでした。")
 		return
 
-	# 終了済み状態でも同じDevice IDで再起動し、元roomへ復帰できることを確認する。
+	# 終了済み状態でも同じDevice IDで再起動する。
+	# AppRootはRESULT_PENDINGをserver snapshotから解決し、ack後に元roomのCharacter Selectへ戻す。
 	online_session.clear_runtime_session_preserving_match()
-	var finished_reauth: Dictionary = await online_session.authenticate_local_device()
-	if not bool(finished_reauth.get("ok", false)) \
-			or str(finished_reauth.get("user_id", "")) != guest_user_id:
+	var finished_app = AppRootScene.instantiate()
+	get_root().add_child(finished_app)
+	if not await _wait_screen(finished_app, "CharacterSelect", 15000):
+		_fail("終了済みFriend matchのP2再起動後に元room Character Selectへ復帰しませんでした。")
+		return
+	if online_session.session == null or str(online_session.session.user_id) != guest_user_id:
 		_fail("終了済みFriend match後のP2再認証でuser_idが変化しました。")
 		return
-
-	var finished_resume: Dictionary = await online_session.restore_unresolved_match_with_retry()
-	if not bool(finished_resume.get("ok", false)) \
-			or not bool(finished_resume.get("repaired", false)) \
-			or str(finished_resume.get("destination", "")) != "friend_character_select":
-		_fail("終了済みFriend matchから元roomへの復帰先を確定できませんでした。")
+	var active_after_app: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(active_after_app.get("ok", false)) or bool(active_after_app.get("active", false)):
+		_fail("Friend Result復帰後もP2のactive match lockが残っています。")
 		return
 
-	var finished_snapshot: Dictionary = finished_resume.get("snapshot", {})
-	if str(finished_snapshot.get("friend_room_code", "")) != room_code:
-		_fail("終了済みFriend snapshotから元room codeを復元できませんでした。")
-		return
-
-	var ack: Dictionary = await online_session.acknowledge_active_match_destination()
-	if not bool(ack.get("ok", false)):
-		_fail("P2 Friend resultのactive match ackに失敗しました。")
-		return
+	finished_app.queue_free()
+	await process_frame
 
 	var room_after: Dictionary = await online_session.get_friend_room_status(room_code)
 	if not bool(room_after.get("ok", false)) \
@@ -282,6 +277,28 @@ func _run() -> void:
 		% [room_code, match_id, guest_user_id]
 	)
 	quit(0)
+
+
+func _wait_screen(app, screen_name: String, timeout_ms: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		if is_instance_valid(app) and str(app.call("current_screen_name")) == screen_name:
+			return true
+		await create_timer(0.05).timeout
+	return false
+
+
+func _wait_round_ready(online_session, timeout_ms: int) -> bool:
+	var deadline := Time.get_ticks_msec() + timeout_ms
+	while Time.get_ticks_msec() < deadline:
+		var snapshot: Dictionary = online_session.latest_match_snapshot
+		if not snapshot.is_empty() \
+				and not bool(snapshot.get("match_finished", false)) \
+				and not bool(snapshot.get("round_finished", false)) \
+				and not bool(snapshot.get("round_countdown_active", false)):
+			return true
+		await create_timer(0.05).timeout
+	return false
 
 
 func _wait_friend_snapshot(online_session, room_code: String, timeout_ms: int) -> Dictionary:
