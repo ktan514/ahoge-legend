@@ -261,7 +261,7 @@ func _run() -> void:
 
 	result_screen.emit_signal("rematch_requested")
 	if not await _wait_screen(app, "FriendRoomLobby", 5000):
-		_fail("REMATCHで同じFriend Lobbyへ戻りません。", app)
+		_fail("Host REMATCHで同じFriend Lobbyへ戻りません。", app)
 		return
 	lobby = app.get_child(0)
 	if str(lobby.call("room_code")) != room_code:
@@ -269,9 +269,28 @@ func _run() -> void:
 		return
 	var post_room: Dictionary = await online_session.get_friend_room_status(room_code)
 	if not bool(post_room.get("ok", false)) \
+			or str(post_room.get("state", "")) != "WAITING" \
+			or not str(post_room.get("guest_user_id", "")).is_empty() \
 			or bool(post_room.get("host_ready", true)) \
 			or bool(post_room.get("guest_ready", true)):
-		_fail("REMATCH LobbyでReadyが解除されていません。", app)
+		_fail("Match終了後にGuest枠が解放されたWAITING roomへ戻っていません。", app)
+		return
+
+	# 前MatchのP2も予約されず、room code JOINの先着として改めてGuest枠を取得する。
+	var p2_rejoin := await _rpc_dict(
+		second_client,
+		second_session,
+		OnlineConfigScript.FRIEND_ROOM_RPC_JOIN,
+		{"room_code": room_code}
+	)
+	if p2_rejoin.is_empty() \
+			or str(p2_rejoin.get("role", "")) != "guest" \
+			or str(p2_rejoin.get("guest_user_id", "")) != str(second_session.user_id):
+		_fail("前MatchのP2が空いているGuest枠へ再JOINできませんでした。", app)
+		return
+
+	if not await _wait_label_text(app, str(second_session.user_id).substr(0, 8), 4000):
+		_fail("P2再JOINがHost Lobbyへ反映されません。", app)
 		return
 
 	lobby.emit_signal("leave_requested")
