@@ -28,7 +28,7 @@ func _run() -> void:
 		return
 
 	var top = app.get_child(0)
-	var settings_button := _find_button(top, "SETTINGS")
+	var settings_button: Button = _find_button(top, "SETTINGS") as Button
 	if settings_button == null or settings_button.disabled:
 		_fail("Top MenuのSETTINGSが有効ではありません。", app)
 		return
