@@ -251,66 +251,43 @@ func _run() -> void:
 			or _has_label_text(result_screen, "AHOGE RATING"):
 		_fail("Friend ResultにRating変動が表示されています。", app)
 		return
-	var change_character_button = _find_button(result_screen, "CHANGE CHARACTER")
 	var rematch_button = _find_button(result_screen, "REMATCH")
+	var change_character_button = _find_button(result_screen, "CHANGE CHARACTER")
 	var leave_room_button = _find_button(result_screen, "LEAVE ROOM")
-	if change_character_button == null or rematch_button == null or leave_room_button == null:
-		_fail("Friend Resultの3ボタンが揃っていません。", app)
+	if rematch_button == null or change_character_button == null or leave_room_button == null:
+		_fail("Host Friend Resultの3ボタンが揃っていません。", app)
 		return
-	if change_character_button.get_parent() != rematch_button.get_parent() \
-			or rematch_button.get_parent() != leave_room_button.get_parent() \
+	if rematch_button.get_parent() != change_character_button.get_parent() \
+			or change_character_button.get_parent() != leave_room_button.get_parent() \
 			or not (
-				change_character_button.get_index() < rematch_button.get_index()
-				and rematch_button.get_index() < leave_room_button.get_index()
+				rematch_button.get_index() < change_character_button.get_index()
+				and change_character_button.get_index() < leave_room_button.get_index()
 			):
-		_fail("Friend Resultのボタン順がCHANGE CHARACTER / REMATCH / LEAVE ROOMではありません。", app)
+		_fail("Host Friend Resultのボタン順がREMATCH / CHANGE CHARACTER / LEAVE ROOMではありません。", app)
 		return
 
-	# P2 result lockも解除し、後続テストへ残さない。
+	# P2 result lockも解除し、Host REMATCHが同じP2で次matchを生成できる状態にする。
 	await _ack_second_result(second_client, second_session, match_id, 6000)
 
 	result_screen.emit_signal("rematch_requested")
-	if not await _wait_screen(app, "FriendRoomLobby", 5000):
-		_fail("Host REMATCHで同じFriend Lobbyへ戻りません。", app)
+	if not await _wait_screen(app, "OnlineBattle", 10000):
+		_fail("Host REMATCHでLobbyを挟まず次Friend Battleへ進みません。", app)
 		return
-	lobby = app.get_child(0)
-	if str(lobby.call("room_code")) != room_code:
-		_fail("REMATCH後にroom codeが変わりました。", app)
-		return
-	var post_room: Dictionary = await online_session.get_friend_room_status(room_code)
-	if not bool(post_room.get("ok", false)) \
-			or str(post_room.get("state", "")) != "WAITING" \
-			or not str(post_room.get("guest_user_id", "")).is_empty() \
-			or bool(post_room.get("host_ready", true)) \
-			or bool(post_room.get("guest_ready", true)):
-		_fail("Match終了後にGuest枠が解放されたWAITING roomへ戻っていません。", app)
-		return
-
-	# 前MatchのP2も予約されず、room code JOINの先着として改めてGuest枠を取得する。
-	var p2_rejoin := await _rpc_dict(
-		second_client,
-		second_session,
-		OnlineConfigScript.FRIEND_ROOM_RPC_JOIN,
-		{"room_code": room_code}
-	)
-	if p2_rejoin.is_empty() \
-			or str(p2_rejoin.get("role", "")) != "guest" \
-			or str(p2_rejoin.get("guest_user_id", "")) != str(second_session.user_id):
-		_fail("前MatchのP2が空いているGuest枠へ再JOINできませんでした。", app)
-		return
-
-	if not await _wait_label_text(app, str(second_session.user_id).substr(0, 8), 4000):
-		_fail("P2再JOINがHost Lobbyへ反映されません。", app)
-		return
-
-	lobby.emit_signal("leave_requested")
-	if not await _wait_screen(app, "FriendMatchMenu", 5000):
-		_fail("host LEAVE ROOMでFriendMatchMenuへ戻りません。", app)
+	var rematch_room: Dictionary = await online_session.get_friend_room_status(room_code)
+	var rematch_match_id := str(rematch_room.get("current_match_id", ""))
+	if not bool(rematch_room.get("ok", false)) \
+			or str(rematch_room.get("state", "")) != "IN_MATCH" \
+			or rematch_match_id.is_empty() \
+			or rematch_match_id == match_id \
+			or str(rematch_room.get("guest_user_id", "")) != str(second_session.user_id) \
+			or str(rematch_room.get("host_character_id", "")) != OnlineConfigScript.RANKED_CHARACTER_LONG_TEST \
+			or str(rematch_room.get("guest_character_id", "")) != OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST:
+		_fail("REMATCHが同じGuest / Characterの新matchになっていません。", app)
 		return
 
 	online_session.clear_session()
 	app.queue_free()
-	print("AHOGE LEGEND friend gameflow smoke: PASS room=%s match=%s" % [room_code, match_id])
+	print("AHOGE LEGEND friend gameflow smoke: PASS room=%s first=%s rematch=%s" % [room_code, match_id, rematch_match_id])
 	quit(0)
 
 
