@@ -1914,7 +1914,7 @@ Round / BO3 / Reconnect / Match ResultはRankedと同じserver authoritative bat
 
 #### 15.2.5 Result / Rematch
 
-Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の選択権はHostだけが持ち、Guestは操作ボタンを持たずHostの選択を待つ。
+Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の次戦方針の選択権はHostだけが持つ。Guestは `WAITING FOR HOST...` と自分自身の `LEAVE ROOM` だけを持ち、Hostの選択を待つ。
 
 Host Result操作はserver RPCを正本とし、次の3択とする。
 
@@ -1965,7 +1965,7 @@ Host以外のclient判断でREMATCH / CHANGE CHARACTER / room全体終了を確�
 Friend matchへjoinした後は既存 Nakama `user_id` 単位のserver-side `active_online_match/current` に `match_mode=friend` として保持する。
 
 - 進行中Friend matchもRankedと同じく、active Round中はdeadlineなしで同一matchへ復帰し、Round境界のみ15秒待機する
-- 終了済みFriend matchへ再ログインした場合はserver result contextを解決する。Hostは維持中roomへ戻せるが、前MatchのGuest枠は予約せずGuestはFriend Menu / 再JOIN導線へ戻す
+- 終了済みFriend matchへ再ログインした場合はserver result snapshotからFriend Resultへ復帰する。Hostは3択を再表示し、GuestはHOST選択待ち + 自分のLEAVE ROOMを再表示する。すでにHost選択が確定済みならroom stateへ追従する
 - 未解決match contextがある間、`OnlineSession` は新しいFriend room作成・参加・対戦開始を拒否する
 - Match Not Found / Invalid Match IDの安全解除契約を変更しない
 
@@ -2040,9 +2040,9 @@ Friend再起動復帰のidentity契約:
 - 同じ `device_id` で再認証したclientは同じNakama `user_id` として扱う
 - Friend match中にclientが終了してもserver-side `active_online_match/current` とそのMatch参加資格は解除しない。再起動後は元authoritative matchへ復帰する
 - 再起動時は新規Friend導線へ進む前に `active_online_match/current` を確認し、ACTIVEなら元authoritative matchへ強制復帰する
-- RESULT_PENDINGならserver result snapshotを表示・ackする。終了後のFriend room Guest枠は前Match参加者へ予約しない
-- Friend roomのhost / guest membershipはNakama `user_id` を正本とするが、Match終了時にGuest membershipを解放する
-- 次MatchのGuest枠はroom code JOINの成功順で確定する。前MatchのGuestだったかどうかは優先条件にしない
+- RESULT_PENDINGならserver result snapshotからFriend Resultを復元し、room stateと同期してHost選択待ちまたは確定済み遷移へ接続する
+- Friend roomのhost / guest membershipはNakama `user_id` を正本とし、Match終了時のPOST_MATCHでは両者membershipを保持する
+- Guest自身がLEAVEした場合だけGuest枠を解放し、その空席はroom code JOINの成功順で確定する。前MatchのGuestだったかどうかは優先条件にしない
 - 別 `device_id` は別userであり、進行中Matchの参加資格を引き継がない
 
 ローカル2client Human VerificationではP1/P2が同一 `user://` を共有し得るため、P2専用helperで別Device IDを一度だけ生成・保存し、再起動時も必ず同じP2 Device IDを再利用する。これにより実製品の「同一インストール再起動」を再現する。
