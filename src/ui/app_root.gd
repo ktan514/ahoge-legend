@@ -471,16 +471,24 @@ func _show_friend_result(summary: Dictionary) -> void:
 		Callable(self, "_refresh_friend_result").bind(screen, result_match_id)
 	)
 	screen.call("set_friend_result_actions_enabled", false)
+	screen.set_meta("friend_result_ack_completed", false)
 	call_deferred("_synchronize_friend_result", screen, result_match_id)
 
 
 func _synchronize_friend_result(screen: Control, result_match_id: String) -> void:
-	if not is_instance_valid(screen) or _current_screen != screen:
-		return
+	while is_instance_valid(screen) and _current_screen == screen:
+		var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
+		if bool(ack_result.get("ok", false)):
+			if is_instance_valid(screen) and _current_screen == screen:
+				screen.set_meta("friend_result_ack_completed", true)
+			break
 
-	var ack_result: Dictionary = await _online_session.acknowledge_active_match_destination()
-	if not bool(ack_result.get("ok", false)):
 		printerr("Friend Result active match ack failed: %s" % str(ack_result.get("message", "")))
+		if not is_instance_valid(screen) or _current_screen != screen:
+			return
+		screen.call("set_friend_result_actions_enabled", false)
+		screen.call("set_status", "SYNCING MATCH RESULT...")
+		await get_tree().create_timer(0.25).timeout
 
 	if not is_instance_valid(screen) or _current_screen != screen:
 		return
@@ -583,8 +591,11 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 
 	var state := str(room.get("state", ""))
 	if state == "POST_MATCH":
-		screen.call("set_friend_result_actions_enabled", true)
-		if _friend_last_role == "guest":
+		var ack_completed := bool(screen.get_meta("friend_result_ack_completed", false))
+		screen.call("set_friend_result_actions_enabled", ack_completed)
+		if not ack_completed:
+			screen.call("set_status", "SYNCING MATCH RESULT...")
+		elif _friend_last_role == "guest":
 			screen.call("set_status", "WAITING FOR HOST...")
 		else:
 			screen.call("set_status", "")
