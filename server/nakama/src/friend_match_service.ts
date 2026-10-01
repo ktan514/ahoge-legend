@@ -704,11 +704,15 @@ function friendRoomResultActionRpc(
     if (room.host_user_id !== ctx.userId) {
       throw new Error("friend result action is host only");
     }
-    if (room.state !== FRIEND_ROOM_STATE_POST_MATCH) {
-      throw new Error("friend room is not waiting for result action");
-    }
 
     if (action === FRIEND_RESULT_ACTION_LEAVE) {
+      if (
+        room.state !== FRIEND_ROOM_STATE_POST_MATCH &&
+        room.state !== FRIEND_ROOM_STATE_WAITING &&
+        room.state !== FRIEND_ROOM_STATE_LOBBY
+      ) {
+        throw new Error("friend room cannot be closed from current state");
+      }
       try {
         deleteFriendRoom(nk, roomCode, record.version);
         return JSON.stringify({
@@ -722,7 +726,15 @@ function friendRoomResultActionRpc(
     }
 
     if (action === FRIEND_RESULT_ACTION_CHANGE_CHARACTER) {
-      room.state = FRIEND_ROOM_STATE_LOBBY;
+      if (
+        room.state !== FRIEND_ROOM_STATE_POST_MATCH &&
+        room.state !== FRIEND_ROOM_STATE_WAITING
+      ) {
+        throw new Error("friend room cannot change character from current state");
+      }
+      room.state = room.guest_user_id
+        ? FRIEND_ROOM_STATE_LOBBY
+        : FRIEND_ROOM_STATE_WAITING;
       room.current_match_id = "";
       room.host_character_id = "";
       room.guest_character_id = "";
@@ -739,6 +751,9 @@ function friendRoomResultActionRpc(
       }
     }
 
+    if (room.state !== FRIEND_ROOM_STATE_POST_MATCH) {
+      throw new Error("friend room is not waiting for rematch");
+    }
     if (
       !room.guest_user_id ||
       !isSupportedCharacterId(room.host_character_id) ||
