@@ -778,8 +778,13 @@ Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確
 ランキング関連数値は更新しない。
 
 ```text
-[REMATCH] [CHANGE CHARACTER] [EXIT]
+[CHANGE CHARACTER] [REMATCH] [LEAVE ROOM]
 ```
+
+- 左 `CHANGE CHARACTER`: Character Selectへ進む
+- 中央 `REMATCH`: Characterを変更せず、次戦のためFriend Lobbyへ戻る
+- 右 `LEAVE ROOM`: Friend roomを退出する
+- `REMATCH` はCharacter Selectへ遷移しない
 
 ## 17. UI-12 ランキング
 
