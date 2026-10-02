@@ -1393,6 +1393,13 @@ Final labels:
 - 再接続中…
 - 相手を待っています…
 
+Round Result:
+- scoreboard上のplayer識別は P1 / P2 を使用する
+- local client視点の一時event / Round Resultでは YOU / OPPONENT を使用する
+- Drawは DRAW と表示する
+- Round Result本文は `ROUND N / YOU|OPPONENT|DRAW / score` の順で表示する
+- Result表示中は次RoundのWaiting / Countdownを重ねない
+
 Event impact:
 - HIT!
 - PARRY!
