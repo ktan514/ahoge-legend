@@ -163,6 +163,7 @@ func _build_online_cards(parent: VBoxContainer) -> void:
 		button_margin.add_child(card_box)
 
 		var card_art = MangaCharacterArtScript.new()
+		card_art.name = "CharacterArt_%s" % character.character_id
 		card_art.custom_minimum_size = Vector2(196, 102)
 		card_art.configure(character, false)
 		card_box.add_child(card_art)
@@ -198,6 +199,7 @@ func _build_online_cards(parent: VBoxContainer) -> void:
 	preview_panel.add_child(preview_box)
 
 	_preview_art = MangaCharacterArtScript.new()
+	_preview_art.name = "SelectedCharacterArt"
 	_preview_art.custom_minimum_size = Vector2(380, 260)
 	preview_box.add_child(_preview_art)
 
@@ -208,6 +210,7 @@ func _build_online_cards(parent: VBoxContainer) -> void:
 	preview_box.add_child(_preview_title)
 
 	_preview_detail = Label.new()
+	_preview_detail.name = "SelectedCharacterDetail"
 	_preview_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_preview_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_preview_detail.add_theme_color_override("font_color", MangaThemeScript.PAPER_1)
