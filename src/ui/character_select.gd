@@ -3,7 +3,7 @@ extends Control
 const CharacterCatalogScript := preload("res://src/domain/character_catalog.gd")
 const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
 const MangaBackdropScript := preload("res://src/ui/theme/manga_backdrop.gd")
-const MangaHeroArtScript := preload("res://src/ui/theme/manga_hero_art.gd")
+const MangaCharacterArtScript := preload("res://src/ui/theme/manga_character_art.gd")
 
 signal battle_requested(player_one_id: String, player_two_id: String)
 signal ranked_character_selected(character_id: String)
@@ -20,6 +20,7 @@ var _selected_player_two_id: String = "SHORT_TEST"
 var _character_buttons: Dictionary = {}
 var _preview_title: Label
 var _preview_detail: Label
+var _preview_art
 var _local_player_two: OptionButton
 
 
@@ -143,17 +144,45 @@ func _build_online_cards(parent: VBoxContainer) -> void:
 	for character in CharacterCatalogScript.all():
 		var button := Button.new()
 		button.name = "Character_%s" % character.character_id
-		button.text = "%s\n%s / %s" % [
-			character.display_name,
-			character.ahoge_type_name(),
-			character.attack_type_name(),
-		]
-		button.custom_minimum_size = Vector2(220, 132)
-		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.text = ""
+		button.custom_minimum_size = Vector2(240, 190)
 		button.pressed.connect(_select_character.bind(character.character_id))
 		MangaThemeScript.apply_secondary_button(button)
 		cards.add_child(button)
+
+		var button_margin := MarginContainer.new()
+		button_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		button_margin.add_theme_constant_override("margin_left", 12)
+		button_margin.add_theme_constant_override("margin_top", 10)
+		button_margin.add_theme_constant_override("margin_right", 12)
+		button_margin.add_theme_constant_override("margin_bottom", 10)
+		button.add_child(button_margin)
+
+		var card_box := VBoxContainer.new()
+		card_box.add_theme_constant_override("separation", 4)
+		button_margin.add_child(card_box)
+
+		var card_art = MangaCharacterArtScript.new()
+		card_art.custom_minimum_size = Vector2(196, 102)
+		card_art.configure(character, false)
+		card_box.add_child(card_art)
+
+		var card_name := Label.new()
+		card_name.text = character.display_name
+		card_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		card_name.add_theme_font_size_override("font_size", 18)
+		card_box.add_child(card_name)
+
+		var card_types := Label.new()
+		card_types.text = "%s / %s" % [
+			character.ahoge_type_name(),
+			character.attack_type_name(),
+		]
+		card_types.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		MangaThemeScript.apply_caption(card_types)
+		card_box.add_child(card_types)
+
+		_set_mouse_passthrough(button_margin)
 		_character_buttons[character.character_id] = button
 
 	var preview_panel := PanelContainer.new()
@@ -168,9 +197,9 @@ func _build_online_cards(parent: VBoxContainer) -> void:
 	preview_box.add_theme_constant_override("separation", 12)
 	preview_panel.add_child(preview_box)
 
-	var preview_art := MangaHeroArtScript.new()
-	preview_art.custom_minimum_size = Vector2(380, 260)
-	preview_box.add_child(preview_art)
+	_preview_art = MangaCharacterArtScript.new()
+	_preview_art.custom_minimum_size = Vector2(380, 260)
+	preview_box.add_child(_preview_art)
 
 	_preview_title = Label.new()
 	_preview_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -245,10 +274,23 @@ func _update_preview() -> void:
 	if character == null:
 		return
 	_preview_title.text = character.display_name
-	_preview_detail.text = "アホ毛タイプ: %s\n攻撃タイプ: %s\n\nアホ毛の形と戦い方で選ぼう。" % [
+	if _preview_art != null:
+		_preview_art.configure(character, true)
+	var feature_text := character.feature_text
+	if feature_text.is_empty():
+		feature_text = "アホ毛の形と戦い方で選ぼう。"
+	_preview_detail.text = "%s\n\nアホ毛タイプ: %s\n攻撃タイプ: %s" % [
+		feature_text,
 		character.ahoge_type_name(),
 		character.attack_type_name(),
 	]
+
+
+func _set_mouse_passthrough(control: Control) -> void:
+	control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in control.get_children():
+		if child is Control:
+			_set_mouse_passthrough(child)
 
 
 func _mode_label() -> String:
