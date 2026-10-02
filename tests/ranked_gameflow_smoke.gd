@@ -203,7 +203,7 @@ func _run() -> void:
 		return
 
 	# 前Round Resultを先に表示し、その表示中には15秒待機を重ねない。
-	if not await _wait_label_text(app, "ROUND 1\nP1\n1 - 0", 1500):
+	if not await _wait_label_text(app, "ROUND 1\nYOU\n1 - 0", 1500):
 		_fail("Round 1 Result表示を確認できませんでした。", app)
 		return
 	if _has_label_text(app, "相手を待っています…"):
