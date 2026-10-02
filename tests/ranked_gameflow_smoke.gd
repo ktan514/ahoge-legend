@@ -44,6 +44,21 @@ func _run() -> void:
 		_fail("Ranked導線開始時に認証 / Realtime接続が成立していません。", app)
 		return
 
+	var character_select_preview = app.get_child(0)
+	var long_art = character_select_preview.find_child("CharacterArt_LONG_TEST", true, false)
+	var short_art = character_select_preview.find_child("CharacterArt_SHORT_TEST", true, false)
+	var selected_art = character_select_preview.find_child("SelectedCharacterArt", true, false)
+	var selected_detail = character_select_preview.find_child("SelectedCharacterDetail", true, false)
+	if long_art == null or short_art == null or selected_art == null:
+		_fail("Character Selectにcharacter別Ahoge previewが揃っていません。", app)
+		return
+	if not long_art.is_visible_in_tree() or not short_art.is_visible_in_tree() 			or not selected_art.is_visible_in_tree():
+		_fail("Character SelectのAhoge previewが表示されていません。", app)
+		return
+	if not selected_detail is Label 			or not str((selected_detail as Label).text).contains("長いアホ毛で間合いを取るスタンダード型"):
+		_fail("Character Selectの選択中character特徴文が反映されていません。", app)
+		return
+
 	var second_client = nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
