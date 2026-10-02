@@ -6,8 +6,6 @@ signal ranking_requested
 signal settings_requested
 signal exit_requested
 
-const BG_TEXTURE: Texture2D = preload("res://assets/ui/top_menu/bg_top_menu.png")
-const SPEED_LINES_TEXTURE: Texture2D = preload("res://assets/ui/top_menu/decor_speed_lines.png")
 const LOGO_TEXTURE: Texture2D = preload("res://assets/ui/top_menu/logo_ahoge_legend.png")
 
 const BUTTON_NORMAL: Texture2D = preload("res://assets/ui/top_menu/btn_menu_normal.png")
@@ -22,6 +20,13 @@ const LABEL_EXIT: Texture2D = preload("res://assets/ui/top_menu/label_exit.png")
 
 const MENU_WIDTH := 430.0
 const MENU_BUTTON_SIZE := Vector2(410.0, 82.0)
+const MENU_ROW_SIZE := Vector2(430.0, 86.0)
+const FOCUS_OFFSET_X := 10.0
+const FOCUS_DURATION := 0.10
+const PRESS_PUSH_X := 6.0
+const PRESS_SHAKE_X := 2.0
+
+var _button_tweens: Dictionary = {}
 
 
 func _ready() -> void:
@@ -31,23 +36,12 @@ func _ready() -> void:
 
 
 func _build_background() -> void:
-	var background := TextureRect.new()
-	background.name = "BackgroundTexture"
-	background.texture = BG_TEXTURE
+	var background := ColorRect.new()
+	background.name = "TopMenuBackgroundPlaceholder"
+	background.color = Color("#08121f")
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-
-	var speed_lines := TextureRect.new()
-	speed_lines.name = "SpeedLinesTexture"
-	speed_lines.texture = SPEED_LINES_TEXTURE
-	speed_lines.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	speed_lines.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	speed_lines.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	speed_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(speed_lines)
 
 
 func _build_menu() -> TextureButton:
@@ -89,37 +83,34 @@ func _build_menu() -> TextureButton:
 	menu.add_theme_constant_override("separation", 6)
 	left.add_child(menu)
 
-	var online_button := _make_menu_button(
+	var online_button := _add_menu_button(
+		menu,
 		"OnlineBattleButton",
 		LABEL_BATTLE,
 		"オンライン対戦へ進む",
 		Callable(self, "_on_online_battle_pressed")
 	)
-	menu.add_child(online_button)
-
-	var ranking_button := _make_menu_button(
+	_add_menu_button(
+		menu,
 		"RankingButton",
 		LABEL_RANKING,
 		"ランキングを表示する",
 		Callable(self, "_on_ranking_pressed")
 	)
-	menu.add_child(ranking_button)
-
-	var settings_button := _make_menu_button(
+	_add_menu_button(
+		menu,
 		"SettingsButton",
 		LABEL_SETTINGS,
 		"設定を開く",
 		Callable(self, "_on_settings_pressed")
 	)
-	menu.add_child(settings_button)
-
-	var exit_button := _make_menu_button(
+	_add_menu_button(
+		menu,
 		"ExitButton",
 		LABEL_EXIT,
 		"ゲームを終了する",
 		Callable(self, "_on_exit_pressed")
 	)
-	menu.add_child(exit_button)
 
 	if _show_debug_menu():
 		var debug_button := Button.new()
@@ -137,15 +128,23 @@ func _build_menu() -> TextureButton:
 	return online_button
 
 
-func _make_menu_button(
+func _add_menu_button(
+	menu: VBoxContainer,
 	button_name: String,
 	label_texture: Texture2D,
 	tooltip: String,
 	callback: Callable
 ) -> TextureButton:
+	var row := Control.new()
+	row.name = "%sRow" % button_name
+	row.custom_minimum_size = MENU_ROW_SIZE
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(row)
+
 	var button := TextureButton.new()
 	button.name = button_name
-	button.custom_minimum_size = MENU_BUTTON_SIZE
+	button.position = Vector2.ZERO
+	button.size = MENU_BUTTON_SIZE
 	button.texture_normal = BUTTON_NORMAL
 	button.texture_hover = BUTTON_FOCUS
 	button.texture_focused = BUTTON_FOCUS
@@ -155,7 +154,12 @@ func _make_menu_button(
 	button.stretch_mode = TextureButton.STRETCH_SCALE
 	button.focus_mode = Control.FOCUS_ALL
 	button.tooltip_text = tooltip
+	button.mouse_entered.connect(_on_menu_button_mouse_entered.bind(button))
+	button.focus_entered.connect(_on_menu_button_focus_changed.bind(button, true))
+	button.focus_exited.connect(_on_menu_button_focus_changed.bind(button, false))
+	button.button_down.connect(_on_menu_button_down.bind(button))
 	button.pressed.connect(callback)
+	row.add_child(button)
 
 	var label := TextureRect.new()
 	label.name = "LabelTexture"
@@ -167,6 +171,43 @@ func _make_menu_button(
 	button.add_child(label)
 
 	return button
+
+
+func _on_menu_button_mouse_entered(button: TextureButton) -> void:
+	if not button.disabled:
+		button.grab_focus()
+
+
+func _on_menu_button_focus_changed(button: TextureButton, focused: bool) -> void:
+	_stop_button_tween(button)
+	var tween := create_tween()
+	_button_tweens[button.get_instance_id()] = tween
+	var target_x := FOCUS_OFFSET_X if focused else 0.0
+	tween.tween_property(
+		button,
+		"position",
+		Vector2(target_x, 0.0),
+		FOCUS_DURATION
+	).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
+func _on_menu_button_down(button: TextureButton) -> void:
+	_stop_button_tween(button)
+	var tween := create_tween()
+	_button_tweens[button.get_instance_id()] = tween
+	var base_x := FOCUS_OFFSET_X if button.has_focus() else 0.0
+	tween.tween_property(button, "position", Vector2(base_x + PRESS_PUSH_X, 0.0), 0.035)
+	tween.tween_property(button, "position", Vector2(base_x - PRESS_SHAKE_X, 0.0), 0.025)
+	tween.tween_property(button, "position", Vector2(base_x + PRESS_SHAKE_X, 0.0), 0.025)
+	tween.tween_property(button, "position", Vector2(base_x, 0.0), 0.035)
+
+
+func _stop_button_tween(button: TextureButton) -> void:
+	var instance_id := button.get_instance_id()
+	var current = _button_tweens.get(instance_id)
+	if current is Tween and current.is_valid():
+		current.kill()
+	_button_tweens.erase(instance_id)
 
 
 func _show_debug_menu() -> bool:
