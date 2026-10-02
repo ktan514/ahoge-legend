@@ -526,7 +526,7 @@ func _synchronize_friend_result(screen: Control, result_match_id: String) -> voi
 		if not is_instance_valid(screen) or _current_screen != screen:
 			return
 		screen.call("set_friend_result_actions_enabled", false)
-		screen.call("set_status", "SYNCING MATCH RESULT...")
+		screen.call("set_status", "対戦結果を同期しています…")
 		await get_tree().create_timer(0.25).timeout
 
 	if not is_instance_valid(screen) or _current_screen != screen:
@@ -653,9 +653,9 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 		var ack_completed := bool(screen.get_meta("friend_result_ack_completed", false))
 		screen.call("set_friend_result_actions_enabled", ack_completed)
 		if not ack_completed:
-			screen.call("set_status", "SYNCING MATCH RESULT...")
+			screen.call("set_status", "対戦結果を同期しています…")
 		elif _friend_last_role == "guest":
-			screen.call("set_status", "WAITING FOR HOST...")
+			screen.call("set_status", "ホストの選択を待っています…")
 		else:
 			screen.call("set_status", "")
 		return
@@ -669,9 +669,9 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 			return
 		screen.call("set_friend_result_actions_enabled", false)
 		if _friend_last_role == "guest":
-			screen.call("set_status", "WAITING FOR HOST...")
+			screen.call("set_status", "ホストの選択を待っています…")
 		else:
-			screen.call("set_status", "SYNCING FRIEND ROOM...")
+			screen.call("set_status", "ルーム状態を確認しています…")
 		return
 
 	if state == "STARTING":
@@ -688,9 +688,9 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 
 	screen.call("set_friend_result_actions_enabled", false)
 	if _friend_last_role == "guest":
-		screen.call("set_status", "WAITING FOR HOST...")
+		screen.call("set_status", "ホストの選択を待っています…")
 	else:
-		screen.call("set_status", "SYNCING FRIEND ROOM...")
+		screen.call("set_status", "ルーム状態を確認しています…")
 
 
 func _leave_friend_room(_screen: Control = null) -> void:
