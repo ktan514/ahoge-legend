@@ -1633,3 +1633,42 @@ Battle timerはLabelによる数字描画を最終仕様としない。
 - integer secondsを桁へ分解してTextureRectで並べる
 - zero paddingなし
 - 85 → ... → 10 → 9 → ... → 0
+
+
+## 16. コンセプト画像をvisual正本とする
+
+2026-10-02 Human Reviewで、UI Design Proposal Board「C. MANGA BOUT」を最終UIのvisual referenceとして再確認した。
+
+以後のasset制作では、単に「漫画風」「黄色・ピンク・黒」を使うだけでは不十分とし、**このconcept boardの具体的な画面構成・形状・情報密度・色の使い方へ合わせる**。
+
+### 16.1 Top Menu
+
+Top Menuはconcept boardの01 Top Menuを基準とする。
+
+- 全体baseは黒〜濃紺のpanel / bar
+- 選択中primary actionだけYellowで強く出す
+- 非選択buttonは黒〜濃紺 / low contrast
+- buttonは横長で細め、斜めcut / rough ink edgeを持つ
+- pinkは主にaccent / slash / player identityへ限定し、button surfaceの常用色にしない
+- glossy UI / rounded card / neon pink主体のbuttonは採用しない
+- menu buttonを大きなpop-art stickerとして独立させない
+- background / speed lines / character art / menu UIを重ねて1画面を構成する
+- logo / title treatmentもconcept boardの白brush + red accent系を優先する
+
+### 16.2 Battle / Result
+
+- Battle HUDはconcept board 05の細い上部bar構成を基準とする
+- timerは中央で最大視認性
+- player sideはBlue / Redのaccent
+- 漫画effectは大きく出すが、UI chromeそのものはdark baseで抑える
+- Resultはconcept board 06のsplit manga panelを基準とする
+- WIN / LOSEはillustrated impact assetとして扱う
+
+### 16.3 Asset review rule
+
+新規assetは次を満たさなければ不採用。
+
+1. concept boardと並べて見て同一visual familyに見える
+2. 色・形・線幅・情報密度がconcept boardと整合する
+3. 単体で派手でも、画面へ置いた時にconcept boardから逸脱するものは不採用
+4. Human Review前に「漫画風だからOK」と自己判断しない
