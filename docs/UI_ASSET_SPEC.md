@@ -45,7 +45,7 @@ buttonの文字を画像化する場合も、buttonの状態画像とlabel画像
 原則として次の4状態を持つ。
 
 - normal
-- hover
+- focus / hover
 - pressed
 - disabled
 
@@ -478,7 +478,7 @@ assets/ui/top_menu/
 ├─ decor_speed_lines.png
 ├─ logo_ahoge_legend.png
 ├─ btn_menu_normal.png
-├─ btn_menu_hover.png
+├─ btn_menu_focus.png
 ├─ btn_menu_pressed.png
 ├─ btn_menu_disabled.png
 ├─ label_battle.png
@@ -517,7 +517,7 @@ Pink / orangeの大きなsticker風button、glossy button、厚いpop-art button
 
 ```text
 btn_menu_normal.png
-btn_menu_hover.png
+btn_menu_focus.png
 btn_menu_pressed.png
 btn_menu_disabled.png
 ```
@@ -571,3 +571,27 @@ TopMenu
 ```
 
 この構成でHuman Verificationを行い、visual directionが承認された後にframe / hero art / additional decorationを追加する。
+
+
+### 12.6 採用asset status
+
+2026-10-02時点のTop Menu実装対象:
+
+```text
+assets/ui/top_menu/bg_top_menu.png
+assets/ui/top_menu/decor_speed_lines.png
+assets/ui/top_menu/logo_ahoge_legend.png
+assets/ui/top_menu/btn_menu_normal.png
+assets/ui/top_menu/btn_menu_focus.png
+assets/ui/top_menu/btn_menu_pressed.png
+assets/ui/top_menu/btn_menu_disabled.png
+assets/ui/top_menu/label_battle.png
+assets/ui/top_menu/label_ranking.png
+assets/ui/top_menu/label_settings.png
+assets/ui/top_menu/label_exit.png
+assets/ui/top_menu/label_friend.png   # 後続画面用。UI-01では未使用
+```
+
+- `btn_menu_focus.png` をmouse hover / keyboard focus / controller focusで共用する
+- UI-01の機能導線は変更せず、「対戦する」からUI-03 Battle Mode Selectへ進む
+- `label_friend.png` をTop Menuへ追加して既存navigationを変更しない
