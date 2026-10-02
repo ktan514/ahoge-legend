@@ -1437,9 +1437,11 @@ Ranked copy:
 - トップへ戻る
 
 Rating:
-- 「レート +18」
-- 「レート -14」
-- Draw時もserver確定deltaを表示
+- Player Ratingは「プレイヤーレート  1500 → 1518  (+18)」形式
+- Ahoge Ratingは「アホ毛レート  1500 → 1518  (+18)」形式
+- 同キャラ戦ではAhoge Ratingの後ろへ「/ 同キャラ戦」を付与してよい
+- Draw時もserver確定before / after / deltaを表示
+- settlement取得失敗時は各欄を「プレイヤーレートを確認できませんでした」「アホ毛レートを確認できませんでした」とする
 
 Friend Host copy:
 - 再戦する
