@@ -1363,6 +1363,10 @@ VictoryLineDefinition
 
 ### 12.1 CharacterDefinition
 
+キャラクター選択の単位は `CharacterDefinition` 1件であり、頭部・髪型・アホ毛を別slotとして組み替えない。
+`head_asset` と `ahoge_asset` は同じCharacterDefinitionへ固定で紐づく一体のvisual setである。
+UI-04はCharacterDefinitionを選ぶ画面であり、アホ毛単体の装備選択UIではない。
+
 ```text
 CharacterDefinition
 - id
