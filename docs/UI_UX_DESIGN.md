@@ -1614,10 +1614,13 @@ asset naming / file list / Godot node mappingの正本は `docs/UI_ASSET_SPEC.md
 UI-01は画像asset移行の最初の対象とする。
 
 - full-screen background: TextureRect
+- **background本体と集中線は別画像**
+- halftone / corner decorationもbackgroundへ焼き込まず独立layer
 - menu / hero frame: NinePatchRectまたはTextureRect
 - button: TextureButton
 - fixed button label: TextureRect
 - logo / fixed catch copy: TextureRect
+- hero artとhero frameも別画像
 - debug-only controlsは製品visual hierarchyから分離
 
 Top Menuでasset pipelineをHuman Verificationした後、Battle HUD / Result / 残り画面へ展開する。
