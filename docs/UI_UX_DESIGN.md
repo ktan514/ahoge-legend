@@ -1455,6 +1455,7 @@ Friend Host copy:
 Friend Guest:
 - 「ホストの選択を待っています…」
 - 「ルームを抜ける」
+- 再起動からFriend Resultへ復帰する場合も、初回表示前にHost / Guest roleを復元し、誤ったroleの操作を一瞬でも表示しない
 
 Hierarchy:
 1. Result
