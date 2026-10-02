@@ -3143,6 +3143,35 @@ OVERTIME   -> fx_overtime
 
 表示life timeはUI/UX正本の240msを初期基準とし、position / scale / rotationはvisual-onlyとする。
 
+
+
+### 22.6 Top Menu asset implementation
+
+UI-01は `assets/ui/top_menu/` の画像assetを直接preloadし、次のnodeで構成する。
+
+- background: `TextureRect`
+- speed lines: `TextureRect`
+- logo: `TextureRect`
+- menu actions: `TextureButton`
+- fixed labels: button childの `TextureRect`
+
+`TextureButton` は共通4stateを使用する。
+
+- normal: `btn_menu_normal.png`
+- hover / keyboard focus / controller focus: `btn_menu_focus.png`
+- pressed: `btn_menu_pressed.png`
+- disabled: `btn_menu_disabled.png`
+
+既存navigation signalは変更しない。
+
+- `online_battle_requested`
+- `ranking_requested`
+- `settings_requested`
+- `exit_requested`
+
+開発専用 `LOCAL TEST BATTLE` は通常のTop Menuへ表示しない。
+必要な場合のみuser command line argument `--show-debug-menu` で表示する。
+
 ### 22.5 Asset fallback
 
 asset制作途中にmissing textureがある場合、開発用fallbackは許可するが、#55 M3へ提出する画面ではfallbackを残さない。
