@@ -15,7 +15,7 @@
 
 ## 2. 現在地
 
-2026-10-02時点で工程4の機能優先GameFlow・主要12画面はmainへ揃った。これらは最終UIではなく機能プロトタイプである。現在は **工程4.5: UI/UXデザイン・最終画面化 #98** を実施し、主要12画面の見た目・文言・操作感・画面遷移を製品版として設計し直す。
+2026-10-02時点で工程4の機能優先GameFlow・主要12画面はmainへ揃い、工程4.5では **#100 Design System / #101 UI-01〜UI-12 Screen Design v1まで確定済み**。現在は **#102 最終UI/UXのGodot実装・反復調整** を進行中である。
 
 完了済みの主要基盤:
 
@@ -35,7 +35,7 @@
 
 M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181041b` でmain採用済み。#54 Human VerificationもPASSし、未解決matchのNakama Storage正本化とRound境界15秒切断復帰も完了した。
 
-現在は #88 でAHOGE LEGEND Rankingを従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ移行する。工程3で作成した総勝利数ベース初期実装は互換参考統計だけ残し、順位値をAhoge Ratingへ置換する。UI-12本画面量産前にserver settlement / Ranking RPC / UI-11 result contractを完成させる。
+#88 Ahoge Rating方式への移行、#92 UI-12 Ranking接続、#94 Friend Match主要画面、#96 Settingsはすべてmain採用・Human Verification済み。これらは工程4機能プロトタイプとして完了し、現在のblockingは工程4.5 #102の最終UI/UX実装と#55 M3である。
 
 
 ## 3. 製造工程
@@ -335,21 +335,21 @@ RC1
 
 現在からの優先順は次とする。
 
-1. #98 工程4.5 UI/UX design foundation
-2. visual direction / typography / color / spacing / component system / copy rule確定
-3. UI-01〜UI-12のscreen-by-screen最終設計
-4. Loading / Waiting / Error / Reconnect / transition設計
-5. Battle HUD / 5:4領域 / wide layout最終設計
-6. GodotへUI/UX実装
-7. 実画面で反復調整
-8. #55 M3主要12画面 UI/UX Human Verification
-9. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
-10. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
-11. 演出・音・台詞
-12. Steam認証
-13. AWS本番
-14. Windows実機・WAN試験
-15. balance / performance調整
+1. [x] #98 工程4.5 UI/UX design foundation
+2. [x] visual direction / typography / color / spacing / component system / copy rule確定（#100）
+3. [x] UI-01〜UI-12のscreen-by-screen最終設計（#101）
+4. [x] Loading / Waiting / Error / Reconnect / transition設計
+5. [x] Battle HUD / 5:4領域 / wide layout最終設計
+6. [ ] #102 Godotへ最終UI/UX実装
+7. [ ] #102 実画面で反復調整
+8. [ ] #55 M3主要12画面 UI/UX Human Verification
+9. [ ] LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
+10. [ ] #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
+11. [ ] 演出・音・台詞
+12. [ ] Steam認証
+13. [ ] AWS本番
+14. [ ] Windows実機・WAN試験
+15. [ ] balance / performance調整
 16. Release Candidate
 
 Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件は、balance検証により確定する。実装担当判断だけで固定しない。
