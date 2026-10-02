@@ -1402,6 +1402,13 @@ visual-only component `MangaCharacterArt` を使用し、`CharacterDefinition` �
 
 このcomponentは見た目専用であり、Hit / Contact / action stateのauthoritative判定には使用しない。
 
+現行テストキャラクターの `feature_text` は次を使用する。
+
+- `LONG_TEST`: 「長いアホ毛で間合いを取るスタンダード型」
+- `SHORT_TEST`: 「短いアホ毛を投げてかき回す変則型」
+
+正式キャラクター導入時は各CharacterDefinitionで個別に置き換える。
+
 ### 12.3 MotionProfile
 
 概念:
