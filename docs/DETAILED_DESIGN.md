@@ -1367,7 +1367,7 @@ VictoryLineDefinition
 CharacterDefinition
 - id
 - display_name
-- feature_text        # Character Selectの1行特徴
+- feature_text: String # Character Selectの1行特徴
 - ahoge_type
 - attack_type
 - head_asset
