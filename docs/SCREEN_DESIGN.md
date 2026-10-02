@@ -896,10 +896,10 @@ Season表示はserverが返す `season_id` を `YYYY / MM` へ整形する。cli
 │                                                              │
 │              [ PLAYER ] [ AHOGE LEGEND ]                    │
 │                                                              │
-│  👑 1   Character A          AHOGE RATING 1842              │
-│     2   Character F          AHOGE RATING 1798              │
-│     3   Character C          AHOGE RATING 1761              │
-│     4   Character H          AHOGE RATING 1715              │
+│  👑 1   Character A          アホ毛レート 1842              │
+│     2   Character F          アホ毛レート 1798              │
+│     3   Character C          アホ毛レート 1761              │
+│     4   Character H          アホ毛レート 1715              │
 │                                                              │
 │       Matches / Wins / Win Rate は補助情報として表示可       │
 │              Reset: Next month 1st 00:00 JST                │
