@@ -1240,7 +1240,7 @@ Card:
 - character name
 - Ahoge Type
 - Attack Type
-- selectedはImpact Yellow frame
+- selectedはPaper fillを維持し、Impact Yellow 4px frameで示す。selected card全体をYellow fillにはしない
 - 正式素材未導入の段階でも、各cardはcharacterごとのAhoge Typeが見分けられる専用vector previewを表示する
 - Top Menu用の2人hero artをCharacter Selectのcard / selected previewへ流用しない
 
