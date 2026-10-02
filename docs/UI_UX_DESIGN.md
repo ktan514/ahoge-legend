@@ -1672,3 +1672,27 @@ Top Menuはconcept boardの01 Top Menuを基準とする。
 2. 色・形・線幅・情報密度がconcept boardと整合する
 3. 単体で派手でも、画面へ置いた時にconcept boardから逸脱するものは不採用
 4. Human Review前に「漫画風だからOK」と自己判断しない
+
+
+### 16.4 Top Menu interaction / background correction
+
+2026-10-03 Human Verificationで次を確定した。
+
+#### Focus / Hover
+- keyboard / controller focusとmouse hoverを別々のselected状態として同時表示しない
+- mouseがmenu buttonへ入った時点で、そのbuttonへfocusも移す
+- selected visualは常に1buttonだけ
+- mouseが離れても最後に選択したbuttonのfocusを維持してよい
+
+#### Background
+- 現在のstadium background + speed linesはBattle向けvisualとして扱う
+- UI-01 Top Menuではspeed linesを使用しない
+- UI-01には専用background assetを使用する
+- Top Menu backgroundはBattleより静かにし、menu / logoの可読性を優先する
+
+#### Button micro animation
+- focus / hover: 80〜120msで右へ8〜12px slide
+- unfocus: 80〜120msで元位置へ戻る
+- pressed: 40〜80msの押し込み + 1〜3px程度の短い振動
+- animationはvisual-onlyでnavigation signalやhit areaを変えない
+- 同時に複数buttonを動かさない
