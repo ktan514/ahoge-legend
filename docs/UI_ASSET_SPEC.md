@@ -464,3 +464,101 @@ Top Menuのasset移行は次を満たしたとき完了とする。
 12. Battle effect文字
 13. balloon
 14. Result assets
+
+
+## 12. Top Menu最小実装セット
+
+最初のHuman Verificationでは、完成版asset一式を先に揃えず、次の**最小セット**だけを制作・実装する。
+
+### 12.1 必須asset
+
+```text
+assets/ui/top_menu/
+├─ bg_top_menu.png
+├─ decor_speed_lines.png
+├─ logo_ahoge_legend.png
+├─ btn_menu_normal.png
+├─ btn_menu_hover.png
+├─ btn_menu_pressed.png
+├─ btn_menu_disabled.png
+├─ label_battle.png
+├─ label_ranking.png
+├─ label_settings.png
+└─ label_exit.png
+```
+
+合計: 11ファイル。
+
+### 12.2 この段階では作らないもの
+
+次は初回asset migrationの必須対象外とする。
+
+- hero frame
+- hero art
+- menu frame
+- halftone overlay
+- corner decoration
+- fixed catch copy画像
+- destructive専用button texture
+- small button texture
+- debug専用asset
+
+まず「背景 / 集中線 / logo / button / fixed label」の5要素だけでTop Menuを再構成する。
+
+### 12.3 button共通化
+
+初回Top MenuではBattle / Ranking / Settings / Exitごとにbutton本体画像を作らない。
+
+共通の4stateを使う。
+
+```text
+btn_menu_normal.png
+btn_menu_hover.png
+btn_menu_pressed.png
+btn_menu_disabled.png
+```
+
+button文字だけを差し替える。
+
+```text
+label_battle.png
+label_ranking.png
+label_settings.png
+label_exit.png
+```
+
+これにより最初のasset制作量を抑えつつ、画像主体UIの品質と操作感をHuman Verificationできる。
+
+### 12.4 背景と集中線の責務
+
+`bg_top_menu.png`:
+- 背景本体だけ
+- 集中線なし
+- logoなし
+- buttonなし
+- fixed copyなし
+- UI frameなし
+
+`decor_speed_lines.png`:
+- 透明背景
+- 集中線だけ
+- 背景色なし
+- logoなし
+- halftoneなし
+- 他decorなし
+
+### 12.5 初回Godot構成
+
+```text
+TopMenu
+├─ TextureRect      bg_top_menu
+├─ TextureRect      decor_speed_lines
+├─ TextureRect      logo_ahoge_legend
+└─ VBoxContainer
+   ├─ TextureButton + label_battle
+   ├─ TextureButton + label_ranking
+   ├─ TextureButton + label_settings
+   └─ TextureButton + label_exit
+```
+
+この構成でHuman Verificationを行い、visual directionが承認された後にframe / hero art / additional decorationを追加する。
