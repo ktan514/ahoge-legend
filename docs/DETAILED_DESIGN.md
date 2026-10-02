@@ -1960,14 +1960,14 @@ Round / BO3 / Reconnect / Match ResultはRankedと同じserver authoritative bat
 
 #### 15.2.5 Result / Rematch
 
-Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の次戦方針の選択権はHostだけが持つ。Guestは `WAITING FOR HOST...` と自分自身の `LEAVE ROOM` だけを持ち、Hostの選択を待つ。
+Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の次戦方針の選択権はHostだけが持つ。Guestは「ホストの選択を待っています…」と自分自身の「ルームを抜ける」だけを持ち、Hostの選択を待つ。
 
 Host Result操作はserver RPCを正本とし、次の3択とする。
 
 ```text
-REMATCH
-CHANGE CHARACTER
-LEAVE ROOM
+再戦する              (action=rematch)
+キャラクターを選び直す (action=change_character)
+ルームを終了           (action=leave)
 ```
 
 - `REMATCH`
