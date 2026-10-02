@@ -12,6 +12,7 @@ const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
+const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -35,6 +36,7 @@ func _init() -> void:
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
 	_test_settings_store_contract()
+	_test_top_menu_asset_contract()
 	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
 	_test_ranked_recovery_policy()
@@ -300,6 +302,37 @@ func _test_settings_store_contract() -> void:
 	_expect_equal(display.get("mode"), "windowed", "未知Modeは初期値へ戻す")
 	_expect_equal(display.get("resolution"), "1280x720", "未知Resolutionは初期値へ戻す")
 	_expect_false(bool(display.get("vsync", true)), "Settings VSync OFFを維持する")
+
+
+func _test_top_menu_asset_contract() -> void:
+	var top_menu = TopMenuScene.instantiate()
+	get_root().add_child(top_menu)
+
+	var background = top_menu.find_child("BackgroundTexture", true, false)
+	var speed_lines = top_menu.find_child("SpeedLinesTexture", true, false)
+	var logo = top_menu.find_child("LogoTexture", true, false)
+	var battle_button = top_menu.find_child("OnlineBattleButton", true, false)
+	var ranking_button = top_menu.find_child("RankingButton", true, false)
+	var settings_button = top_menu.find_child("SettingsButton", true, false)
+	var exit_button = top_menu.find_child("ExitButton", true, false)
+
+	_expect_true(background is TextureRect, "Top Menu背景はTextureRect")
+	_expect_true(speed_lines is TextureRect, "Top Menu集中線は独立TextureRect")
+	_expect_true(logo is TextureRect, "Top Menu logoはTextureRect")
+	_expect_true(battle_button is TextureButton, "Top Menu対戦buttonはTextureButton")
+	_expect_true(ranking_button is TextureButton, "Top Menu Ranking buttonはTextureButton")
+	_expect_true(settings_button is TextureButton, "Top Menu Settings buttonはTextureButton")
+	_expect_true(exit_button is TextureButton, "Top Menu Exit buttonはTextureButton")
+
+	if battle_button is TextureButton:
+		var texture_button := battle_button as TextureButton
+		_expect_true(texture_button.texture_normal != null, "Top Menu button normal assetをloadする")
+		_expect_true(texture_button.texture_hover != null, "Top Menu button focus assetをhoverへloadする")
+		_expect_true(texture_button.texture_focused != null, "Top Menu button focus assetをfocusへloadする")
+		_expect_true(texture_button.texture_pressed != null, "Top Menu button pressed assetをloadする")
+		_expect_true(texture_button.texture_disabled != null, "Top Menu button disabled assetをloadする")
+
+	top_menu.free()
 
 
 func _test_match_resume_router() -> void:
