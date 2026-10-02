@@ -1,176 +1,193 @@
 extends Control
 
-const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
-const MangaBackdropScript := preload("res://src/ui/theme/manga_backdrop.gd")
-const MangaHeroArtScript := preload("res://src/ui/theme/manga_hero_art.gd")
-
 signal local_test_requested
 signal online_battle_requested
 signal ranking_requested
 signal settings_requested
 signal exit_requested
 
+const BG_TEXTURE: Texture2D = preload("res://assets/ui/top_menu/bg_top_menu.png")
+const SPEED_LINES_TEXTURE: Texture2D = preload("res://assets/ui/top_menu/decor_speed_lines.png")
+const LOGO_TEXTURE: Texture2D = preload("res://assets/ui/top_menu/logo_ahoge_legend.png")
+
+const BUTTON_NORMAL: Texture2D = preload("res://assets/ui/top_menu/btn_menu_normal.png")
+const BUTTON_FOCUS: Texture2D = preload("res://assets/ui/top_menu/btn_menu_focus.png")
+const BUTTON_PRESSED: Texture2D = preload("res://assets/ui/top_menu/btn_menu_pressed.png")
+const BUTTON_DISABLED: Texture2D = preload("res://assets/ui/top_menu/btn_menu_disabled.png")
+
+const LABEL_BATTLE: Texture2D = preload("res://assets/ui/top_menu/label_battle.png")
+const LABEL_RANKING: Texture2D = preload("res://assets/ui/top_menu/label_ranking.png")
+const LABEL_SETTINGS: Texture2D = preload("res://assets/ui/top_menu/label_settings.png")
+const LABEL_EXIT: Texture2D = preload("res://assets/ui/top_menu/label_exit.png")
+
+const MENU_WIDTH := 430.0
+const MENU_BUTTON_SIZE := Vector2(410.0, 82.0)
+
 
 func _ready() -> void:
-	var backdrop = MangaBackdropScript.new()
-	add_child(backdrop)
+	_build_background()
+	var online_button := _build_menu()
+	online_button.call_deferred("grab_focus")
 
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 40)
-	margin.add_theme_constant_override("margin_top", 32)
-	margin.add_theme_constant_override("margin_right", 40)
-	margin.add_theme_constant_override("margin_bottom", 28)
-	add_child(margin)
 
-	var page := VBoxContainer.new()
-	page.add_theme_constant_override("separation", 20)
-	margin.add_child(page)
+func _build_background() -> void:
+	var background := TextureRect.new()
+	background.name = "BackgroundTexture"
+	background.texture = BG_TEXTURE
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(background)
 
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 16)
-	page.add_child(header)
+	var speed_lines := TextureRect.new()
+	speed_lines.name = "SpeedLinesTexture"
+	speed_lines.texture = SPEED_LINES_TEXTURE
+	speed_lines.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	speed_lines.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	speed_lines.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	speed_lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(speed_lines)
 
-	var title := Label.new()
-	title.text = "AHOGE LEGEND"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	MangaThemeScript.apply_screen_title(title)
-	title.add_theme_color_override("font_outline_color", MangaThemeScript.IMPACT_YELLOW)
-	title.add_theme_constant_override("outline_size", 2)
-	header.add_child(title)
 
-	var kicker := Label.new()
-	kicker.text = "アホ毛でつながる、熱い対戦。"
-	kicker.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	MangaThemeScript.apply_caption(kicker)
-	header.add_child(kicker)
+func _build_menu() -> TextureButton:
+	var safe_margin := MarginContainer.new()
+	safe_margin.name = "TopMenuSafeArea"
+	safe_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	safe_margin.add_theme_constant_override("margin_left", 54)
+	safe_margin.add_theme_constant_override("margin_top", 38)
+	safe_margin.add_theme_constant_override("margin_right", 54)
+	safe_margin.add_theme_constant_override("margin_bottom", 38)
+	add_child(safe_margin)
 
-	var divider := HSeparator.new()
-	page.add_child(divider)
+	var horizontal := HBoxContainer.new()
+	horizontal.add_theme_constant_override("separation", 30)
+	safe_margin.add_child(horizontal)
 
-	var content := HBoxContainer.new()
-	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 28)
-	page.add_child(content)
+	var left := VBoxContainer.new()
+	left.name = "MenuColumn"
+	left.custom_minimum_size.x = MENU_WIDTH
+	left.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 8)
+	horizontal.add_child(left)
 
-	var menu_panel := PanelContainer.new()
-	menu_panel.custom_minimum_size = Vector2(360, 0)
-	menu_panel.add_theme_stylebox_override(
-		"panel",
-		MangaThemeScript.dark_panel_style(MangaThemeScript.IMPACT_YELLOW)
-	)
-	content.add_child(menu_panel)
+	var logo := TextureRect.new()
+	logo.name = "LogoTexture"
+	logo.texture = LOGO_TEXTURE
+	logo.custom_minimum_size = Vector2(MENU_WIDTH, 205)
+	logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_child(logo)
 
-	var menu_margin := MarginContainer.new()
-	menu_margin.add_theme_constant_override("margin_left", 24)
-	menu_margin.add_theme_constant_override("margin_top", 24)
-	menu_margin.add_theme_constant_override("margin_right", 24)
-	menu_margin.add_theme_constant_override("margin_bottom", 24)
-	menu_panel.add_child(menu_margin)
+	var spacer := Control.new()
+	spacer.custom_minimum_size.y = 14
+	left.add_child(spacer)
 
 	var menu := VBoxContainer.new()
-	menu.alignment = BoxContainer.ALIGNMENT_CENTER
-	menu.add_theme_constant_override("separation", 14)
-	menu_margin.add_child(menu)
+	menu.name = "MenuButtons"
+	menu.add_theme_constant_override("separation", 6)
+	left.add_child(menu)
 
-	var section := Label.new()
-	section.text = "TOP MENU"
-	section.add_theme_color_override("font_color", MangaThemeScript.WHITE)
-	section.add_theme_font_size_override("font_size", 18)
-	menu.add_child(section)
-
-	var online_button := Button.new()
-	online_button.name = "OnlineBattleButton"
-	online_button.text = "対戦する"
-	online_button.tooltip_text = "オンライン対戦へ進む"
-	online_button.pressed.connect(func() -> void:
-		online_battle_requested.emit()
+	var online_button := _make_menu_button(
+		"OnlineBattleButton",
+		LABEL_BATTLE,
+		"オンライン対戦へ進む",
+		Callable(self, "_on_online_battle_pressed")
 	)
-	MangaThemeScript.apply_primary_button(online_button)
 	menu.add_child(online_button)
 
-	var ranking_button := Button.new()
-	ranking_button.name = "RankingButton"
-	ranking_button.text = "ランキング"
-	ranking_button.pressed.connect(func() -> void:
-		ranking_requested.emit()
+	var ranking_button := _make_menu_button(
+		"RankingButton",
+		LABEL_RANKING,
+		"ランキングを表示する",
+		Callable(self, "_on_ranking_pressed")
 	)
-	MangaThemeScript.apply_secondary_button(ranking_button)
 	menu.add_child(ranking_button)
 
-	var settings_button := Button.new()
-	settings_button.name = "SettingsButton"
-	settings_button.text = "設定"
-	settings_button.pressed.connect(func() -> void:
-		settings_requested.emit()
+	var settings_button := _make_menu_button(
+		"SettingsButton",
+		LABEL_SETTINGS,
+		"設定を開く",
+		Callable(self, "_on_settings_pressed")
 	)
-	MangaThemeScript.apply_secondary_button(settings_button)
 	menu.add_child(settings_button)
 
-	var exit_button := Button.new()
-	exit_button.name = "ExitButton"
-	exit_button.text = "ゲームを終了"
-	exit_button.pressed.connect(func() -> void:
-		exit_requested.emit()
+	var exit_button := _make_menu_button(
+		"ExitButton",
+		LABEL_EXIT,
+		"ゲームを終了する",
+		Callable(self, "_on_exit_pressed")
 	)
-	MangaThemeScript.apply_secondary_button(exit_button)
 	menu.add_child(exit_button)
 
-	if OS.is_debug_build():
-		var debug_divider := HSeparator.new()
-		menu.add_child(debug_divider)
-		var debug_label := Label.new()
-		debug_label.text = "DEBUG"
-		debug_label.add_theme_color_override("font_color", MangaThemeScript.PAPER_2)
-		debug_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		MangaThemeScript.apply_caption(debug_label)
-		menu.add_child(debug_label)
+	if _show_debug_menu():
+		var debug_button := Button.new()
+		debug_button.name = "LocalTestButton"
+		debug_button.text = "DEBUG: LOCAL TEST BATTLE"
+		debug_button.custom_minimum_size = Vector2(MENU_WIDTH, 42)
+		debug_button.pressed.connect(_on_local_test_pressed)
+		menu.add_child(debug_button)
 
-		var local_button := Button.new()
-		local_button.name = "LocalTestButton"
-		local_button.text = "LOCAL TEST BATTLE"
-		local_button.pressed.connect(func() -> void:
-			local_test_requested.emit()
-		)
-		MangaThemeScript.apply_secondary_button(local_button)
-		menu.add_child(local_button)
+	var right_spacer := Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	horizontal.add_child(right_spacer)
 
-	var hero_panel := PanelContainer.new()
-	hero_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hero_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hero_panel.add_theme_stylebox_override(
-		"panel",
-		MangaThemeScript.panel_style(MangaThemeScript.PAPER_1, MangaThemeScript.INK_0, 4, true)
-	)
-	content.add_child(hero_panel)
+	return online_button
 
-	var hero_stack := VBoxContainer.new()
-	hero_stack.add_theme_constant_override("separation", 12)
-	hero_panel.add_child(hero_stack)
 
-	var hero := MangaHeroArtScript.new()
-	hero.custom_minimum_size = Vector2(540, 360)
-	hero.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hero.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	hero_stack.add_child(hero)
+func _make_menu_button(
+	button_name: String,
+	label_texture: Texture2D,
+	tooltip: String,
+	callback: Callable
+) -> TextureButton:
+	var button := TextureButton.new()
+	button.name = button_name
+	button.custom_minimum_size = MENU_BUTTON_SIZE
+	button.texture_normal = BUTTON_NORMAL
+	button.texture_hover = BUTTON_FOCUS
+	button.texture_focused = BUTTON_FOCUS
+	button.texture_pressed = BUTTON_PRESSED
+	button.texture_disabled = BUTTON_DISABLED
+	button.ignore_texture_size = true
+	button.stretch_mode = TextureButton.STRETCH_SCALE
+	button.focus_mode = Control.FOCUS_ALL
+	button.tooltip_text = tooltip
+	button.pressed.connect(callback)
 
-	var hero_copy := Label.new()
-	hero_copy.text = "小さなアホ毛で、でっかく熱く。"
-	hero_copy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hero_copy.add_theme_font_size_override("font_size", 24)
-	hero_copy.add_theme_color_override("font_color", MangaThemeScript.INK_0)
-	hero_stack.add_child(hero_copy)
+	var label := TextureRect.new()
+	label.name = "LabelTexture"
+	label.texture = label_texture
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	label.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(label)
 
-	var footer := HBoxContainer.new()
-	page.add_child(footer)
+	return button
 
-	var fan_note := Label.new()
-	fan_note.text = "AHOGE LEGEND  /  hololive fan game prototype"
-	fan_note.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	MangaThemeScript.apply_caption(fan_note)
-	footer.add_child(fan_note)
 
-	var tagline := Label.new()
-	tagline.text = "PLAY WITH YOUR AHOGE."
-	MangaThemeScript.apply_caption(tagline)
-	footer.add_child(tagline)
+func _show_debug_menu() -> bool:
+	return OS.is_debug_build() and OS.get_cmdline_user_args().has("--show-debug-menu")
+
+
+func _on_online_battle_pressed() -> void:
+	online_battle_requested.emit()
+
+
+func _on_ranking_pressed() -> void:
+	ranking_requested.emit()
+
+
+func _on_settings_pressed() -> void:
+	settings_requested.emit()
+
+
+func _on_exit_pressed() -> void:
+	exit_requested.emit()
+
+
+func _on_local_test_pressed() -> void:
+	local_test_requested.emit()
