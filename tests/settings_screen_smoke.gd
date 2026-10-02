@@ -28,7 +28,7 @@ func _run() -> void:
 		return
 
 	var top = app.get_child(0)
-	var settings_button: Button = _find_button(top, "設定") as Button
+	var settings_button := top.find_child("SettingsButton", true, false) as BaseButton
 	if settings_button == null or settings_button.disabled:
 		_fail("Top MenuのSETTINGSが有効ではありません。", app)
 		return
@@ -99,7 +99,7 @@ func _run() -> void:
 		return
 
 	top = app.get_child(0)
-	settings_button = _find_button(top, "設定")
+	settings_button = top.find_child("SettingsButton", true, false) as BaseButton
 	settings_button.emit_signal("pressed")
 	if not await _wait_screen(app, "Settings", 3000):
 		_fail("Settingsを再表示できません。", app)
@@ -128,7 +128,7 @@ func _run() -> void:
 		return
 
 	top = app.get_child(0)
-	settings_button = _find_button(top, "設定")
+	settings_button = top.find_child("SettingsButton", true, false) as BaseButton
 	settings_button.emit_signal("pressed")
 	if not await _wait_screen(app, "Settings", 3000):
 		_fail("Settingsを3回目に表示できません。", app)
