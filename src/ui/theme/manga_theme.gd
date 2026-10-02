@@ -79,6 +79,31 @@ static func apply_destructive_button(button: Button) -> void:
 	button.add_theme_font_size_override("font_size", 18)
 
 
+static func apply_character_card_button(button: Button, selected: bool) -> void:
+	var border := IMPACT_YELLOW if selected else INK_0
+	var border_width := 4 if selected else 3
+	var normal := _button_style(PAPER_0, border, border_width, Vector2(5, 5))
+	var hover := _button_style(PAPER_1, IMPACT_YELLOW, 4, Vector2(6, 6))
+	var pressed := _button_style(PAPER_1, IMPACT_YELLOW, 4, Vector2(1, 1))
+	var disabled := _button_style(
+		PAPER_2,
+		Color(INK_2.r, INK_2.g, INK_2.b, 0.6),
+		2,
+		Vector2.ZERO
+	)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.add_theme_color_override("font_color", INK_0)
+	button.add_theme_color_override("font_hover_color", INK_0)
+	button.add_theme_color_override("font_pressed_color", INK_0)
+	button.add_theme_color_override(
+		"font_disabled_color",
+		Color(INK_2.r, INK_2.g, INK_2.b, 0.65)
+	)
+
+
 static func apply_back_button(button: Button) -> void:
 	apply_secondary_button(button)
 	button.custom_minimum_size = Vector2(132.0, 48.0)
