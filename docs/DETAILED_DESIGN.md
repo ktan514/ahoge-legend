@@ -3079,3 +3079,74 @@ settlementが既に存在するmatchはRatingを再更新しない。
 - 画面比率の最終値
 
 未決事項を変更する場合は、Issueで目的を明確にし、基本設計・詳細設計を先に更新してから実装する。
+
+
+## 22. UI画像アセット実装
+
+UI画像assetのfile list / naming / visual responsibilityは `docs/UI_ASSET_SPEC.md` を正本とする。
+
+### 22.1 Component boundary
+
+```text
+TextureButton
+├─ state texture
+└─ fixed label TextureRect
+
+NinePatchRect
+└─ panel / frame texture
+
+DigitNumberDisplay
+└─ TextureRect[]  # digit_0.png ... digit_9.png
+
+ImpactImageDisplay
+└─ TextureRect    # fx_hit / fx_parry / sfx_doka ...
+
+BalloonMessage
+├─ NinePatchRect
+└─ Label          # 可変台詞
+```
+
+### 22.2 TextureButton
+
+button interactionはButton/TextureButtonのsignalを正本とし、画像側へlogicを持たせない。
+
+- normal / hover / pressed / disabled textureをstateへ割り当てる
+- fixed label画像はmouse filterを無効化し、入力判定をTextureButtonへ集約する
+- accessibilityやdebug検証のため、action自体の識別名はnode name / signalとして保持する
+
+### 22.3 DigitNumberDisplay
+
+入力: non-negative integer
+
+処理:
+1. integerをdecimal stringへ変換
+2. 1文字ずつ0〜9へmap
+3. 対応digit textureをTextureRectへ設定
+4. 必要桁数だけ表示
+5. leading zeroは付けない
+
+Battle timerでは85〜0のみを扱う。
+
+### 22.4 ImpactImageDisplay
+
+入力eventをasset keyへmapする。
+
+```text
+HIT        -> fx_hit
+PARRY      -> fx_parry
+JUST_*     -> fx_just
+DODGE      -> fx_dodge
+CLASH      -> fx_clash
+STAGGER    -> fx_stagger
+OVERTIME   -> fx_overtime
+```
+
+表示life timeはUI/UX正本の240msを初期基準とし、position / scale / rotationはvisual-onlyとする。
+
+### 22.5 Asset fallback
+
+asset制作途中にmissing textureがある場合、開発用fallbackは許可するが、#55 M3へ提出する画面ではfallbackを残さない。
+
+- missing assetを黙ってcode drawで製品仕様へ昇格させない
+- missing assetはdebug placeholderとして明示する
+- final asset導入後にplaceholder pathを削除する
