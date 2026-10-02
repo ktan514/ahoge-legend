@@ -1591,3 +1591,42 @@ Window:
 | UI-12 | Ranking | DESIGN v1 |
 
 Godot実装時にpixel-level調整は行うが、information hierarchy / copy / interaction / visual directionを無断変更しない。
+
+
+## 15. 画像アセット主体UI実装
+
+2026-10-02 Human Verificationで、code draw中心の第一モックは製品版として質感不足と判断した。
+
+以後の最終UIは **画像アセット主体** とする。
+
+- 背景 / button surface / panel / frame / decorationは画像
+- fixed logo / fixed copy / 漫画効果音 / WIN・LOSE・DRAWは画像化可能
+- timer数字は0〜9の個別画像
+- player name / Rating / room code / 設定値 / 可変台詞等はtext
+- 吹き出しは画像 + 可変text
+- codeはlayout / state / animation / texture切替を担当する
+- 本番用の漫画装飾を `draw_line` / `draw_rect` だけで完成扱いにしない
+
+asset naming / file list / Godot node mappingの正本は `docs/UI_ASSET_SPEC.md` とする。
+
+### 15.1 UI-01 Top Menu migration
+
+UI-01は画像asset移行の最初の対象とする。
+
+- full-screen background: TextureRect
+- menu / hero frame: NinePatchRectまたはTextureRect
+- button: TextureButton
+- fixed button label: TextureRect
+- logo / fixed catch copy: TextureRect
+- debug-only controlsは製品visual hierarchyから分離
+
+Top Menuでasset pipelineをHuman Verificationした後、Battle HUD / Result / 残り画面へ展開する。
+
+### 15.2 Timer
+
+Battle timerはLabelによる数字描画を最終仕様としない。
+
+- 0〜9のPNGを使用
+- integer secondsを桁へ分解してTextureRectで並べる
+- zero paddingなし
+- 85 → ... → 10 → 9 → ... → 0
