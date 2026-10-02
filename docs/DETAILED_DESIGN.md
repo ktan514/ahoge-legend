@@ -2020,7 +2020,7 @@ Host以外のclient判断でREMATCH / CHANGE CHARACTER / room全体終了を確�
 Friend matchへjoinした後は既存 Nakama `user_id` 単位のserver-side `active_online_match/current` に `match_mode=friend` として保持する。
 
 - 進行中Friend matchもRankedと同じく、active Round中はdeadlineなしで同一matchへ復帰し、Round境界のみ15秒待機する
-- 終了済みFriend matchへ再ログインした場合はserver result snapshotからFriend Resultへ復帰する。Hostは3択を再表示し、GuestはHOST選択待ち + 自分のLEAVE ROOMを再表示する。すでにHost選択が確定済みならroom stateへ追従する
+- 終了済みFriend matchへ再ログインした場合はserver result snapshotからFriend Resultへ復帰する。Result初回表示前に `ahoge_friend_room_status` で現在userのHost / Guest membershipを復元し、Hostは3択、GuestはHost選択待ち + 自分の退出操作を最初の表示から正しく出す。すでにHost選択が確定済みならroom stateへ追従する。room statusを一時取得できない場合は誤ったroleの操作を表示せず、操作無効の同期状態から再取得する
 - 未解決match contextがある間、`OnlineSession` は新しいFriend room作成・参加・対戦開始を拒否する
 - Match Not Found / Invalid Match IDの安全解除契約を変更しない
 
@@ -2096,7 +2096,7 @@ Friend再起動復帰のidentity契約:
 - 同じ `device_id` で再認証したclientは同じNakama `user_id` として扱う
 - Friend match中にclientが終了してもserver-side `active_online_match/current` とそのMatch参加資格は解除しない。再起動後は元authoritative matchへ復帰する
 - 再起動時は新規Friend導線へ進む前に `active_online_match/current` を確認し、ACTIVEなら元authoritative matchへ強制復帰する
-- RESULT_PENDINGならserver result snapshotからFriend Resultを復元し、room stateと同期してHost選択待ちまたは確定済み遷移へ接続する
+- RESULT_PENDINGならserver result snapshotを取得した後、Friend Resultを表示する前にroom stateを1回取得してHost / Guest roleを復元する。そのroleを初回UIへ渡し、以後はroom stateのpollでHost選択待ちまたは確定済み遷移へ追従する
 - Friend roomのhost / guest membershipはNakama `user_id` を正本とし、Match終了時のPOST_MATCHでは両者membershipを保持する
 - Guest自身がLEAVEした場合だけGuest枠を解放し、その空席はroom code JOINの成功順で確定する。前MatchのGuestだったかどうかは優先条件にしない
 - 別 `device_id` は別userであり、進行中Matchの参加資格を引き継がない
@@ -2112,9 +2112,9 @@ Friend Result:
 
 - WIN / LOSE / DRAW
 - 最終BO3 score
-- `NO RATING CHANGE (FRIEND MATCH)`
-- Host: `REMATCH` / `CHANGE CHARACTER` / `LEAVE ROOM`
-- Guest: `WAITING FOR HOST...` / `LEAVE ROOM` のみ。Host専用のREMATCH / CHANGE CHARACTER / room全体LEAVEはGuest画面ではvisibleにしない
+- `フレンド対戦 / レート変動なし`
+- Host: `再戦する` / `キャラクターを選び直す` / `ルームを終了`
+- Guest: `ホストの選択を待っています…` / `ルームを抜ける` のみ。Host専用の再戦 / キャラクター選び直し / room全体終了はGuest画面ではvisibleにしない
 
 Result操作はHostだけが行い、server room stateを通してGuestへ伝播する。GuestはHostの選択へ追従する。
 
@@ -2863,7 +2863,7 @@ RESULT_PENDING
 1. `active=false` → 通常導線
 2. `ACTIVE` → Realtime接続後、同じmatch IDへjoinしauthoritative snapshotを受信
 3. `RESULT_PENDING / ranked` → Battleを再表示せずUI-11 Resultへ遷移
-4. `RESULT_PENDING / friend` → Friend文脈のCharacter Selectへ遷移
+4. `RESULT_PENDING / friend` → room roleを復元してUI-11 Friend Resultへ直接遷移
 5. `ACTIVE` だがserver上にmatchが存在しない → serverがstale contextを安全解除
 6. timeout / network error / server error → contextを解除せず再試行可能な状態を保持
 
