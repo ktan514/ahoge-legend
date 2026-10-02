@@ -111,22 +111,22 @@ Battleは5:4中央領域案を固定せず、最終UI/UX設計で採否を決定
 
 ## 4. Screen-by-screen design
 
-以下はすべて最終デザイン未確定。工程4.5で順に設計する。
+本節は工程4.5開始時に定めた**設計対象一覧の履歴**である。現在の最終Screen Designは §14 を正本とし、UI-01〜UI-12はすべて `DESIGN v1` 確定済みである。
 
-| ID | Screen | 最終デザイン |
+| ID | Screen | 現在の設計状態 |
 | --- | --- | --- |
-| UI-01 | Top Menu | PENDING |
-| UI-02 | Settings | PENDING |
-| UI-03 | Battle Mode Select | PENDING |
-| UI-04 | Character Select | PENDING |
-| UI-05 | Ranked Matching | PENDING |
-| UI-06 | Friend Match Menu | PENDING |
-| UI-07 | Friend Room Join | PENDING |
-| UI-08 | Friend Room Lobby | PENDING |
-| UI-09 | PreBattle Dialogue | PENDING |
-| UI-10 | Battle / HUD | PENDING |
-| UI-11 | Match Result | PENDING |
-| UI-12 | Ranking | PENDING |
+| UI-01 | Top Menu | DESIGN v1（§14.1） |
+| UI-02 | Settings | DESIGN v1（§14.2） |
+| UI-03 | Battle Mode Select | DESIGN v1（§14.3） |
+| UI-04 | Character Select | DESIGN v1（§14.4） |
+| UI-05 | Ranked Matching | DESIGN v1（§14.5） |
+| UI-06 | Friend Match Menu | DESIGN v1（§14.6） |
+| UI-07 | Friend Room Join | DESIGN v1（§14.7） |
+| UI-08 | Friend Room Lobby | DESIGN v1（§14.8） |
+| UI-09 | PreBattle Dialogue | DESIGN v1（§14.9） |
+| UI-10 | Battle / HUD | DESIGN v1（§14.10） |
+| UI-11 | Match Result | DESIGN v1（§14.11） |
+| UI-12 | Ranking | DESIGN v1（§14.12） |
 
 各画面では最低限以下を確定する。
 
@@ -469,12 +469,12 @@ C案を採用するが、「常時うるさい漫画演出」にはしない。
 - character colorは補助色として使い、基本UIはPaper / Ink / Impact Yellowを軸にする
 - 顔全体・全身をBattle画面へ表示しない
 
-### 9.2 Design System draft
+### 9.2 Design System draft（履歴）
 
 Human Decision済み:
 - visual direction: MANGA BOUT / COMIC IMPACT
 
-現時点のdraft。実画面mockup確認後に確定する。
+本節はDesign System確定前のdraft履歴である。**現在の正本は §12 Design System v1 / §13 Design System確定**とし、本節の値を現行仕様として参照しない。
 
 #### Color
 
@@ -541,9 +541,9 @@ Human Decision済み:
 - Battle HUD常時animationは禁止
 - screen shakeは重大eventだけ、2〜4px程度の短時間に限定
 
-## 10. 代表4画面 具体デザイン
+## 10. 代表4画面 具体デザイン（先行設計履歴）
 
-この節は#101へ渡す先行screen designとする。機能prototypeの座標・文言をそのまま踏襲しない。
+この節は#101へ渡した先行screen designの履歴である。UI-01 / 04 / 10 / 11を含む現在の全画面仕様は §14 UI-01〜UI-12 最終Screen Design v1を正本とする。
 
 ### 10.1 UI-01 Top Menu
 
@@ -828,11 +828,11 @@ Hostの選択待ちはspeech balloonではなくstatus captionとして明確に
 - network同期中は同じResult画面上でstatus表示
 - Host選択後はcomic panel wipeで次状態へ
 
-## 11. #100 残Human Decision
+## 11. #100 残Human Decision（解決済み履歴）
 
 visual directionは確定済み。
 
-残りはdesign systemの詳細として、以下をmockup確認後に確定する。
+以下は#100当時の未決項目であり、すべて §12〜§13 で解決済み。現在の仕様判断には §12〜§13 を使用する。
 
 1. UI主言語
    - 英語short label + 日本語補足
@@ -847,7 +847,7 @@ visual directionは確定済み。
    - moderate
    - strong
 
-#100ではこれらをcommon component mockupと合わせて確定する。
+#100でcommon component mockupと合わせて確定済み。
 
 
 ## 12. Design System v1
