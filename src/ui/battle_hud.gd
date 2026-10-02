@@ -23,6 +23,9 @@ var _player_one_score: Label
 var _player_two_score: Label
 var _player_one_visual
 var _player_two_visual
+var _message_generation: int = 0
+
+const IMPACT_MESSAGE_SECONDS := 0.24
 
 
 func _ready() -> void:
@@ -359,7 +362,18 @@ func _render_snapshot(
 
 
 func flash_message(text: String) -> void:
+	_message_generation += 1
+	var generation := _message_generation
 	_message.text = _impact_copy(text)
+	if text.is_empty():
+		return
+	call_deferred("_clear_message_after_delay", generation)
+
+
+func _clear_message_after_delay(generation: int) -> void:
+	await get_tree().create_timer(IMPACT_MESSAGE_SECONDS).timeout
+	if generation == _message_generation:
+		_message.text = ""
 
 
 func _impact_copy(text: String) -> String:
