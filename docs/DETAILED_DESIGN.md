@@ -1367,6 +1367,7 @@ VictoryLineDefinition
 CharacterDefinition
 - id
 - display_name
+- feature_text        # Character Selectの1行特徴
 - ahoge_type
 - attack_type
 - head_asset
@@ -1386,6 +1387,20 @@ SHORT
 ```
 
 これは攻撃範囲を意味しない。
+
+### 12.2.1 Character Select用Visual Placeholder
+
+正式な `head_asset / ahoge_asset` が未導入の間も、UI-04は文字だけのcardにしない。
+visual-only component `MangaCharacterArt` を使用し、`CharacterDefinition` から次を描き分ける。
+
+- `ahoge_type`: LONG / NORMAL / SHORTごとの長さ・curve
+- `attack_type`: SWING / THROWを補助的なmotion cueとして表現
+- selected detail previewではidle swayを付ける
+- card内previewは静止または極小motionとし、可読性を優先する
+- 顔・目・鼻・口・全身は描かず、頭頂部 + 髪 + アホ毛だけを描く
+- Top Menu用の2人hero artはUI-04へ流用しない
+
+このcomponentは見た目専用であり、Hit / Contact / action stateのauthoritative判定には使用しない。
 
 ### 12.3 MotionProfile
 
