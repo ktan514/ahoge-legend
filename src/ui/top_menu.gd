@@ -132,7 +132,7 @@ func _add_menu_button(
 	menu: VBoxContainer,
 	button_name: String,
 	label_texture: Texture2D,
-	tooltip: String,
+	_tooltip: String,
 	callback: Callable
 ) -> TextureButton:
 	var row := Control.new()
@@ -153,7 +153,6 @@ func _add_menu_button(
 	button.ignore_texture_size = true
 	button.stretch_mode = TextureButton.STRETCH_SCALE
 	button.focus_mode = Control.FOCUS_ALL
-	button.tooltip_text = tooltip
 	button.mouse_entered.connect(_on_menu_button_mouse_entered.bind(button))
 	button.focus_entered.connect(_on_menu_button_focus_changed.bind(button, true))
 	button.focus_exited.connect(_on_menu_button_focus_changed.bind(button, false))
