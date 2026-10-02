@@ -1696,3 +1696,11 @@ Top Menuはconcept boardの01 Top Menuを基準とする。
 - pressed: 40〜80msの押し込み + 1〜3px程度の短い振動
 - animationはvisual-onlyでnavigation signalやhit areaを変えない
 - 同時に複数buttonを動かさない
+
+
+### 16.5 Top Menu tooltip
+
+- Top Menuではtooltipを表示しない
+- hover / focus時のfeedbackは色変化 + 微小slideだけで成立させる
+- mouse hoverで説明ポップアップを重ねない
+- menu項目の意味はlabel画像そのものから理解できることを前提とする
