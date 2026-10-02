@@ -259,7 +259,7 @@ func _run() -> void:
 	if not await _wait_button_enabled(guest_leave_button, 7000):
 		_fail("Guest Friend ResultのLEAVE ROOMが同期完了後も有効になりません。")
 		return
-	if not _has_label_text(guest_result, "WAITING FOR HOST..."):
+	if not _has_label_text(guest_result, "ホストの選択を待っています…"):
 		_fail("Guest Friend ResultにHOST選択待ち表示がありません。")
 		return
 
