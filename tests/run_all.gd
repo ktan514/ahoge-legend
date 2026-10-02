@@ -39,6 +39,7 @@ func _init() -> void:
 	_test_ranked_matchmaker_query()
 	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
+	_test_character_catalog_ui_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -397,6 +398,21 @@ func _test_ranked_character_contract() -> void:
 	_expect_true(OnlineConfigScript.is_supported_ranked_character_id("LONG_TEST"), "LONG_TESTをRanked characterとして許可する")
 	_expect_true(OnlineConfigScript.is_supported_ranked_character_id("SHORT_TEST"), "SHORT_TESTをRanked characterとして許可する")
 	_expect_false(OnlineConfigScript.is_supported_ranked_character_id("UNKNOWN"), "未知character_idを拒否する")
+
+
+func _test_character_catalog_ui_contract() -> void:
+	var long_character = CharacterCatalogScript.get_by_id("LONG_TEST")
+	var short_character = CharacterCatalogScript.get_by_id("SHORT_TEST")
+	_expect_true(not str(long_character.feature_text).is_empty(), "LONG_TESTはCharacter Select特徴文を持つ")
+	_expect_true(not str(short_character.feature_text).is_empty(), "SHORT_TESTはCharacter Select特徴文を持つ")
+	_expect_true(
+		str(long_character.feature_text).contains("長いアホ毛"),
+		"LONG_TEST特徴文はLONG型の見た目を説明する"
+	)
+	_expect_true(
+		str(short_character.feature_text).contains("投げ"),
+		"SHORT_TEST特徴文はTHROW型の戦い方を説明する"
+	)
 
 
 func _test_combat_input_protocol() -> void:
