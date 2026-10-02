@@ -808,16 +808,16 @@ Rating変動はscore summary内へ整理し、buttonより上に表示する。
 
 #### Friend Host actions
 
-- REMATCH
-- CHANGE CHARACTER
-- LEAVE ROOM
+- 再戦する
+- キャラクターを選び直す
+- ルームを終了
 
-REMATCHをPrimary、CHANGE CHARACTERをSecondary、LEAVE ROOMをDestructiveとする。
+「再戦する」をPrimary、「キャラクターを選び直す」をSecondary、「ルームを終了」をDestructiveとする。
 
 #### Friend Guest
 
-- WAITING FOR HOST...
-- LEAVE ROOM
+- ホストの選択を待っています…
+- ルームを抜ける
 
 Hostの選択待ちはspeech balloonではなくstatus captionとして明確にする。
 
