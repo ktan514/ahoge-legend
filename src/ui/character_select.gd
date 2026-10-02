@@ -279,7 +279,7 @@ func _update_preview() -> void:
 	_preview_title.text = character.display_name
 	if _preview_art != null:
 		_preview_art.configure(character, true)
-	var feature_text := character.feature_text
+	var feature_text: String = str(character.feature_text)
 	if feature_text.is_empty():
 		feature_text = "アホ毛の形と戦い方で選ぼう。"
 	_preview_detail.text = "%s\n\nアホ毛タイプ: %s\n攻撃タイプ: %s" % [
