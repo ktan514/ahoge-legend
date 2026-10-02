@@ -297,6 +297,8 @@ LONG / NORMAL / SHORTはキャラクター名ではなく戦闘特性の分類�
 - Windows x86_64 export
 - 2地点WAN対戦
 - latency / packet loss / disconnect / reconnect
+- #71 両者同時切断・意図的退出・server障害時の最終終了契約を確定・実装
+- #72 server tick基準のremote Motion位相同期を実装し、latency下で目視確認
 - 長時間試験
 - performance / balance調整
 
