@@ -1412,6 +1412,8 @@ Event impact:
 
 Rules:
 - 180〜300ms
+- 実装基準は240ms。新しいeventが来た場合は前eventの消去timerを無効化して新eventの240msを開始する
+- event textは時間経過後に自動消去し、次eventまで残留させない
 - timer / attack trajectoryを覆わない
 - root/head-topを覆わない
 
