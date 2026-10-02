@@ -509,6 +509,10 @@ assets/ui/top_menu/
 
 初回Top MenuではBattle / Ranking / Settings / Exitごとにbutton本体画像を作らない。
 
+**visual source of truthはUI Design Proposal Board「C. MANGA BOUT」01 Top Menu。**
+buttonはconcept boardと同じく、黒〜濃紺の細長い斜めpanelを基本とし、selected / primaryだけYellowへ切り替える。
+Pink / orangeの大きなsticker風button、glossy button、厚いpop-art buttonは採用しない。
+
 共通の4stateを使う。
 
 ```text
@@ -530,6 +534,11 @@ label_exit.png
 これにより最初のasset制作量を抑えつつ、画像主体UIの品質と操作感をHuman Verificationできる。
 
 ### 12.4 背景と集中線の責務
+
+背景・集中線・button・logoを個別assetに分けるが、**最終合成時の見た目はconcept boardの01 Top Menuへ一致させる**。
+個別assetを自由に別テイストで作らない。
+
+
 
 `bg_top_menu.png`:
 - 背景本体だけ
