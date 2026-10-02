@@ -306,7 +306,7 @@ func _test_settings_store_contract() -> void:
 
 func _test_top_menu_asset_contract() -> void:
 	var top_menu = TopMenuScene.instantiate()
-	get_root().add_child(top_menu)
+	top_menu.call("_ready")
 
 	var background = top_menu.find_child("BackgroundTexture", true, false)
 	var speed_lines = top_menu.find_child("SpeedLinesTexture", true, false)
