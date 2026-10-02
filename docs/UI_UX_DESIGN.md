@@ -1241,13 +1241,16 @@ Card:
 - Ahoge Type
 - Attack Type
 - selectedはImpact Yellow frame
+- 正式素材未導入の段階でも、各cardはcharacterごとのAhoge Typeが見分けられる専用vector previewを表示する
+- Top Menu用の2人hero artをCharacter Selectのcard / selected previewへ流用しない
 
 Selected detail:
 - キャラクター名
-- 1行特徴
+- CharacterDefinitionの1行特徴
 - アホ毛タイプ
 - 攻撃タイプ
-- 動くAhoge preview
+- 選択中characterだけを描く動くAhoge preview
+- previewはvisual-onlyで、gameplay判定やserver stateの正本にしない
 
 Transition:
 - card change 160ms
