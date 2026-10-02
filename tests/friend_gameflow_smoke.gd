@@ -262,11 +262,11 @@ func _run() -> void:
 		_fail("Friend Match Result受信後1秒以内にResult画面を表示できませんでした。", app)
 		return
 	var result_screen = app.get_child(0)
-	if not _has_label_text(result_screen, "NO RATING CHANGE (FRIEND MATCH)"):
+	if not _has_label_text(result_screen, "フレンド対戦 / レート変動なし"):
 		_fail("Friend ResultにRating非対象表示がありません。", app)
 		return
-	if _has_label_text(result_screen, "PLAYER RATING") \
-			or _has_label_text(result_screen, "AHOGE RATING"):
+	if _has_label_text(result_screen, "プレイヤーレート") \
+			or _has_label_text(result_screen, "アホ毛レート"):
 		_fail("Friend ResultにRating変動が表示されています。", app)
 		return
 	var rematch_button = _find_button(result_screen, "再戦する")
