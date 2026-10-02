@@ -3179,3 +3179,29 @@ asset制作途中にmissing textureがある場合、開発用fallbackは許可�
 - missing assetを黙ってcode drawで製品仕様へ昇格させない
 - missing assetはdebug placeholderとして明示する
 - final asset導入後にplaceholder pathを削除する
+
+
+### 22.7 Top Menu focus / animation
+
+UI-01のmenu buttonは、mouseとkeyboard/controllerの選択状態を1本化する。
+
+```text
+mouse_entered(button)
+  -> button.grab_focus()
+  -> previous focus buttonはnormalへ戻る
+  -> current buttonだけfocus texture
+```
+
+buttonはVBoxContainerへ直接置かず、固定sizeのrow wrapperへ入れる。
+TextureButton自体のlocal positionをTweenし、Container layoutとanimationが競合しないようにする。
+
+初期値:
+- focus offset x = 10px
+- focus duration = 0.10s
+- unfocus duration = 0.10s
+- press offset x = 6px追加
+- press shake = ±2px
+- press total duration <= 0.12s
+
+Top Menuでは `decor_speed_lines.png` をload/displayしない。
+現在のstadium + speed-line visualはBattle assetへ移管する。
