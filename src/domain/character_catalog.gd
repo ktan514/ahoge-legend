@@ -9,13 +9,15 @@ static func all() -> Array:
 		"LONG_TEST",
 		"LONG TEST",
 		CharacterDefinitionScript.AhogeType.LONG,
-		CharacterDefinitionScript.AttackType.SWING
+		CharacterDefinitionScript.AttackType.SWING,
+		"長いアホ毛で間合いを取るスタンダード型"
 	))
 	characters.append(CharacterDefinitionScript.create(
 		"SHORT_TEST",
 		"SHORT TEST",
 		CharacterDefinitionScript.AhogeType.SHORT,
-		CharacterDefinitionScript.AttackType.THROW
+		CharacterDefinitionScript.AttackType.THROW,
+		"短いアホ毛を投げてかき回す変則型"
 	))
 	return characters
 
