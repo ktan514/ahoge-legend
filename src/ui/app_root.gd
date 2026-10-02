@@ -245,6 +245,11 @@ func _force_resume_unresolved_online_match() -> void:
 			_show_friend_online_battle(snapshot)
 			return
 		if destination == "friend_result":
+			# 再起動復帰では初回Result表示前にroom membershipを復元し、
+			# Host / Guest専用操作を誤表示しない。
+			var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
+			if bool(room.get("ok", false)):
+				_set_friend_room(room)
 			_show_friend_result_from_snapshot(snapshot)
 			return
 
