@@ -1443,6 +1443,10 @@ Rating:
 - Draw時もserver確定before / after / deltaを表示
 - settlement取得失敗時は各欄を「プレイヤーレートを確認できませんでした」「アホ毛レートを確認できませんでした」とする
 
+Friend Result common:
+- 「フレンド対戦 / レート変動なし」を表示する
+- Player Rating / Ahoge Ratingの変動行は表示しない
+
 Friend Host copy:
 - 再戦する
 - キャラクターを選び直す
