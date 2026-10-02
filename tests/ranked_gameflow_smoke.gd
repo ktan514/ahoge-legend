@@ -203,21 +203,21 @@ func _run() -> void:
 		return
 
 	# 前Round Resultを先に表示し、その表示中には15秒待機を重ねない。
-	if not await _wait_label_text(app, "TAKES ROUND 1", 1500):
+	if not await _wait_label_text(app, "ROUND 1\nP1\n1 - 0", 1500):
 		_fail("Round 1 Result表示を確認できませんでした。", app)
 		return
-	if _has_label_text(app, "WAITING FOR OPPONENT..."):
+	if _has_label_text(app, "相手を待っています…"):
 		_fail("Round 1 Result表示中に相手再接続15秒待機が始まりました。", app)
 		return
 
 	# Result hold完了後、次Round開始側で15秒カウントを表示する。
-	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n15", 5000):
+	if not await _wait_label_text(app, "相手を待っています…\n15", 5000):
 		_fail("次Round開始側でWAITING FOR OPPONENT 15秒表示が始まりませんでした。", app)
 		return
-	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n14", 2500):
+	if not await _wait_label_text(app, "相手を待っています…\n14", 2500):
 		_fail("相手再接続待機カウントが15から14へ減少しませんでした。", app)
 		return
-	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n0", 20000):
+	if not await _wait_label_text(app, "相手を待っています…\n0", 20000):
 		_fail("相手再接続待機カウントの0表示を確認できませんでした。", app)
 		return
 
