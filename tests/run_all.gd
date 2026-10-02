@@ -308,7 +308,7 @@ func _test_top_menu_asset_contract() -> void:
 	var top_menu = TopMenuScene.instantiate()
 	top_menu.call("_ready")
 
-	var background = top_menu.find_child("BackgroundTexture", true, false)
+	var background = top_menu.find_child("TopMenuBackgroundPlaceholder", true, false)
 	var speed_lines = top_menu.find_child("SpeedLinesTexture", true, false)
 	var logo = top_menu.find_child("LogoTexture", true, false)
 	var battle_button = top_menu.find_child("OnlineBattleButton", true, false)
@@ -316,8 +316,8 @@ func _test_top_menu_asset_contract() -> void:
 	var settings_button = top_menu.find_child("SettingsButton", true, false)
 	var exit_button = top_menu.find_child("ExitButton", true, false)
 
-	_expect_true(background is TextureRect, "Top Menu背景はTextureRect")
-	_expect_true(speed_lines is TextureRect, "Top Menu集中線は独立TextureRect")
+	_expect_true(background is ColorRect, "Top Menuは専用背景asset導入までBattle背景を使わない")
+	_expect_true(speed_lines == null, "Top MenuではBattle用集中線を表示しない")
 	_expect_true(logo is TextureRect, "Top Menu logoはTextureRect")
 	_expect_true(battle_button is TextureButton, "Top Menu対戦buttonはTextureButton")
 	_expect_true(ranking_button is TextureButton, "Top Menu Ranking buttonはTextureButton")
@@ -331,6 +331,10 @@ func _test_top_menu_asset_contract() -> void:
 		_expect_true(texture_button.texture_focused != null, "Top Menu button focus assetをfocusへloadする")
 		_expect_true(texture_button.texture_pressed != null, "Top Menu button pressed assetをloadする")
 		_expect_true(texture_button.texture_disabled != null, "Top Menu button disabled assetをloadする")
+		_expect_true(
+			texture_button.get_parent() is Control,
+			"Top Menu buttonはanimation用row wrapper内へ配置する"
+		)
 
 	top_menu.free()
 
