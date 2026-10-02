@@ -157,6 +157,10 @@ assets/ui/top_menu/bg_top_menu.png
 - reference 1600x900
 - Paper texture / manga page感を含める
 - layout上重要な文字やbutton位置は焼き込まない
+- **集中線を焼き込まない**
+- halftone / corner decorationも原則として焼き込まない
+- 背景本体は「単独で表示しても成立する静かなbase」にする
+- 装飾強度は上位layerで調整する
 
 ### 5.2 Background decoration
 
@@ -166,9 +170,14 @@ assets/ui/top_menu/decor_speed_lines.png
 assets/ui/top_menu/decor_corner_marks.png
 ```
 
-- 透過PNG
+- すべて透過PNG
+- **背景本体とは完全に別file**
 - 個別layerとして配置
 - responsive時にcrop / reposition可能とする
+- `decor_speed_lines.png` は集中線だけを持ち、背景色・Paper texture・文字・frameを含めない
+- `decor_halftone.png` はhalftoneだけを持つ
+- `decor_corner_marks.png` は角装飾だけを持つ
+- 装飾同士も1枚へ合成せず、個別にON/OFF可能とする
 
 ### 5.3 Logo
 
@@ -247,24 +256,112 @@ assets/ui/top_menu/label_exit.png
 各labelは透明背景。
 TextureButtonのchild TextureRectとして中央へ重ねる。
 
-### 5.9 Product Top Menu composition
+### 5.9 Product Top Menu layer composition
+
+Top Menuの描画順を次で固定する。
 
 ```text
-bg_top_menu
-├─ decor_halftone
-├─ decor_speed_lines
-├─ logo_ahoge_legend
-├─ frame_menu
-│  ├─ TextureButton(primary) + label_battle
-│  ├─ TextureButton(secondary) + label_ranking
-│  ├─ TextureButton(secondary) + label_settings
-│  └─ TextureButton(secondary) + label_exit
-├─ frame_hero
-│  └─ art_top_menu_hero
-├─ copy_kicker
-├─ copy_main
-└─ copy_tagline
+Z0  bg_top_menu
+Z1  decor_halftone
+Z2  decor_speed_lines
+Z3  decor_corner_marks
+Z4  frame_menu
+Z5  button surfaces
+Z6  button label images
+Z7  frame_hero
+Z8  art_top_menu_hero
+Z9  logo_ahoge_legend
+Z10 copy_kicker
+Z11 copy_main
+Z12 copy_tagline
+Z13 optional foreground accent
 ```
+
+重要:
+- `bg_top_menu.png` と `decor_speed_lines.png` は同一画像へ統合しない
+- `frame_hero.png` と `art_top_menu_hero.png` も統合しない
+- button surfaceとbutton labelも統合しない
+- logo / fixed copyも背景へ焼き込まない
+- 各layerはGodot側で個別に位置・scale・visibleを制御可能にする
+
+### 5.10 Top Menu complete asset manifest
+
+```text
+assets/ui/top_menu/
+├─ bg_top_menu.png
+├─ decor_halftone.png
+├─ decor_speed_lines.png
+├─ decor_corner_marks.png
+├─ frame_menu.png
+├─ frame_hero.png
+├─ art_top_menu_hero.png
+├─ copy_main.png
+├─ copy_kicker.png
+├─ copy_tagline.png
+├─ label_battle.png
+├─ label_ranking.png
+├─ label_settings.png
+└─ label_exit.png
+
+assets/ui/logo/
+└─ logo_ahoge_legend.png
+
+assets/ui/common/
+├─ btn_primary_normal.png
+├─ btn_primary_hover.png
+├─ btn_primary_pressed.png
+├─ btn_primary_disabled.png
+├─ btn_secondary_normal.png
+├─ btn_secondary_hover.png
+├─ btn_secondary_pressed.png
+├─ btn_secondary_disabled.png
+├─ btn_destructive_normal.png
+├─ btn_destructive_hover.png
+├─ btn_destructive_pressed.png
+├─ btn_destructive_disabled.png
+├─ btn_small_normal.png
+├─ btn_small_hover.png
+├─ btn_small_pressed.png
+└─ btn_small_disabled.png
+```
+
+このmanifestに含まれないvisual要素をTop Menu最終版へ追加する場合は、先に本書へfileを追加してから実装する。
+
+### 5.11 Reference size and responsibility
+
+| Asset | Reference size | Stretch | 内容 |
+| --- | ---: | --- | --- |
+| bg_top_menu.png | 1600x900 | cover | base backgroundのみ |
+| decor_halftone.png | 1600x900 | cover/crop | halftoneのみ |
+| decor_speed_lines.png | 1600x900 | cover/crop | 集中線のみ |
+| decor_corner_marks.png | 1600x900 | cover/crop | corner accentのみ |
+| frame_menu.png | 480x590基準 | NinePatch | menu frameのみ |
+| frame_hero.png | 900x590基準 | NinePatch/固定 | hero frameのみ |
+| art_top_menu_hero.png | hero area基準 | contain/crop | hero artのみ |
+| logo_ahoge_legend.png | content依存 | contain | logoのみ |
+| copy_*.png | content依存 | contain | fixed copyのみ |
+| label_*.png | button内 | contain | fixed button labelのみ |
+
+### 5.12 Layer independence rule
+
+次を禁止する。
+
+- 背景へ集中線を焼き込む
+- 背景へlogoを焼き込む
+- 背景へ固定copyを焼き込む
+- hero artへframeを焼き込む
+- button surfaceへ文字を焼き込む
+- halftoneと集中線を同じPNGへ統合する
+
+理由:
+- responsive調整
+- intensity調整
+- animation
+- state差し替え
+- asset reuse
+- Human Verificationでの個別修正
+
+を可能にするため。
 
 ## 6. Debug UI
 
