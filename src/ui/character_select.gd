@@ -147,7 +147,7 @@ func _build_online_cards(parent: VBoxContainer) -> void:
 		button.text = ""
 		button.custom_minimum_size = Vector2(240, 190)
 		button.pressed.connect(_select_character.bind(character.character_id))
-		MangaThemeScript.apply_secondary_button(button)
+		MangaThemeScript.apply_character_card_button(button, false)
 		cards.add_child(button)
 
 		var button_margin := MarginContainer.new()
@@ -264,10 +264,10 @@ func _select_character(character_id: String) -> void:
 func _update_selection_visuals() -> void:
 	for character_id in _character_buttons.keys():
 		var button: Button = _character_buttons[character_id]
-		if str(character_id) == _selected_player_one_id:
-			MangaThemeScript.apply_primary_button(button)
-		else:
-			MangaThemeScript.apply_secondary_button(button)
+		MangaThemeScript.apply_character_card_button(
+			button,
+			str(character_id) == _selected_player_one_id
+		)
 
 
 func _update_preview() -> void:
