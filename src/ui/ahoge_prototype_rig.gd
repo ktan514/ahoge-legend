@@ -25,6 +25,8 @@ var _whole_angle: float = 0.0
 var _whole_angle_velocity: float = 0.0
 var _whole_reach: float = 1.0
 var _whole_reach_velocity: float = 0.0
+var _last_angle_target: float = 0.0
+var _last_reach_target: float = 1.0
 
 
 func _ready() -> void:
@@ -163,6 +165,8 @@ func _simulate_whole_motion(delta: float) -> void:
 
 	angle_target = clampf(angle_target, -1.38, 1.48)
 	reach_target = clampf(reach_target, 0.74, 2.55)
+	_last_angle_target = angle_target
+	_last_reach_target = reach_target
 
 	var parrying := _action_state == CombatantStateScript.ActionState.PARRY
 
@@ -291,3 +295,11 @@ func debug_sprite_anchor() -> Vector2:
 	if _sprite == null:
 		return Vector2.ZERO
 	return -_sprite.position
+
+
+func debug_angle_target() -> float:
+	return _last_angle_target
+
+
+func debug_reach_target() -> float:
+	return _last_reach_target
