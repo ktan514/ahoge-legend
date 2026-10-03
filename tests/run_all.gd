@@ -524,7 +524,12 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.free()
 		return
 
-	var before_x := before[tip_index].x
+	var tip_right_index := tip_index + 1
+	_expect_true(before.size() > tip_right_index, "secondary motion試験でtip右端を取得できる")
+	if before.size() <= tip_right_index:
+		rig.free()
+		return
+	var before_x := (before[tip_index].x + before[tip_right_index].x) * 0.5
 	rig.set_motion(
 		Vector2(9.0, 0.0),
 		Vector2(3.0, 0.0),
@@ -535,7 +540,8 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var idle_after: PackedVector2Array = polygon.polygon
-	var idle_moved := absf(idle_after[tip_index].x - before_x)
+	var idle_tip_x := (idle_after[tip_index].x + idle_after[tip_right_index].x) * 0.5
+	var idle_moved := absf(idle_tip_x - before_x)
 	_expect_true(idle_moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
 
 	rig.set_motion(
@@ -548,7 +554,9 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var charge_after: PackedVector2Array = polygon.polygon
-	var charge_tip_x := charge_after[tip_index].x
+	var charge_tip_x := (
+		charge_after[tip_index].x + charge_after[tip_right_index].x
+	) * 0.5
 	_expect_true(charge_tip_x <= -45.0, "CHARGINGでアホ毛tipが後方へ大きく伸びる")
 
 	rig.set_motion(
@@ -561,7 +569,9 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var strike_after: PackedVector2Array = polygon.polygon
-	var strike_tip_x := strike_after[tip_index].x
+	var strike_tip_x := (
+		strike_after[tip_index].x + strike_after[tip_right_index].x
+	) * 0.5
 	_expect_true(strike_tip_x >= 65.0, "STRIKEでアホ毛tipが前方へ大きく伸びる")
 	_expect_true(
 		strike_tip_x - charge_tip_x >= 110.0,
