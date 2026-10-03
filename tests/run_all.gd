@@ -485,7 +485,7 @@ func _test_ahoge_image_rig_uv_contract() -> void:
 		rig.free()
 		return
 
-	var uv := polygon.uv
+	var uv: PackedVector2Array = polygon.uv
 	_expect_true(uv.size() > 0, "画像アホ毛rigはUVを生成する")
 	if uv.size() > 0:
 		var max_x := 0.0
