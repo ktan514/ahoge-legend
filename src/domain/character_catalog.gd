@@ -10,7 +10,9 @@ static func all() -> Array:
 		"LONG TEST",
 		CharacterDefinitionScript.AhogeType.LONG,
 		CharacterDefinitionScript.AttackType.SWING,
-		"長いアホ毛で間合いを取るスタンダード型"
+		"長いアホ毛で間合いを取るスタンダード型",
+		"res://assets/characters/prototype/pink_profile/head.png",
+		"res://assets/characters/prototype/pink_profile/ahoge.png"
 	))
 	characters.append(CharacterDefinitionScript.create(
 		"SHORT_TEST",
