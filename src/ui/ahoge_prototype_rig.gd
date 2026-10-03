@@ -2,8 +2,8 @@ extends Node2D
 
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 
-@export var source_anchor_reference := Vector2(180.0, 1175.0)
-@export var source_reference_size := Vector2(1254.0, 1254.0)
+@export var source_anchor_reference: Vector2 = Vector2(180.0, 1175.0)
+@export var source_reference_size: Vector2 = Vector2(1254.0, 1254.0)
 @export var minimum_base_scale: float = 0.21
 
 var _texture: Texture2D
@@ -37,7 +37,6 @@ func _ready() -> void:
 	_sprite = Sprite2D.new()
 	_sprite.name = "AhogeSprite"
 	_sprite.centered = false
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_motion_root.add_child(_sprite)
 
 	set_process(true)
@@ -125,26 +124,26 @@ func _simulate_whole_motion(delta: float) -> void:
 		CombatantStateScript.ActionState.STRIKE:
 			var u := clampf(_action_age / _phase_duration, 0.0, 1.0)
 			if _charge_ratio > 0.0:
-				var release := _ease_out(
+				var release_progress := _ease_out(
 					clampf((u - 0.035) / 0.74, 0.0, 1.0)
 				)
 				angle_target = lerpf(
 					-0.38 - 0.40 * _charge_ratio,
 					1.04 + 0.20 * _charge_ratio,
-					release
+					release_progress
 				)
 				reach_target = lerpf(
 					1.0,
 					2.10 + 0.42 * _charge_ratio,
-					release
+					release_progress
 				)
 			else:
 				var lag := sin(clampf(u / 0.44, 0.0, 1.0) * PI)
-				var release := _ease_out(
+				var release_progress := _ease_out(
 					clampf((u - 0.30) / 0.70, 0.0, 1.0)
 				)
-				angle_target += -0.50 * lag + 1.04 * release
-				reach_target = lerpf(0.82, 2.05, release)
+				angle_target += -0.50 * lag + 1.04 * release_progress
+				reach_target = lerpf(0.82, 2.05, release_progress)
 
 		CombatantStateScript.ActionState.PARRY:
 			var u := clampf(_action_age / _phase_duration, 0.0, 1.0)
