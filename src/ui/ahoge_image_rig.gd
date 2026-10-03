@@ -98,17 +98,19 @@ func _refresh_mesh() -> void:
 	var points := PackedVector2Array()
 	var uvs := PackedVector2Array()
 
+	var source_size := _texture.get_size()
+
 	for index in range(safe_segments + 1):
 		var t := float(index) / float(safe_segments)
 		var center := _segment_center(t)
 		points.append(center + Vector2(-_display_width * 0.5, 0.0))
-		uvs.append(Vector2(0.0, 1.0 - t))
+		uvs.append(Vector2(0.0, source_size.y * (1.0 - t)))
 
 	for index in range(safe_segments, -1, -1):
 		var t := float(index) / float(safe_segments)
 		var center := _segment_center(t)
 		points.append(center + Vector2(_display_width * 0.5, 0.0))
-		uvs.append(Vector2(1.0, 1.0 - t))
+		uvs.append(Vector2(source_size.x, source_size.y * (1.0 - t)))
 
 	_polygon.polygon = points
 	_polygon.uv = uvs
