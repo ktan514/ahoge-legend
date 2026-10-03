@@ -544,6 +544,21 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 	var idle_moved := absf(idle_tip_x - before_x)
 	_expect_true(idle_moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
 
+	# 6コマ試験は直前の人工的な速度入力を残さず、IDLEへ収束してから開始する。
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.IDLE,
+		true
+	)
+	for _index in range(120):
+		rig.call("_process", 1.0 / 60.0)
+
+	var settled: PackedVector2Array = polygon.polygon
+	var settled_tip_x := (
+		settled[tip_index].x + settled[tip_right_index].x
+	) * 0.5
+
 	rig.set_motion(
 		Vector2(-36.0, 0.0),
 		Vector2(-140.0, 0.0),
@@ -558,7 +573,7 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		charge_lag[tip_index].x + charge_lag[tip_right_index].x
 	) * 0.5
 	_expect_true(
-		charge_lag_tip_x > before_x,
+		charge_lag_tip_x > settled_tip_x + 0.25,
 		"CHARGING開始直後は頭が先に後退しアホ毛tipが相対的に前へ残る"
 	)
 
