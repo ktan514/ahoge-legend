@@ -558,7 +558,15 @@ func _test_ahoge_bone_rig_motion_contract() -> void:
 	_expect_true(strike_scale >= 1.8, "STRIKEの射程は複数Bone間の分散伸長で確保する")
 
 	var max_bone_rotation := float(rig.debug_max_bone_rotation())
-	_expect_true(max_bone_rotation < deg_to_rad(35.0), "1本のBoneだけを極端に折らず回転を分散する")
+	_expect_true(max_bone_rotation < deg_to_rad(70.0), "prototype key poseでも1 Boneを70度以上へ折らない")
+	_expect_true(
+		int(rig.debug_rotated_bone_count(5.0)) >= 4,
+		"STRIKEの大arcは複数Boneへ回転を分散して作る"
+	)
+	_expect_true(
+		strike_tip.y < -20.0,
+		"prototype同様、最大伸長時もtipは頭頂部より上のhook位置を維持する"
+	)
 
 	rig.set_motion(
 		Vector2.ZERO,
