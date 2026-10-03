@@ -14,6 +14,13 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var propagation: float = 0.42
 @export var tip_power: float = 1.7
 @export var stretch_response: float = 7.0
+@export var action_extension_response: float = 16.0
+@export var charge_back_extension: float = 80.0
+@export var windup_back_extension: float = 105.0
+@export var strike_forward_extension: float = 135.0
+@export var parry_back_extension: float = 20.0
+@export var dodge_back_extension: float = 28.0
+@export var stagger_back_extension: float = 38.0
 
 var _polygon: Polygon2D
 var _texture: Texture2D
@@ -24,6 +31,8 @@ var _display_width: float = 120.0
 var _head_velocity := Vector2.ZERO
 var _head_acceleration := Vector2.ZERO
 var _action_bend_target: float = 0.0
+var _action_extension_target: float = 0.0
+var _action_extension: float = 0.0
 var _stretch_target: float = 0.0
 var _stretch: float = 0.0
 
@@ -65,24 +74,31 @@ func set_motion(
 	match action_state:
 		CombatantStateScript.ActionState.CHARGING:
 			_action_bend_target = -18.0
-			_stretch_target = 0.035
+			_action_extension_target = -charge_back_extension
+			_stretch_target = 0.08
 		CombatantStateScript.ActionState.WINDUP:
 			_action_bend_target = -26.0
-			_stretch_target = 0.05
+			_action_extension_target = -windup_back_extension
+			_stretch_target = 0.10
 		CombatantStateScript.ActionState.STRIKE:
 			_action_bend_target = 42.0
-			_stretch_target = 0.14
+			_action_extension_target = strike_forward_extension
+			_stretch_target = 0.16
 		CombatantStateScript.ActionState.PARRY:
 			_action_bend_target = -10.0
+			_action_extension_target = -parry_back_extension
 			_stretch_target = 0.015
 		CombatantStateScript.ActionState.DODGE:
 			_action_bend_target = -24.0
+			_action_extension_target = -dodge_back_extension
 			_stretch_target = -0.02
 		CombatantStateScript.ActionState.STAGGER:
 			_action_bend_target = -34.0
+			_action_extension_target = -stagger_back_extension
 			_stretch_target = -0.04
 		_:
 			_action_bend_target = 0.0
+			_action_extension_target = 0.0
 			_stretch_target = 0.0
 
 
@@ -111,6 +127,11 @@ func _simulate_secondary_motion(delta: float) -> void:
 		_stretch,
 		_stretch_target + clampf(-_head_acceleration.y * 0.0025, -0.035, 0.035),
 		minf(delta * stretch_response, 1.0)
+	)
+	_action_extension = lerpf(
+		_action_extension,
+		_action_extension_target,
+		minf(delta * action_extension_response, 1.0)
 	)
 
 	var inertial_target := (
@@ -196,5 +217,9 @@ func _segment_center(index: int, t: float) -> Vector2:
 	var x := 0.0
 	if index >= 0 and index < _joint_offsets.size():
 		x = _joint_offsets[index]
+
+	var extension_weight := pow(t, 1.25)
+	x += _action_extension * extension_weight
+
 	var y := -display_height * (1.0 + _stretch) * t
 	return Vector2(x, y)
