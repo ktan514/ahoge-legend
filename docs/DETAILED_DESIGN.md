@@ -1491,6 +1491,43 @@ assets/characters/prototype/charactor_01/
 assetが存在しないcharacterは従来のcode-draw FighterVisualへfallbackする。
 これによりasset追加前のCIと、SHORT_TEST等の未素材characterを壊さない。
 
+#### 13.3.1 Charge / Strike sweep
+
+アホ毛は単に局所bendするだけではなく、攻撃cycleで先端位置を大きくsweepする。
+
+local Xはcharacterの向きに依存しないforward軸とする。
+`AhogeImageRig.scale.x = facing` により、左右characterで自動反転する。
+
+初期visual値:
+
+- IDLE: action extension 0px
+- CHARGING: tipを後方へ約80px
+- WINDUP: tipを後方へ約105px
+- STRIKE: tipを前方へ約135px
+- COOLDOWN: 0pxへばね復帰
+- PARRY: 後方へ約20px
+- DODGE: 後方へ約28px
+- STAGGER: 後方へ約38px
+
+rootは0px固定とし、tipへ向かうほどextension比率を増やす。
+extensionはpolygon全体の平行移動ではなく、rootからtipへ連続的に増加させる。
+
+CHARGING / WINDUPでは縦方向も5〜10%程度伸ばし、溜め感を出す。
+STRIKEでは10〜16%程度伸ばし、前方への振り抜きを強調する。
+
+HeadMotion由来の慣性bendとaction extensionは加算する。
+そのため攻撃時は
+
+```text
+headを後ろへ引く
+  -> ahogeがさらに遅れて後方へ残る
+  -> STRIKEでheadが前へ振られる
+  -> ahoge tipが遅れて前方へsweep
+  -> spring/dampingでovershootして収束
+```
+
+をvisual checkpointとする。
+
 Checkpoint:
 - 頭部とアホ毛が別resourceで表示できる
 - 根元が頭部へ固定される
