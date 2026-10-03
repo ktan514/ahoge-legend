@@ -454,30 +454,14 @@ AHOGE LEGEND match result smoke: PASS
 
 Match Resultは `winner_user_id / loser_user_id / round_wins_by_user / final_round_number / server_tick` を含みます。通知順序は最終RoundのRound Result → BO3 score → Match Resultです。Rating / Ranking更新とUI-11表示は後続工程で接続します。
 
-## M1 authoritative Battle実画面確認
+## Battle実画面確認
 
-工程2完了ゲートM1では、通常GameFlow完成前にUI-10 Battleへ直接入り、Nakama authoritative stateをGodot実ウィンドウで確認します。
+BattleのHuman Verificationは通常のゲーム起動・通常GameFlowから実施します。M1専用のBattle直行起動、専用Scene、内部2client自動生成は提供しません。
 
-```bash
-./scripts/server-up.sh
-./scripts/client-m1-battle.sh
-```
-
-M1画面は同一process内で2つのNakama clientを成立させます。P1はLONG_TESTをマウスで、P2はSHORT_TESTをQ/Eで操作します。
-
-- P1: 左クリック Attack/Charge、右クリック Parry/Dodge
-- P2: Q Attack/Charge、E Parry/Dodge
-- 85秒timer / Hit数 / Round数 / Overtime / Match Resultはserver eventを表示
-- 中央戦闘領域は5:4候補で表示し、Human Verificationで見え方を確認
-- Round 1を含む各Round開始前に `3 → 2 → 1 → GO!` を表示
-- Countdown中はtimerを85で保持し、戦闘入力をserver側で受理しない
-- 1本取得時は `P1/P2 TAKES ROUND N` と現在のBO3 scoreを表示
-- GOと同じserver tickから85秒timerと戦闘を開始
-
-CIでは次のheadless smokeで、M1 Sceneから2-client joinと初期HUD state受信までを回帰確認します。
+通常起動:
 
 ```bash
-./scripts/client-m1-battle-smoke.sh
+godot --path .
 ```
 
 ## 設計・製造計画の正本
