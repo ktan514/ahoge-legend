@@ -1469,7 +1469,7 @@ UI-10 Battleで、正式character asset導入前に「頭部画像 + 別アホ�
 Prototype asset:
 
 ```text
-assets/characters/prototype/pink_profile/
+assets/characters/prototype/charactor_01/
 ├─ head.png
 └─ ahoge.png
 ```
