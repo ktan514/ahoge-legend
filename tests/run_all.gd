@@ -13,8 +13,8 @@ const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
-const AhogeImageRigScript := preload("res://src/ui/ahoge_image_rig.gd")
-const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
+const BattleFighter3DScript := preload("res://src/ui/battle_fighter_3d.gd")
+const BattleArena3DScript := preload("res://src/ui/battle_arena_3d.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -44,9 +44,8 @@ func _init() -> void:
 	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
 	_test_character_catalog_ui_contract()
-	_test_ahoge_image_rig_uv_contract()
-	_test_ahoge_image_rig_secondary_motion_contract()
-	_test_fighter_visual_clip_contract()
+	_test_battle_fighter_3d_contract()
+	_test_battle_arena_3d_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -472,247 +471,76 @@ func _test_character_catalog_ui_contract() -> void:
 	)
 
 
-func _test_ahoge_image_rig_uv_contract() -> void:
-	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
-	_expect_true(texture != null, "prototypeアホ毛画像をloadできる")
-	if texture == null:
-		return
-
-	var rig = AhogeImageRigScript.new()
-	rig.call("_ready")
-	rig.configure(texture, 1.0)
-
-	var mesh_instance = rig.find_child("AhogeRibbonMesh", true, false) as MeshInstance2D
-	_expect_true(mesh_instance != null, "画像アホ毛rigはMeshInstance2Dを生成する")
-	if mesh_instance == null:
-		rig.free()
-		return
-
-	var geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var vertices: PackedVector2Array = geometry.get("vertices", PackedVector2Array())
-	var uvs: PackedVector2Array = geometry.get("uvs", PackedVector2Array())
-	var indices: PackedInt32Array = geometry.get("indices", PackedInt32Array())
-	var expected_vertices := (int(rig.segments) + 1) * 2
-	var expected_indices := int(rig.segments) * 6
-
-	_expect_equal(vertices.size(), expected_vertices, "triangle ribbonは各segmentの左右頂点を持つ")
-	_expect_equal(uvs.size(), expected_vertices, "triangle ribbonは各頂点UVを持つ")
-	_expect_equal(indices.size(), expected_indices, "各segmentを2三角形6indexで明示構成する")
-	_expect_true(mesh_instance.mesh != null, "triangle ribbonをArrayMeshとして描画へ渡す")
-
-	if uvs.size() > 0:
-		var min_x := INF
-		var max_x := -INF
-		var min_y := INF
-		var max_y := -INF
-		for point in uvs:
-			min_x = minf(min_x, point.x)
-			max_x = maxf(max_x, point.x)
-			min_y = minf(min_y, point.y)
-			max_y = maxf(max_y, point.y)
-		_expect_true(min_x >= 0.0 and max_x <= 1.0, "ArrayMesh UVは0..1横範囲")
-		_expect_true(min_y >= 0.0 and max_y <= 1.0, "ArrayMesh UVは0..1縦範囲")
-		_expect_true(max_x - min_x >= 0.01, "alpha断面から有効な横幅UVを抽出する")
-		_expect_true(max_y - min_y >= 0.25, "alpha断面を縦方向へ十分samplingする")
-
-	if vertices.size() == expected_vertices:
-		var root_center := (vertices[0] + vertices[1]) * 0.5
-		_expect_true(root_center.length() <= 0.1, "ribbon root centerは頭部anchorへ固定する")
-		_expect_true(vertices[0].distance_to(vertices[1]) >= 3.0, "root断面は可視幅を持つ")
-
-	rig.free()
-
-
-func _test_ahoge_image_rig_secondary_motion_contract() -> void:
-	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
-	_expect_true(texture != null, "secondary motion試験用アホ毛画像をloadできる")
-	if texture == null:
-		return
-
-	var rig = AhogeImageRigScript.new()
-	rig.call("_ready")
-	rig.configure(texture, 1.0)
-
-	var safe_segments := int(rig.segments)
-	var tip_left := safe_segments * 2
-	var tip_right := tip_left + 1
-	var mid_section := int(safe_segments / 2)
-	var mid_left := mid_section * 2
-	var mid_right := mid_left + 1
-
-	var before_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var before: PackedVector2Array = before_geometry.get("vertices", PackedVector2Array())
-	_expect_true(before.size() > tip_right and before.size() > mid_right, "ribbonのtip / middle断面を取得できる")
-	if before.size() <= tip_right or before.size() <= mid_right:
-		rig.free()
-		return
-
-	var before_tip_center := (before[tip_left] + before[tip_right]) * 0.5
-	var before_mid_width := before[mid_left].distance_to(before[mid_right])
-	_expect_true(before_mid_width >= 3.0, "IDLE時のribbon中間部は視認可能な太さを持つ")
-
-	rig.set_motion(
-		Vector2(9.0, 0.0),
-		Vector2(3.0, 0.0),
-		CombatantStateScript.ActionState.IDLE,
-		true
-	)
-	for _index in range(60):
-		rig.call("_process", 1.0 / 60.0)
-
-	var idle_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var idle_after: PackedVector2Array = idle_geometry.get("vertices", PackedVector2Array())
-	var idle_tip_center := (idle_after[tip_left] + idle_after[tip_right]) * 0.5
-	_expect_true(
-		idle_tip_center.distance_to(before_tip_center) >= 4.0,
-		"頭部速度入力でアホ毛先端が視認可能量動く"
-	)
-
-	rig.set_motion(
-		Vector2.ZERO,
-		Vector2.ZERO,
-		CombatantStateScript.ActionState.IDLE,
-		true
-	)
-	for _index in range(120):
-		rig.call("_process", 1.0 / 60.0)
-
-	var settled_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var settled: PackedVector2Array = settled_geometry.get("vertices", PackedVector2Array())
-	var settled_tip_center := (settled[tip_left] + settled[tip_right]) * 0.5
-	var settled_mid_width := settled[mid_left].distance_to(settled[mid_right])
-
-	rig.set_motion(
-		Vector2(-36.0, 0.0),
-		Vector2(-140.0, 0.0),
-		CombatantStateScript.ActionState.CHARGING,
-		true
-	)
-	for _index in range(4):
-		rig.call("_process", 1.0 / 60.0)
-
-	var charge_lag_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var charge_lag: PackedVector2Array = charge_lag_geometry.get("vertices", PackedVector2Array())
-	var charge_lag_tip_center := (charge_lag[tip_left] + charge_lag[tip_right]) * 0.5
-	_expect_true(
-		charge_lag_tip_center.x > settled_tip_center.x + 0.25,
-		"CHARGING開始直後は頭が先に後退しアホ毛tipが相対的に前へ残る"
-	)
-
-	rig.set_motion(
-		Vector2.ZERO,
-		Vector2.ZERO,
-		CombatantStateScript.ActionState.CHARGING,
-		true
-	)
-	for _index in range(30):
-		rig.call("_process", 1.0 / 60.0)
-
-	var charge_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var charge_after: PackedVector2Array = charge_geometry.get("vertices", PackedVector2Array())
-	var charge_tip_center := (charge_after[tip_left] + charge_after[tip_right]) * 0.5
-	_expect_true(
-		charge_tip_center.x <= settled_tip_center.x - 45.0,
-		"CHARGINGでアホ毛tipがrest位置から後方へ大きく移動する"
-	)
-
-	rig.set_motion(
-		Vector2(58.0, 0.0),
-		Vector2(220.0, 0.0),
-		CombatantStateScript.ActionState.STRIKE,
-		true
-	)
-	for _index in range(2):
-		rig.call("_process", 1.0 / 60.0)
-
-	var strike_lag_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var strike_lag: PackedVector2Array = strike_lag_geometry.get("vertices", PackedVector2Array())
-	var strike_lag_tip_center := (strike_lag[tip_left] + strike_lag[tip_right]) * 0.5
-	_expect_true(
-		strike_lag_tip_center.x < settled_tip_center.x + 120.0,
-		"STRIKE開始直後はアホ毛tipが一瞬遅れて残る"
-	)
-
-	rig.set_motion(
-		Vector2.ZERO,
-		Vector2.ZERO,
-		CombatantStateScript.ActionState.STRIKE,
-		true
-	)
-	for _index in range(16):
-		rig.call("_process", 1.0 / 60.0)
-
-	var strike_geometry: Dictionary = rig.call("_build_ribbon_geometry")
-	var strike_after: PackedVector2Array = strike_geometry.get("vertices", PackedVector2Array())
-	var strike_indices: PackedInt32Array = strike_geometry.get("indices", PackedInt32Array())
-	var strike_tip_center := (strike_after[tip_left] + strike_after[tip_right]) * 0.5
-	var strike_mid_width := strike_after[mid_left].distance_to(strike_after[mid_right])
-	var strike_cross_section := strike_after[mid_right] - strike_after[mid_left]
-
-	_expect_true(
-		strike_tip_center.x >= settled_tip_center.x + 430.0,
-		"STRIKEでアホ毛tipがrest位置から相手側まで届く量へ伸びる"
-	)
-	_expect_true(
-		strike_tip_center.x - charge_tip_center.x >= 500.0,
-		"CHARGING後方位置からSTRIKE前方位置へ大きく振り抜ける"
-	)
-	_expect_true(
-		strike_mid_width >= settled_mid_width * 0.85,
-		"STRIKE大変形中もribbon中間部の太さを保持して一本線へ潰れない"
-	)
-	_expect_true(
-		absf(strike_cross_section.y) >= absf(strike_cross_section.x) * 0.35,
-		"横方向へ伸びたcenterlineに合わせて断面normalも回転する"
-	)
-	_expect_equal(
-		strike_indices.size(),
-		safe_segments * 6,
-		"STRIKE大変形時も全segmentのtriangle indexを保持する"
-	)
-
-	rig.free()
-
-
-func _test_fighter_visual_clip_contract() -> void:
-	var fighter = FighterVisualScript.new()
-	fighter.size = Vector2(420.0, 460.0)
-
+func _test_battle_fighter_3d_contract() -> void:
 	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
 	var state = CombatantStateScript.new(CombatConfigScript.new())
-	fighter.configure(character, state, 1.0)
+	var fighter = BattleFighter3DScript.new()
+	fighter.configure(character, state, 1.0, -4.15)
 	fighter.call("_ready")
 
-	_expect_false(
-		fighter.clip_contents,
-		"画像FighterVisualはアホ毛sweepをplayer矩形でclipしない"
+	var head_mesh = fighter.find_child("HeadMesh3D", true, false) as MeshInstance3D
+	var hair_mesh = fighter.find_child("HairMesh3D", true, false) as MeshInstance3D
+	var ahoge_mesh = fighter.find_child("AhogeMesh3D", true, false) as MeshInstance3D
+
+	_expect_true(head_mesh != null, "Battle 3D fighterは3D頭部meshを持つ")
+	_expect_true(hair_mesh != null, "Battle 3D fighterは3D髪meshを持つ")
+	_expect_true(ahoge_mesh != null, "Battle 3D fighterは3Dアホ毛meshを持つ")
+	if head_mesh == null or hair_mesh == null or ahoge_mesh == null:
+		fighter.free()
+		return
+
+	_expect_true(head_mesh.mesh is SphereMesh, "3D prototype頭部はSphereMeshで成立する")
+	_expect_true(hair_mesh.mesh is SphereMesh, "3D prototype髪はSphereMeshで成立する")
+	_expect_true(ahoge_mesh.mesh is ArrayMesh, "3Dアホ毛は連続tube ArrayMeshで生成する")
+
+	var idle_aabb := ahoge_mesh.mesh.get_aabb()
+	_expect_true(idle_aabb.size.y >= 2.0, "LONGの3Dアホ毛は待機時に十分な長さを持つ")
+	_expect_true(idle_aabb.size.z > 0.05, "3Dアホ毛は2D平面ではなく奥行きのあるtubeを持つ")
+
+	state.action_state = CombatantStateScript.ActionState.STRIKE
+	for _index in range(24):
+		fighter.call("_process", 1.0 / 60.0)
+	var strike_aabb := ahoge_mesh.mesh.get_aabb()
+	_expect_true(
+		strike_aabb.size.x >= idle_aabb.size.x + 3.0,
+		"STRIKEでは3Dアホ毛が前方へ大きく伸びる"
 	)
 
-	var head_clip = fighter.find_child("HeadClipControl", true, false) as Control
-	var head_layer = fighter.find_child("HeadLayer", true, false) as Node2D
-	var ahoge_rig = fighter.find_child("AhogeImageRig", true, false)
-	_expect_true(head_clip != null, "画像FighterVisualは頭部専用clip領域を持つ")
-	if head_clip != null:
-		_expect_true(head_clip.clip_contents, "頭部専用clip領域は下端cropを有効にする")
-		_expect_true(
-			head_clip.offset_left <= -180.0 and head_clip.offset_right >= 180.0,
-			"頭部clip領域は左右へ180px以上bleedし前後モーションを見切らせない"
-		)
-	_expect_true(head_layer != null, "頭部clip拡張用の座標補正layerを持つ")
-	if head_layer != null:
-		_expect_true(
-			head_layer.position.x >= 180.0,
-			"左右clip bleed分だけ頭部座標系を補正する"
-		)
-
-	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogeImageRigを持つ")
-	if head_clip != null and ahoge_rig != null:
-		_expect_true(
-			not head_clip.is_ancestor_of(ahoge_rig),
-			"アホ毛rigは頭部clip領域の外側へ置く"
-		)
+	state.ahoge_available = false
+	fighter.call("_process", 1.0 / 60.0)
+	_expect_false(ahoge_mesh.visible, "ahoge unavailable時は3Dアホ毛を非表示にする")
 
 	fighter.free()
+
+
+func _test_battle_arena_3d_contract() -> void:
+	var p1_character = CharacterCatalogScript.get_by_id("LONG_TEST")
+	var p2_character = CharacterCatalogScript.get_by_id("SHORT_TEST")
+	var p1_state = CombatantStateScript.new(CombatConfigScript.new())
+	var p2_state = CombatantStateScript.new(CombatConfigScript.new())
+
+	var arena = BattleArena3DScript.new()
+	arena.size = Vector2(920.0, 460.0)
+	arena.configure(p1_character, p1_state, p2_character, p2_state)
+	arena.call("_ready")
+
+	var viewport = arena.find_child("Battle3DViewport", true, false) as SubViewport
+	var camera = arena.find_child("BattleCamera3D", true, false) as Camera3D
+	var p1 = arena.find_child("PlayerOne3D", true, false)
+	var p2 = arena.find_child("PlayerTwo3D", true, false)
+
+	_expect_true(viewport != null, "Battle 3D arenaはSubViewportを持つ")
+	_expect_true(camera != null, "Battle 3D arenaはCamera3Dを持つ")
+	_expect_true(p1 != null and p2 != null, "左右fighterを同一3D arenaへ配置する")
+	if viewport != null:
+		_expect_true(viewport.transparent_bg, "3D arena背景は2D Manga UIへ合成できる透明背景")
+		_expect_true(viewport.size.x >= 900 and viewport.size.y >= 450, "Battle全幅を1つの3D viewportで描画する")
+	if camera != null:
+		_expect_equal(camera.projection, Camera3D.PROJECTION_ORTHOGONAL, "Battle 3D cameraは正投影")
+	if p1 != null and p2 != null:
+		_expect_true(p1.get_parent() == p2.get_parent(), "左右fighterは同じ3D座標系を共有する")
+
+	arena.free()
 
 
 func _test_combat_input_protocol() -> void:
