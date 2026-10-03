@@ -60,7 +60,7 @@ on:
       - "src/ui/ranking.gd"
       - "scenes/screens/ranking/Ranking.tscn"
       - "src/ui/battle_hud.gd"
-      - "src/ui/ahoge_bone_rig.gd"
+      - "src/ui/ahoge_prototype_rig.gd"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
