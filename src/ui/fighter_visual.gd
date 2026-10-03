@@ -121,10 +121,22 @@ func _process(delta: float) -> void:
 			action_target.x = -facing * 16.0
 			rotation_target = -4.0 * facing
 
+	var breath_scale := 1.0
+	if combat_state.action_state in [
+		CombatantStateScript.ActionState.CHARGING,
+		CombatantStateScript.ActionState.WINDUP,
+		CombatantStateScript.ActionState.STRIKE,
+		CombatantStateScript.ActionState.PARRY,
+		CombatantStateScript.ActionState.DODGE,
+		CombatantStateScript.ActionState.STAGGER,
+		CombatantStateScript.ActionState.ROUND_LOCKED,
+	]:
+		breath_scale = 0.0
+
 	var breath_offset := Vector2(
-		sin(_breath_phase * 1.35) * 3.5,
+		sin(_breath_phase * 1.35) * 4.0,
 		sin(_breath_phase * 0.92 + 0.45) * 4.5
-	)
+	) * breath_scale
 	var target := action_target + breath_offset
 
 	var previous_offset := _head_offset
