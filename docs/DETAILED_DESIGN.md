@@ -1462,148 +1462,123 @@ HeadMotionはアクションごとに頭部のローカル位置・回転を生�
 完全な物理シミュレーション結果をゲーム判定には使用しない。
 
 
-### 13.3 2D Head / Bone-rigged Ahoge Prototype
+### 13.3 2D Head / Prototype-compatible Ahoge Motion
 
-UI-10 Battleのcharacter表示は、3D procedural prototypeを正式方針にせず、**2D頭部画像 + Bone rig済み2Dアホ毛**へ戻す。
+UI-10 BattleのLONG型visualは、元HTML prototypeの実装ロジックをGodotへ移植する。
 
-Prototype asset:
-
-```text
-assets/characters/prototype/charactor_01/
-├─ head.png
-└─ ahoge.png
-```
-
-`LONG_TEST` の `CharacterDefinition` へ上記2pathを固定で紐づける。
-頭部とアホ毛を別々に選択・装備する機能は追加しない。
-
-#### 13.3.1 Skeleton2D / Bone2D skin
-
-アホ毛は次のnode構造を持つ。
+構成:
 
 ```text
-AhogeBoneRig (Node2D)
-├─ AhogeSkeleton2D (Skeleton2D)
-│  └─ AhogeBone0 (Bone2D)
-│      └─ AhogeBone1
-│          └─ ...
-│              └─ AhogeBone6
-└─ AhogeSkin (Polygon2D)
+FighterVisual
+├─ HeadClipControl
+│  └─ HeadSprite
+└─ AhogePrototypeRig
+   └─ MotionRoot
+      └─ AhogeSprite
 ```
 
-初期prototypeは7 Boneを基準とする。正式characterではMotionProfileによりBone数を変更可能にする。
+アホ毛はsource PNGを変形meshへ分解せず、画像そのものを使用する。
+root anchorを頭頂部へ固定し、`MotionRoot` のrotation / scaleだけを更新する。
 
-rest mesh:
-- source PNGのalpha領域を縦方向へsamplingする
-- 各sampleでleft / right silhouetteとUVを取得する
-- 隣接sample間を明示的なtriangle pairへ分割する
-- triangle topologyはrest poseで一度だけ生成し、action中に作り直さない
-- 曲がる位置には十分な内部vertexを持たせる
+#### 13.3.1 Prototype whole motion
 
-skin:
-- `Polygon2D.skeleton` を `AhogeSkeleton2D` へ接続する
-- 各vertexは位置に対応する前後2 Boneへ線形weightを持つ
-- root付近はBone0の影響を強くし、tipへ向かうにつれて後段Boneへweightを移す
-- action中はPolygon頂点を直接更新せず、Bone transformだけを更新する
+state:
+- `whole_angle`
+- `whole_angle_velocity`
+- `whole_reach`
+- `whole_reach_velocity`
 
-Bone motion:
-- root Boneは頭頂部anchorへ固定
-- HeadMotion velocity / accelerationを二次動作入力とする
-- 各Boneはroot側ほど高spring / damping、tip側ほど低spring / damping
-- idleは小さい位相差を持つ揺れ
-- CHARGING / WINDUPは後方へ段階的に曲げる
-- STRIKEはroot→tipへ回転を分散して前方へ振り抜く
-- extensionはBone間距離を複数区間へ分配して伸ばす
-- COOLDOWNでrest length / rest rotationへばね復帰する
-- `ahoge_available=false` ではskinを非表示にする
+入力:
+- head forward velocity
+- head forward acceleration
+- action state
+- action elapsed time
+- charge ratio
 
-この方式では、旧実装のように毎frame polygon輪郭を再生成・再triangulateしない。大変形でもmesh connectivityを固定し、裂け・消失・面反転を避ける。
-
-#### 13.3.2 Head / Ahoge relation
-
-頭部は従来どおり `Sprite2D` で表示し、顔全体を出さず頭頂部だけをBattle下端から見せる。
+prototypeから移植するLONG基準値:
 
 ```text
-Combat Action
-  -> HeadMotion
-      -> Head Sprite position / rotation
-      -> Crown Anchor
-          -> Skeleton2D root
-              -> Bone chain secondary motion
-                  -> Polygon2D skin deformation
+base angle target
+= head_forward_velocity * 0.00135
++ head_forward_acceleration * 0.000028
 ```
 
-頭部前進で射程を稼がない。射程は主にアホ毛Bone chainの振り抜きとBone間伸長で表現する。
+CHARGING:
+- `tension = charge_elapsed / max_charge`
+- angle target = `-0.28 - 0.48 * tension + inertia * 0.12`
+- reach target = `1.0`
+- チャージ中は長さを増やさない
 
-頭部画像は下端cropを維持し、左右clip bleedを確保して前後モーション時の見切れを防ぐ。
+WINDUP:
+- charged: angle `-0.38 - 0.40 * charge`, reach `1.0`
+- normal: angleへ `-0.62 * easeOut(q)`
+- normal reach `1.0 -> 0.80`
 
-#### 13.3.3 LONG strike motion
+STRIKE charged:
+- release = `easeOut(clamp((u - 0.035) / 0.74))`
+- angle `(-0.38 - 0.40*charge) -> (1.04 + 0.20*charge)`
+- reach `1.0 -> (2.10 + 0.42*charge)`
 
-Human reference動画のprototype挙動をLONG型のvisual正本とする。
+STRIKE normal:
+- lag = `sin(clamp(u / 0.44) * PI)`
+- release = `easeOut(clamp((u - 0.30) / 0.70))`
+- angle += `-0.50 * lag + 1.04 * release`
+- reach `0.82 -> 2.05`
 
-観察した特徴:
-- IDLEではC字状の元シルエットを維持する
-- 攻撃開始時に頭部そのものは大きく前進しない
-- アホ毛全体が根元を支点に前方へ倒れ込む
-- 中央部は大きな弧を作り、完全な直線にはしない
-- 毛先側は最後まで湾曲を残し、CONTACT付近で下向きへhookする
-- 根元から毛先までの太さ・texture連続性を維持する
-- 最大伸長状態を短時間保持した後、素早くC字rest poseへ戻る
-- 大きな動きは物理だけに任せず、制御されたkey poseを正本とし、慣性・ばねはその周囲の二次動作として加える
+clamp:
+- angle target: `-1.38 .. 1.48 rad`
+- angle state: `-1.50 .. 1.60 rad`
+- reach target: `0.74 .. 2.55`
+- reach state: `0.68 .. 2.62`
 
-7 Bone prototypeでは、STRIKE最大姿勢のrelative rotation目安を次とする。
+spring / damping:
+- angle default: stiffness 38 / damping 6.6
+- angle charging: 46 / 7.2
+- angle charged strike: 58 / 7.8
+- reach default: 38 / 7.2
+- reach charging: 72 / 11.5
+- reach charged windup: 70
+- reach strike: 58 / 8.5
 
-```text
-Bone0  +58°  rootを前方へ倒す
-Bone1   +8°
-Bone2  -10°
-Bone3  -12°  中央部を広いarcへする
-Bone4   -2°
-Bone5  +18°
-Bone6  +32°  tip hookを作る
-```
+render:
+- local X scale = `whole_reach`
+- local Y scale = `lerp(1.0, 0.82, clamp((reach - 1) / 1.45))`
+- rotation = `whole_angle`
+- source image root anchorを固定
 
-これは各Boneの**相対角度**であり、全Boneへ同一角度を配らない。
-左右反転はFighterVisualのfacing transformで行い、pose table自体は共通とする。
+この方式ではsource PNGのC字輪郭自体が攻撃中も保持される。
+旧Polygon deformation / ribbon / Skeleton2Dによる大変形は使用しない。
 
-visual timing初期値:
+#### 13.3.2 Prototype head motion
 
-```text
-WINDUP
-  -> 後方へ小さく溜める
+頭部もprototypeの時間曲線を移植する。
 
-STRIKE 0.00〜約0.06秒
-  -> key poseへ高速展開
+WINDUP:
+- `backAmp = 82 + 72 * charge`
+- easeOutで後方へ移動
 
-STRIKE 約0.06秒以降
-  -> 最大arc / reachを維持
+STRIKE:
+- `forwardAmp = 86 + 74 * charge`
+- phase1: `1 - easeOut(u / 0.20)`
+- phase2: `easeOut((u - 0.12) / 0.42)`
+- phase3: `easeOut((u - 0.46) / 0.40)`
+- retreat残量 + 前方加速 + 最終pushの3段階で頭部を振る
 
-COOLDOWN開始〜約0.16秒
-  -> key poseからrest C字へ高速復帰
+頭部の座標変化からvelocity / accelerationを算出し、AhogePrototypeRigへ入力する。
 
-以降
-  -> secondary springのみで収束
-```
+#### 13.3.3 Visual checkpoint
 
-射程補正はuniformな画像scaleではなくBone間距離へ分散する。
-root側の伸長は小さく、tip側ほど伸長を大きくし、最大時の全長はrestのおよそ2倍前後を初期基準とする。
-1区間だけを極端に伸ばさない。
+Human Verificationは元prototype動画を基準とする。
 
-HeadMotion初期基準:
-- CHARGING: 後方 約28px
-- WINDUP: 後方 約36px
-- STRIKE: 前方 約18px
-
-頭部移動はattack reachの主成分にしない。
-
-Human Verification:
-- prototype動画と同様にC字restから大きな前方arcへ変形する
-- 中央部が直線棒にならない
-- tipが最後にhookして相手側へ到達する
-- 画像が裂けない / 消えない
-- 根元が頭部から外れない
-- 最大姿勢から0.2秒程度で自然に戻り始める
-- 太さ・texture continuityを維持する
+- IDLEで元PNGのC字輪郭がそのまま見える
+- CHARGINGでは後方へ張るが画像サイズは増えない
+- WINDUPで頭が先に後退し、アホ毛が遅れる
+- STRIKE前半は頭が先行しアホ毛が後方へ残る
+- STRIKE後半でアホ毛全体が前へ追い越す
+- reach最大時も画像が裂けない
+- texture / 太さ / ハイライトが崩れない
+- charged STRIKEでは通常攻撃よりさらに大きく前方へ伸びる
+- ばねと減衰によりovershoot後にrestへ戻る
 
 ### 13.3 ロング型
 
