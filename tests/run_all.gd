@@ -479,7 +479,7 @@ func _test_ahoge_bone_rig_contract() -> void:
 		return
 
 	var rig = AhogeBoneRigScript.new()
-	get_root().add_child(rig)
+	rig.call("_ready")
 	rig.configure(texture, 1.0)
 
 	var skeleton = rig.find_child("AhogeSkeleton2D", true, false) as Skeleton2D
@@ -490,7 +490,7 @@ func _test_ahoge_bone_rig_contract() -> void:
 		rig.free()
 		return
 
-	_expect_equal(skeleton.get_bone_count(), int(rig.bone_count), "設定したBone数をSkeleton2Dへ生成する")
+	_expect_equal(rig.debug_bone_count(), int(rig.bone_count), "設定したBone数をSkeleton2D階層へ生成する")
 	_expect_equal(skin.get_bone_count(), int(rig.bone_count), "Polygon2Dへ全Bone weightを登録する")
 	_expect_true(not skin.skeleton.is_empty(), "Polygon2DはSkeleton2Dへのpathを持つ")
 	_expect_true(skin.polygon.size() >= 18, "skinは曲げ用に十分なvertexを持つ")
@@ -557,10 +557,7 @@ func _test_ahoge_bone_rig_motion_contract() -> void:
 	_expect_true(strike_tip.x >= 260.0, "STRIKEでBone chainのtipが相手方向へ大きく進む")
 	_expect_true(strike_scale >= 1.8, "STRIKEの射程は複数Bone間の分散伸長で確保する")
 
-	var max_bone_rotation := 0.0
-	for bone_index in range(skeleton.get_bone_count()):
-		var bone := skeleton.get_bone(bone_index)
-		max_bone_rotation = maxf(max_bone_rotation, absf(bone.rotation))
+	var max_bone_rotation := float(rig.debug_max_bone_rotation())
 	_expect_true(max_bone_rotation < deg_to_rad(35.0), "1本のBoneだけを極端に折らず回転を分散する")
 
 	rig.set_motion(
@@ -594,7 +591,7 @@ func _test_fighter_visual_clip_contract() -> void:
 	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
 	var state = CombatantStateScript.new(CombatConfigScript.new())
 	fighter.configure(character, state, 1.0)
-	get_root().add_child(fighter)
+	fighter.call("_ready")
 
 	_expect_false(
 		fighter.clip_contents,
