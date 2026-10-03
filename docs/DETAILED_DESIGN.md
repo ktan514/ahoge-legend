@@ -1477,30 +1477,59 @@ assets/characters/prototype/charactor_01/
 `LONG_TEST` の `CharacterDefinition` へ上記2pathを固定で紐づける。
 頭部とアホ毛を別々に選択・装備する機能は追加しない。
 
+#### 13.3.1 2D spline / ribbon mesh
+
+2026-10-03 Human Verificationで、PNG全体を矩形断面のまま圧縮・横伸長する方式は、大きなSTRIKE変形時にアホ毛が細い線へ潰れ、輪郭とハイライトが崩れることを確認した。この方式は廃止する。
+
+画像アホ毛は次の2段階で扱う。
+
+1. source PNGのalpha領域を縦方向にsamplingし、各segmentについて以下を取得する
+   - source center x
+   - source half width
+   - source UV left / right
+2. 実行時はsegment centerをスプライン状の中心線として計算し、各centerのtangentへ直交するnormal方向へsource half widthを展開してribbon meshを生成する
+
+概念:
+
+```text
+root ●
+     ╲
+      ●
+       ╲
+        ●
+          ╲
+           ● tip
+
+各●のcenterline tangentに対して
+左端 ← normal ─ center ─ normal → 右端
+```
+
 実装:
 - head: `Sprite2D`
-- ahoge: subdivided `Polygon2D`
+- ahoge: subdivided `Polygon2D` をribbon meshとして使用する
 - root側segmentは固定
-- tip側ほど変位量を大きくする
-- idle時は複数sin波を合成して連続的にくねらせる
-- HeadMotionのvelocityを入力し、移動方向と逆へ遅れてしなる
-- STRIKE / CHARGING / STAGGER等のaction stateをvisual bendへ加える
+- source PNGのalpha断面から元の曲線・太さ・UVを抽出する
+- tip側ほどHeadMotion由来の二次変位量を大きくする
+- centerlineはHeadMotionのvelocity / accelerationとaction stateで変形する
+- mesh幅は中心線のtangentに対するnormal方向へ展開し、大変形中も厚みを維持する
+- STRIKEではsource curveを段階的にstraightenしつつ、前方extensionをroot→tipへ滑らかに増加させる
+- STRIKE時の縦方向圧縮はcenterline poseだけへ適用し、画像断面幅そのものは潰さない
 - `ahoge_available=false` では画像ahogeを非表示にする
 - gameplay / Contact / Hit判定には使用しない
 
 assetが存在しないcharacterは従来のcode-draw FighterVisualへfallbackする。
 これによりasset追加前のCIと、SHORT_TEST等の未素材characterを壊さない。
 
-#### 13.3.1 Charge / Strike sweep
+#### 13.3.2 Charge / Strike sweep
 
-アホ毛は単に局所bendするだけではなく、攻撃cycleで先端位置を大きくsweepする。
+アホ毛は局所bendだけではなく、攻撃cycleで中心線と毛先位置を大きくsweepする。
 
 local Xはcharacterの向きに依存しないforward軸とする。
 `AhogeImageRig.scale.x = facing` により、左右characterで自動反転する。
 
-Human Verification反映後の基準visual値:
+初期visual基準:
 
-- IDLE: action extension 0px
+- IDLE: action extension 0px、source curveを保持
 - CHARGING: tipを後方へ約90px
 - WINDUP: tipを後方へ約130px
 - STRIKE: tipを前方へ約520px
@@ -1510,12 +1539,9 @@ Human Verification反映後の基準visual値:
 - STAGGER: 後方へ約38px
 
 rootは0px固定とし、tipへ向かうほどextension比率を増やす。
-extensionはpolygon全体の平行移動ではなく、rootからtipへ連続的に増加させる。
-透明余白を含むprototype画像でも実際の毛先が追従するよう、extension weightは画像上端だけへ集中させず、上側segment全体へ滑らかに立ち上げる。
+STRIKEではsource curveを完全消失させず、毛先側ほどstraightenを強める。中心線の高さは攻撃姿勢として下げられるが、断面幅はnormal方向で保持するため、旧方式のように一本線へ潰さない。
 
-CHARGING / WINDUPでは縦方向をわずかに伸ばして溜め感を出す。
-STRIKEでは横方向のextensionを主成分とし、同時に縦方向の高さを通常時のおよそ30〜40%へ圧縮して、縦長の元形状から「前方へ長く伸び、まっすぐに近づく」形へ連続変形させる。
-1280x720の基準Battle layoutでは、LONG型STRIKEの見た目上の毛先が相手頭部側の接触領域まで到達できることをHuman Verification checkpointとする。
+1280x720の基準Battle layoutでは、LONG型STRIKEの見た目上の毛先が相手頭部側まで到達でき、かつ中間部の太さがIDLE時から大きく崩れないことをHuman Verification checkpointとする。
 
 頭部前進は射程を稼ぐ手段にしない。
 STRIKE時の頭部前進は約34pxを基準とし、頭部は基本位置周辺の小さな振りに留める。
@@ -1526,20 +1552,24 @@ HeadMotion由来の慣性bendとaction extensionは加算する。
 
 ```text
 headを後ろへ引く
-  -> ahogeがさらに遅れて後方へ残る
+  -> ahoge centerlineが遅れて後方へ残る
   -> STRIKEでheadが前へ振られる
-  -> ahoge tipが遅れて前方へsweep
+  -> rootからtipへ順にcenterlineが前方へ展開する
+  -> ribbon断面はtangentへ追従して回転し、太さを保つ
+  -> tipが相手側へ到達
   -> spring/dampingでovershootして収束
 ```
-
-をvisual checkpointとする。
 
 Checkpoint:
 - 頭部とアホ毛が別resourceで表示できる
 - 根元が頭部へ固定される
-- idle時にアホ毛が連続的にぬるぬる動く
+- source PNGの曲線と太さをIDLEで保つ
 - 頭部の左右移動でアホ毛が遅れて追従する
-- action時に揺れが増幅する
+- STRIKEで毛先が相手側へ到達する
+- STRIKE中も中間部が一本線へ潰れない
+- 振り抜き後に自然にsource curveへ戻る
+
+この2D ribbon方式で正式キャラクター品質を満たせない場合は、アホ毛のみを3D mesh + bone / splineで構成し、正投影カメラで2D Battleへ合成する2.5D方式へ移行する。ゲーム全体の3D化は前提としない。
 
 ### 13.3 ロング型
 
