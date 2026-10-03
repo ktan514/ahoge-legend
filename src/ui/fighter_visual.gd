@@ -2,7 +2,7 @@ extends Control
 
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 const CharacterDefinitionScript := preload("res://src/domain/character_definition.gd")
-const AhogeImageRigScript := preload("res://src/ui/ahoge_image_rig.gd")
+const AhogeBoneRigScript := preload("res://src/ui/ahoge_bone_rig.gd")
 
 @export var head_clip_horizontal_bleed: float = 180.0
 
@@ -76,8 +76,8 @@ func _build_asset_nodes() -> void:
 	_head_sprite.z_index = 0
 	_head_layer.add_child(_head_sprite)
 
-	_ahoge_rig = AhogeImageRigScript.new()
-	_ahoge_rig.name = "AhogeImageRig"
+	_ahoge_rig = AhogeBoneRigScript.new()
+	_ahoge_rig.name = "AhogeBoneRig"
 	_ahoge_rig.z_index = 5
 	_asset_root.add_child(_ahoge_rig)
 
