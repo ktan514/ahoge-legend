@@ -14,6 +14,7 @@ const CombatInputProtocolScript := preload("res://src/online/combat_input_protoc
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
 const AhogeImageRigScript := preload("res://src/ui/ahoge_image_rig.gd")
+const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -45,6 +46,7 @@ func _init() -> void:
 	_test_character_catalog_ui_contract()
 	_test_ahoge_image_rig_uv_contract()
 	_test_ahoge_image_rig_secondary_motion_contract()
+	_test_fighter_visual_clip_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -630,6 +632,36 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 	)
 
 	rig.free()
+
+
+func _test_fighter_visual_clip_contract() -> void:
+	var fighter = FighterVisualScript.new()
+	fighter.size = Vector2(420.0, 460.0)
+
+	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
+	var state = CombatantStateScript.new(CombatConfigScript.new())
+	fighter.configure(character, state, 1.0)
+	fighter.call("_ready")
+
+	_expect_false(
+		fighter.clip_contents,
+		"画像FighterVisualはアホ毛sweepをplayer矩形でclipしない"
+	)
+
+	var head_clip = fighter.find_child("HeadClipControl", true, false) as Control
+	var ahoge_rig = fighter.find_child("AhogeImageRig", true, false)
+	_expect_true(head_clip != null, "画像FighterVisualは頭部専用clip領域を持つ")
+	if head_clip != null:
+		_expect_true(head_clip.clip_contents, "頭部専用clip領域は下端cropを有効にする")
+
+	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogeImageRigを持つ")
+	if head_clip != null and ahoge_rig != null:
+		_expect_true(
+			not head_clip.is_ancestor_of(ahoge_rig),
+			"アホ毛rigは頭部clip領域の外側へ置く"
+		)
+
+	fighter.free()
 
 
 func _test_combat_input_protocol() -> void:
