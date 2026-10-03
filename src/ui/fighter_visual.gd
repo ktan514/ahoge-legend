@@ -103,13 +103,13 @@ func _process(delta: float) -> void:
 	var rotation_target := 0.0
 	match combat_state.action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			action_target.x = -facing * 24.0
+			action_target.x = -facing * 52.0
 			rotation_target = -2.5 * facing
 		CombatantStateScript.ActionState.WINDUP:
-			action_target.x = -facing * 30.0
+			action_target.x = -facing * 64.0
 			rotation_target = -3.5 * facing
 		CombatantStateScript.ActionState.STRIKE:
-			action_target.x = facing * 34.0
+			action_target.x = facing * 68.0
 			rotation_target = 4.0 * facing
 		CombatantStateScript.ActionState.PARRY:
 			action_target.y = -22.0
@@ -117,6 +117,9 @@ func _process(delta: float) -> void:
 		CombatantStateScript.ActionState.DODGE:
 			action_target = Vector2(-facing * 18.0, 24.0)
 			rotation_target = 2.5 * facing
+		CombatantStateScript.ActionState.COOLDOWN:
+			action_target.x = facing * 20.0
+			rotation_target = 1.5 * facing
 		CombatantStateScript.ActionState.STAGGER:
 			action_target.x = -facing * 16.0
 			rotation_target = -4.0 * facing
@@ -141,7 +144,12 @@ func _process(delta: float) -> void:
 
 	var previous_offset := _head_offset
 	var previous_velocity := _head_velocity
-	_head_offset = _head_offset.lerp(target, minf(delta * 10.0, 1.0))
+	var head_response := 10.0
+	if combat_state.action_state == CombatantStateScript.ActionState.STRIKE:
+		head_response = 22.0
+	elif combat_state.action_state == CombatantStateScript.ActionState.CHARGING:
+		head_response = 8.0
+	_head_offset = _head_offset.lerp(target, minf(delta * head_response, 1.0))
 	_head_velocity = (_head_offset - previous_offset) / maxf(delta, 0.001)
 	_head_acceleration = (_head_velocity - previous_velocity) / maxf(delta, 0.001)
 
