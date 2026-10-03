@@ -468,3 +468,14 @@ func debug_tip_local_position() -> Vector2:
 
 func debug_total_length_scale() -> float:
 	return _length_scale
+
+
+func debug_bone_count() -> int:
+	return _bones.size()
+
+
+func debug_max_bone_rotation() -> float:
+	var result := 0.0
+	for bone in _bones:
+		result = maxf(result, absf(bone.rotation))
+	return result
