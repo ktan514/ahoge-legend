@@ -14,6 +14,8 @@ enum AttackType {
 @export var character_id: String = ""
 @export var display_name: String = ""
 @export var feature_text: String = ""
+@export var head_asset_path: String = ""
+@export var ahoge_asset_path: String = ""
 @export var ahoge_type: int = AhogeType.LONG
 @export var attack_type: int = AttackType.SWING
 
@@ -23,12 +25,16 @@ static func create(
 	name_value: String,
 	ahoge_type_value: int,
 	attack_type_value: int,
-	feature_text_value: String = ""
+	feature_text_value: String = "",
+	head_asset_path_value: String = "",
+	ahoge_asset_path_value: String = ""
 ):
 	var definition = new()
 	definition.character_id = id_value
 	definition.display_name = name_value
 	definition.feature_text = feature_text_value
+	definition.head_asset_path = head_asset_path_value
+	definition.ahoge_asset_path = ahoge_asset_path_value
 	definition.ahoge_type = ahoge_type_value
 	definition.attack_type = attack_type_value
 	return definition
