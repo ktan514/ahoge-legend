@@ -37,7 +37,7 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var dodge_back_extension: float = 28.0
 @export var stagger_back_extension: float = 38.0
 
-var _polygon: Polygon2D
+var _mesh_instance: MeshInstance2D
 var _texture: Texture2D
 var _facing: float = 1.0
 var _available: bool = true
@@ -68,9 +68,9 @@ var _source_uv_y := PackedFloat32Array()
 
 
 func _ready() -> void:
-	_polygon = Polygon2D.new()
-	_polygon.name = "AhogePolygon"
-	add_child(_polygon)
+	_mesh_instance = MeshInstance2D.new()
+	_mesh_instance.name = "AhogeRibbonMesh"
+	add_child(_mesh_instance)
 	_resize_joint_state()
 	set_process(true)
 	_refresh_mesh()
@@ -80,8 +80,8 @@ func configure(texture_value: Texture2D, facing_value: float) -> void:
 	_texture = texture_value
 	_facing = 1.0 if facing_value >= 0.0 else -1.0
 	scale.x = _facing
-	if _polygon != null:
-		_polygon.texture = _texture
+	if _mesh_instance != null:
+		_mesh_instance.texture = _texture
 	_sample_source_profile()
 	_resize_joint_state()
 	_refresh_mesh()
@@ -353,16 +353,47 @@ func _find_alpha_span(image: Image, center_y: int, used: Rect2i) -> Vector2:
 
 
 func _refresh_mesh() -> void:
-	if _polygon == null or _texture == null:
+	if _mesh_instance == null or _texture == null:
 		return
 
+	var geometry := _build_ribbon_geometry()
+	var vertices_2d: PackedVector2Array = geometry.get("vertices", PackedVector2Array())
+	var uvs: PackedVector2Array = geometry.get("uvs", PackedVector2Array())
+	var indices: PackedInt32Array = geometry.get("indices", PackedInt32Array())
+	if vertices_2d.is_empty() or indices.is_empty():
+		_mesh_instance.mesh = null
+		return
+
+	var vertices_3d := PackedVector3Array()
+	vertices_3d.resize(vertices_2d.size())
+	for index in range(vertices_2d.size()):
+		var point := vertices_2d[index]
+		vertices_3d[index] = Vector3(point.x, point.y, 0.0)
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices_3d
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_mesh_instance.mesh = mesh
+	_mesh_instance.texture = _texture
+
+
+func _build_ribbon_geometry() -> Dictionary:
 	_resize_joint_state()
 	var safe_segments := maxi(segments, 4)
 	var count := safe_segments + 1
 	if _source_center_offsets.size() != count:
 		_sample_source_profile()
-	if _source_center_offsets.size() != count:
-		return
+	if _source_center_offsets.size() != count or _texture == null:
+		return {
+			"vertices": PackedVector2Array(),
+			"uvs": PackedVector2Array(),
+			"indices": PackedInt32Array(),
+		}
 
 	var centers := PackedVector2Array()
 	centers.resize(count)
@@ -370,14 +401,14 @@ func _refresh_mesh() -> void:
 		var t := float(index) / float(safe_segments)
 		centers[index] = _segment_center(index, t)
 
-	var left_points := PackedVector2Array()
-	var right_points := PackedVector2Array()
-	var left_uvs := PackedVector2Array()
-	var right_uvs := PackedVector2Array()
-	left_points.resize(count)
-	right_points.resize(count)
-	left_uvs.resize(count)
-	right_uvs.resize(count)
+	var vertices := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	vertices.resize(count * 2)
+	uvs.resize(count * 2)
+
+	var source_size := _texture.get_size()
+	var source_width := maxf(source_size.x, 1.0)
+	var source_height := maxf(source_size.y, 1.0)
 
 	for index in range(count):
 		var previous_index := maxi(index - 1, 0)
@@ -388,28 +419,48 @@ func _refresh_mesh() -> void:
 		else:
 			tangent = tangent.normalized()
 
-		# tangentへ直交する断面方向へ幅を展開する。
-		# STRIKEでcenterlineが横を向いても、このnormalが一緒に回るため太さが潰れない。
+		# centerlineへ直交するnormalへ左右断面を配置する。
+		# 各segmentを明示triangleで結ぶため、ribbon全体が自己交差しても
+		# Polygon2Dの自動triangulation失敗で全体が消えることはない。
 		var normal := Vector2(-tangent.y, tangent.x).normalized()
-		var half_width := _source_half_widths[index]
+		var half_width := maxf(_source_half_widths[index], min_section_half_width)
+		var left_index := index * 2
+		var right_index := left_index + 1
+		vertices[left_index] = centers[index] - normal * half_width
+		vertices[right_index] = centers[index] + normal * half_width
 
-		left_points[index] = centers[index] - normal * half_width
-		right_points[index] = centers[index] + normal * half_width
-		left_uvs[index] = Vector2(_source_uv_left[index], _source_uv_y[index])
-		right_uvs[index] = Vector2(_source_uv_right[index], _source_uv_y[index])
+		var uv_y := clampf(_source_uv_y[index] / source_height, 0.0, 1.0)
+		uvs[left_index] = Vector2(
+			clampf(_source_uv_left[index] / source_width, 0.0, 1.0),
+			uv_y
+		)
+		uvs[right_index] = Vector2(
+			clampf(_source_uv_right[index] / source_width, 0.0, 1.0),
+			uv_y
+		)
 
-	var points := PackedVector2Array()
-	var uvs := PackedVector2Array()
-	for index in range(count):
-		points.append(left_points[index])
-		uvs.append(left_uvs[index])
-	for index in range(count - 1, -1, -1):
-		points.append(right_points[index])
-		uvs.append(right_uvs[index])
+	var indices := PackedInt32Array()
+	indices.resize(safe_segments * 6)
+	var write_index := 0
+	for segment_index in range(safe_segments):
+		var left_a := segment_index * 2
+		var right_a := left_a + 1
+		var left_b := (segment_index + 1) * 2
+		var right_b := left_b + 1
 
-	_polygon.polygon = points
-	_polygon.uv = uvs
-	_polygon.texture = _texture
+		indices[write_index] = left_a
+		indices[write_index + 1] = right_a
+		indices[write_index + 2] = left_b
+		indices[write_index + 3] = right_a
+		indices[write_index + 4] = right_b
+		indices[write_index + 5] = left_b
+		write_index += 6
+
+	return {
+		"vertices": vertices,
+		"uvs": uvs,
+		"indices": indices,
+	}
 
 
 func _segment_center(index: int, t: float) -> Vector2:
