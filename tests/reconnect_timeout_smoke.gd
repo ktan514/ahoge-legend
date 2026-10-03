@@ -446,6 +446,21 @@ func _run_both_disconnected_abandon_scenario(
 	if not _second_match_id.is_empty():
 		await _second_socket.leave_match_async(_second_match_id)
 
+	# 前シナリオのruntime状態を一切持ち越さず、fresh client相当で開始する。
+	online_session.clear_session()
+	var fresh_auth: Dictionary = await online_session.authenticate_local_device()
+	if not bool(fresh_auth.get("ok", false)) or str(fresh_auth.get("user_id", "")) != p1_user_id:
+		_fail("両者不在abandon試験前のP1 fresh認証に失敗しました。")
+		return false
+	var fresh_realtime: Dictionary = await online_session.connect_realtime_socket()
+	if not bool(fresh_realtime.get("ok", false)):
+		_fail("両者不在abandon試験前のP1 Realtime再接続に失敗しました。")
+		return false
+	var fresh_active: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(fresh_active.get("ok", false)) or bool(fresh_active.get("active", false)):
+		_fail("両者不在abandon試験前にP1 active matchが残っています。")
+		return false
+
 	p1_joined[0] = ""
 	_second_match_id = ""
 	_second_ticket = ""
