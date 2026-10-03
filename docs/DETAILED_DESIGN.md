@@ -601,7 +601,7 @@ authoritative matchへ通常joinした場合もserverはjoinしたplayerへ `MAT
 
 UI-09初期実装は正式台詞コンテンツを要求せず、snapshotで確定した双方のcharacterと `READY...` を短時間表示する機能優先版とする。スキップ可否は未決のまま追加しない。
 
-UI-10 Rankedは既存M1 HUD表現を再利用するが、M1デバッグ用の第二client自動生成は使用しない。実際の相手はremote playerとし、ローカルplayerの入力だけを `OnlineSession.send_combat_input()` でserverへ送る。
+UI-10 Rankedは共通BattleHUD / FighterVisualを使用し、実際の相手はremote playerとする。実際の相手はremote playerとし、ローカルplayerの入力だけを `OnlineSession.send_combat_input()` でserverへ送る。
 
 UI-11 Rankedは `MATCH_RESULT` のwinner / final score / finish_causeを勝敗正本として表示する。RatingはMatch Resultからclient計算しない。`match_id` を使ってserverのRanked settlement RPCを取得し、Player Ratingと使用characterのAhoge Ratingをそれぞれ `before → after (delta)` で表示する。再ログインResultでも同じsettlement RPCを使用するため、clientローカルにmatch前Ratingを保存して正本化しない。
 
