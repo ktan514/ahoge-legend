@@ -3338,3 +3338,28 @@ TextureButton自体のlocal positionをTweenし、Container layoutとanimation�
 
 Top Menuでは `decor_speed_lines.png` をload/displayしない。
 現在のstadium + speed-line visualはBattle assetへ移管する。
+
+
+### 18.9 Ranked both-disconnected abandonment
+
+2026-10-03 Human Decision / bugfix。
+
+通常の片側切断契約は維持する。
+一方、Rankedで両participantが不在のままRound境界Reconnect deadlineを両者とも超過した場合、そのmatchを無期限ACTIVEのまま保持しない。
+
+契約:
+- 対象: `matchMode == ranked`
+- 条件:
+  - `presences` が0件
+  - expected participant 2名とも `reconnectDeadlineTickByUser` が期限超過
+- 結果:
+  - matchを `ABANDONED` として終了
+  - Player Rating更新なし
+  - Ahoge Rating更新なし
+  - Match Resultを作らない
+  - `active_online_match/current` を両participantから削除
+  - match processを終了する
+  - 次回client起動時は古いBattleへ復帰せずTop Menuへ進む
+
+片側のみ期限超過した場合は従来どおり `DISCONNECT_FORFEIT` Roundを適用する。
+瞬間的な両者切断の即終了ルールは本項では確定せず、Round境界deadline超過時だけを対象とする。
