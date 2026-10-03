@@ -44,6 +44,7 @@ func _init() -> void:
 	_test_ranked_character_contract()
 	_test_character_catalog_ui_contract()
 	_test_ahoge_image_rig_uv_contract()
+	_test_ahoge_image_rig_secondary_motion_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -496,6 +497,46 @@ func _test_ahoge_image_rig_uv_contract() -> void:
 		var source_size := texture.get_size()
 		_expect_true(max_x >= source_size.x - 1.0, "画像アホ毛UVはtexture全幅を参照する")
 		_expect_true(max_y >= source_size.y - 1.0, "画像アホ毛UVはtexture全高を参照する")
+
+	rig.free()
+
+
+func _test_ahoge_image_rig_secondary_motion_contract() -> void:
+	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
+	_expect_true(texture != null, "secondary motion試験用アホ毛画像をloadできる")
+	if texture == null:
+		return
+
+	var rig = AhogeImageRigScript.new()
+	rig.call("_ready")
+	rig.configure(texture, 1.0)
+
+	var polygon = rig.find_child("AhogePolygon", true, false) as Polygon2D
+	_expect_true(polygon != null, "secondary motion試験でPolygon2Dを取得できる")
+	if polygon == null:
+		rig.free()
+		return
+
+	var before: PackedVector2Array = polygon.polygon
+	var tip_index := int(rig.segments)
+	_expect_true(before.size() > tip_index, "secondary motion試験でtip頂点を取得できる")
+	if before.size() <= tip_index:
+		rig.free()
+		return
+
+	var before_x := before[tip_index].x
+	rig.set_motion(
+		Vector2(9.0, 0.0),
+		Vector2(3.0, 0.0),
+		CombatantStateScript.ActionState.IDLE,
+		true
+	)
+	for _index in range(60):
+		rig.call("_process", 1.0 / 60.0)
+
+	var after: PackedVector2Array = polygon.polygon
+	var moved := absf(after[tip_index].x - before_x)
+	_expect_true(moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
 
 	rig.free()
 
