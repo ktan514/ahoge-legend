@@ -10,7 +10,10 @@ var facing: float = 1.0
 
 var _head_offset := Vector2.ZERO
 var _head_velocity := Vector2.ZERO
+var _head_acceleration := Vector2.ZERO
 var _ahoge_lag: float = 0.0
+var _breath_phase: float = 0.0
+var _head_rotation: float = 0.0
 
 var _asset_root: Node2D
 var _head_sprite: Sprite2D
@@ -94,24 +97,47 @@ func _process(delta: float) -> void:
 	if combat_state == null or delta <= 0.0:
 		return
 
-	var target := Vector2.ZERO
+	_breath_phase += delta
+
+	var action_target := Vector2.ZERO
+	var rotation_target := 0.0
 	match combat_state.action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			target.x = -facing * 24.0
+			action_target.x = -facing * 24.0
+			rotation_target = -2.5 * facing
 		CombatantStateScript.ActionState.WINDUP:
-			target.x = -facing * 30.0
+			action_target.x = -facing * 30.0
+			rotation_target = -3.5 * facing
 		CombatantStateScript.ActionState.STRIKE:
-			target.x = facing * 34.0
+			action_target.x = facing * 34.0
+			rotation_target = 4.0 * facing
 		CombatantStateScript.ActionState.PARRY:
-			target.y = -22.0
+			action_target.y = -22.0
+			rotation_target = -2.0 * facing
 		CombatantStateScript.ActionState.DODGE:
-			target = Vector2(-facing * 18.0, 24.0)
+			action_target = Vector2(-facing * 18.0, 24.0)
+			rotation_target = 2.5 * facing
 		CombatantStateScript.ActionState.STAGGER:
-			target.x = -facing * 16.0
+			action_target.x = -facing * 16.0
+			rotation_target = -4.0 * facing
 
-	var previous := _head_offset
-	_head_offset = _head_offset.lerp(target, minf(delta * 12.0, 1.0))
-	_head_velocity = (_head_offset - previous) / maxf(delta, 0.001)
+	var breath_offset := Vector2(
+		sin(_breath_phase * 1.35) * 3.5,
+		sin(_breath_phase * 0.92 + 0.45) * 4.5
+	)
+	var target := action_target + breath_offset
+
+	var previous_offset := _head_offset
+	var previous_velocity := _head_velocity
+	_head_offset = _head_offset.lerp(target, minf(delta * 10.0, 1.0))
+	_head_velocity = (_head_offset - previous_offset) / maxf(delta, 0.001)
+	_head_acceleration = (_head_velocity - previous_velocity) / maxf(delta, 0.001)
+
+	_head_rotation = lerpf(
+		_head_rotation,
+		rotation_target + sin(_breath_phase * 0.8) * 0.65,
+		minf(delta * 8.0, 1.0)
+	)
 
 	var lag_target := clampf(-_head_velocity.x * 0.10, -34.0, 34.0)
 	_ahoge_lag = lerpf(_ahoge_lag, lag_target, minf(delta * 8.0, 1.0))
@@ -119,7 +145,8 @@ func _process(delta: float) -> void:
 	if _asset_mode:
 		_update_asset_pose()
 		_ahoge_rig.set_motion(
-			_head_velocity.x * facing,
+			Vector2(_head_velocity.x * facing, _head_velocity.y),
+			Vector2(_head_acceleration.x * facing, _head_acceleration.y),
 			combat_state.action_state,
 			combat_state.ahoge_available
 		)
@@ -158,6 +185,7 @@ func _update_asset_pose() -> void:
 
 	_head_sprite.position = head_center
 	_head_sprite.scale = Vector2(head_scale * facing, head_scale)
+	_head_sprite.rotation = deg_to_rad(_head_rotation)
 
 	var crown_anchor := Vector2(
 		head_center.x + facing * 10.0,
