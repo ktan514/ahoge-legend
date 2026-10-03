@@ -121,7 +121,9 @@ M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181
 
 工程2のserver実装が完了したら、工程3へ進む前に #53 を実施する。
 
-この時点では工程4の全GameFlow完成を待たない。UI-10へ直接入れる最小のデバッグ導線を用意し、authoritativeなBattle状態を実画面へ接続して確認する。仮素材・仮レイアウトでよいが、実際に操作できることを必須とする。
+この時点では工程4の全GameFlow完成を待たず、一時的なBattle直行デバッグ構成を使ってauthoritativeなBattle状態を実画面へ接続して確認した。
+
+M1は完了済みであり、この直行デバッグ構成は工程4以降の製品ランタイムへ残さない。現行のHuman Verificationは通常GameFlowから実施し、`--m1-battle` や専用 `BattleM1Debug` Sceneを提供しない。
 
 M1で重大な乖離が見つかった場合、工程3へ進む前に修正する。
 
