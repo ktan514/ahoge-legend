@@ -1,6 +1,6 @@
 extends Control
 
-const BattleArena3DScript := preload("res://src/ui/battle_arena_3d.gd")
+const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
 const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
 const MangaBackdropScript := preload("res://src/ui/theme/manga_backdrop.gd")
 
@@ -21,7 +21,8 @@ var _player_one_name: Label
 var _player_two_name: Label
 var _player_one_score: Label
 var _player_two_score: Label
-var _battle_arena_3d
+var _player_one_visual
+var _player_two_visual
 var _message_generation: int = 0
 
 const IMPACT_MESSAGE_SECONDS := 0.24
@@ -135,17 +136,37 @@ func _ready() -> void:
 	battle_caption.add_theme_color_override("font_color", MangaThemeScript.INK_2)
 	arena_stack.add_child(battle_caption)
 
-	var battle_area := Control.new()
-	battle_area.custom_minimum_size = Vector2(920, 460)
+	var battle_area := HBoxContainer.new()
 	battle_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	battle_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	battle_area.alignment = BoxContainer.ALIGNMENT_CENTER
+	battle_area.add_theme_constant_override("separation", 12)
 	arena_stack.add_child(battle_area)
 
-	_battle_arena_3d = BattleArena3DScript.new()
-	_battle_arena_3d.name = "BattleArena3D"
-	_battle_arena_3d.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_battle_arena_3d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	battle_area.add_child(_battle_arena_3d)
+	var player_one_box := VBoxContainer.new()
+	player_one_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_one_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_player_one_visual = FighterVisualScript.new()
+	_player_one_visual.custom_minimum_size = Vector2(420, 460)
+	_player_one_visual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_player_one_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	player_one_box.add_child(_player_one_visual)
+	battle_area.add_child(player_one_box)
+
+	var center_space := Control.new()
+	center_space.custom_minimum_size.x = 80
+	center_space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	battle_area.add_child(center_space)
+
+	var player_two_box := VBoxContainer.new()
+	player_two_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	player_two_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_player_two_visual = FighterVisualScript.new()
+	_player_two_visual.custom_minimum_size = Vector2(420, 460)
+	_player_two_visual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_player_two_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	player_two_box.add_child(_player_two_visual)
+	battle_area.add_child(player_two_box)
 
 	_connection = Label.new()
 	_connection.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -222,12 +243,8 @@ func _ready() -> void:
 func set_combatants(player_one_character, player_one_state, player_two_character, player_two_state) -> void:
 	_player_one_name.text = "1P  %s" % player_one_character.display_name
 	_player_two_name.text = "%s  2P" % player_two_character.display_name
-	_battle_arena_3d.configure(
-		player_one_character,
-		player_one_state,
-		player_two_character,
-		player_two_state
-	)
+	_player_one_visual.configure(player_one_character, player_one_state, 1.0)
+	_player_two_visual.configure(player_two_character, player_two_state, -1.0)
 
 
 func set_connection_status(text: String) -> void:
