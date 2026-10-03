@@ -298,23 +298,22 @@ Hit数が同点の場合は延長戦へ移行せず、**両者へラウンドポ
 
 本番では頭部の速度・加速度を入力とし、慣性、遅れ、ばね、減衰、必要な伸縮補正を加える制御付き擬似物理を採用する。
 
-2026-10-03 Human Verificationで、PNG直接変形・2Dリボンメッシュ・3D procedural prototypeを比較した結果、正式なBattleキャラクター表現は**2Dボーンリグ**へ切り替える。
+元HTML prototypeのソースコードとHuman Verification動画を正本として、LONG型のBattle表示は**元アホ毛画像の形を保ったwhole-image secondary motion**を採用する。
 
-採用構成:
-- 頭部・髪: 2D画像
-- アホ毛: `Skeleton2D + Bone2D chain + Polygon2D skin`
-- アホ毛画像の三角形構造はrest poseで固定する
-- 毎frame polygon頂点を直接引き延ばさない
-- Bone rotation / Bone間距離だけを時間変化させ、weight済みmeshを変形する
-- 根元Boneは頭頂部anchorへ固定し、毛先ほど遅れ・しなり・伸長を大きくする
-- STRIKE時は複数Boneへ回転を分散し、1箇所だけを折り曲げない
-- 射程補正はBone間距離を段階的に伸ばして得る
+prototypeでは7節の柔軟chainも検証したが、細かな局所変形よりv13系の「アホ毛全体が大きく振れ、伸びる」表現の方が視認性が高かったため、最終的なLONG描画の主成分は次とする。
 
-3Dモデル制作を前提としない。BattleのHUD・キャラクターとも2D構成を維持する。
+- 頭部位置・速度・加速度を入力にする
+- アホ毛PNGのroot anchorを頭頂部へ固定する
+- PNG内部の頂点を毎frame再生成しない
+- rootを中心に画像全体をrotationする
+- 前方reachは画像全体のlocal X scaleで表現する
+- reach増加時だけlocal Yを最大約18%圧縮する
+- angle / reachはそれぞればね＋減衰でtargetへ追従させる
+- source PNGが持つC字輪郭・太さ・ハイライトをそのまま保持する
 
-正式素材では、アホ毛をリグしやすいニュートラル姿勢の透過画像として用意し、Bone chainとweightをキャラクター固有MotionProfileへ合わせて調整できる構造とする。prototypeでは現在の分離アホ毛PNGからmeshを生成して制御系を検証する。
+正式BattleではSkeleton2Dによる大変形を主方式にしない。必要な局所揺れはwhole-image motionの補助に限定し、prototype動画と同じ大きな全体スイングを優先する。
 
-ただし、攻撃判定・射程・相殺判定は見た目の2Dボーン変形結果には依存させない。
+攻撃判定・射程・相殺判定は見た目の画像scale結果には依存させない。
 
 ### 10.3 待機
 
