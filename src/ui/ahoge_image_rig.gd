@@ -4,29 +4,38 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 
 @export var display_height: float = 248.0
 @export var segments: int = 22
-@export var idle_amplitude: float = 7.0
-@export var secondary_amplitude: float = 3.0
-@export var lag_response: float = 7.5
-@export var lag_scale: float = 0.075
-@export var max_lag: float = 26.0
-@export var tip_power: float = 1.85
+@export var velocity_influence: float = 3.2
+@export var acceleration_influence: float = 0.55
+@export var max_bend: float = 58.0
+@export var root_spring: float = 34.0
+@export var tip_spring: float = 14.0
+@export var root_damping: float = 9.0
+@export var tip_damping: float = 4.8
+@export var propagation: float = 0.42
+@export var tip_power: float = 1.7
+@export var stretch_response: float = 7.0
 
 var _polygon: Polygon2D
 var _texture: Texture2D
 var _facing: float = 1.0
-var _phase: float = 0.0
-var _lag: float = 0.0
-var _lag_target: float = 0.0
-var _action_bend: float = 0.0
-var _impulse: float = 0.0
 var _available: bool = true
 var _display_width: float = 120.0
+
+var _head_velocity := Vector2.ZERO
+var _head_acceleration := Vector2.ZERO
+var _action_bend_target: float = 0.0
+var _stretch_target: float = 0.0
+var _stretch: float = 0.0
+
+var _joint_offsets := PackedFloat32Array()
+var _joint_velocities := PackedFloat32Array()
 
 
 func _ready() -> void:
 	_polygon = Polygon2D.new()
 	_polygon.name = "AhogePolygon"
 	add_child(_polygon)
+	_resize_joint_state()
 	set_process(true)
 	_refresh_mesh()
 
@@ -38,47 +47,113 @@ func configure(texture_value: Texture2D, facing_value: float) -> void:
 	if _polygon != null:
 		_polygon.texture = _texture
 	_refresh_dimensions()
+	_resize_joint_state()
 	_refresh_mesh()
 
 
-func set_motion(relative_head_velocity_x: float, action_state: int, available: bool) -> void:
+func set_motion(
+	head_velocity: Vector2,
+	head_acceleration: Vector2,
+	action_state: int,
+	available: bool
+) -> void:
 	_available = available
 	visible = available
-	_lag_target = clampf(
-		-relative_head_velocity_x * lag_scale,
-		-max_lag,
-		max_lag
-	)
+	_head_velocity = head_velocity
+	_head_acceleration = head_acceleration
 
 	match action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			_action_bend = -8.0
+			_action_bend_target = -18.0
+			_stretch_target = 0.035
 		CombatantStateScript.ActionState.WINDUP:
-			_action_bend = -11.0
+			_action_bend_target = -26.0
+			_stretch_target = 0.05
 		CombatantStateScript.ActionState.STRIKE:
-			_action_bend = -20.0
+			_action_bend_target = 42.0
+			_stretch_target = 0.14
 		CombatantStateScript.ActionState.PARRY:
-			_action_bend = 9.0
+			_action_bend_target = -10.0
+			_stretch_target = 0.015
 		CombatantStateScript.ActionState.DODGE:
-			_action_bend = 13.0
+			_action_bend_target = -24.0
+			_stretch_target = -0.02
 		CombatantStateScript.ActionState.STAGGER:
-			_action_bend = 17.0
+			_action_bend_target = -34.0
+			_stretch_target = -0.04
 		_:
-			_action_bend = 0.0
+			_action_bend_target = 0.0
+			_stretch_target = 0.0
 
 
 func kick(power: float = 1.0) -> void:
-	_impulse = clampf(_impulse + power, 0.0, 1.0)
+	if _joint_velocities.size() <= 1:
+		return
+	for index in range(1, _joint_velocities.size()):
+		var t := float(index) / float(_joint_velocities.size() - 1)
+		_joint_velocities[index] += 95.0 * power * pow(t, 1.8)
 
 
 func _process(delta: float) -> void:
-	if delta <= 0.0 or not _available:
+	if delta <= 0.0 or not _available or _texture == null:
 		return
 
-	_phase += delta
-	_lag = lerpf(_lag, _lag_target, minf(delta * lag_response, 1.0))
-	_impulse = move_toward(_impulse, 0.0, delta * 2.8)
+	_simulate_secondary_motion(delta)
 	_refresh_mesh()
+
+
+func _simulate_secondary_motion(delta: float) -> void:
+	_resize_joint_state()
+	if _joint_offsets.size() <= 1:
+		return
+
+	_stretch = lerpf(
+		_stretch,
+		_stretch_target + clampf(-_head_acceleration.y * 0.0025, -0.035, 0.035),
+		minf(delta * stretch_response, 1.0)
+	)
+
+	var inertial_target := (
+		-_head_velocity.x * velocity_influence
+		-_head_acceleration.x * acceleration_influence
+		+ _action_bend_target
+	)
+	inertial_target = clampf(inertial_target, -max_bend, max_bend)
+
+	_joint_offsets[0] = 0.0
+	_joint_velocities[0] = 0.0
+
+	for index in range(1, _joint_offsets.size()):
+		var t := float(index) / float(_joint_offsets.size() - 1)
+		var weight := pow(t, tip_power)
+		var desired := inertial_target * weight
+
+		if index > 1:
+			desired = lerpf(
+				desired,
+				_joint_offsets[index - 1],
+				propagation * (1.0 - t * 0.35)
+			)
+
+		var spring := lerpf(root_spring, tip_spring, t)
+		var damping := lerpf(root_damping, tip_damping, t)
+		var accel := (desired - _joint_offsets[index]) * spring
+		accel -= _joint_velocities[index] * damping
+
+		_joint_velocities[index] += accel * delta
+		_joint_offsets[index] += _joint_velocities[index] * delta
+
+
+func _resize_joint_state() -> void:
+	var count := maxi(segments, 4) + 1
+	if _joint_offsets.size() == count and _joint_velocities.size() == count:
+		return
+
+	_joint_offsets.resize(count)
+	_joint_velocities.resize(count)
+	for index in range(count):
+		_joint_offsets[index] = 0.0
+		_joint_velocities[index] = 0.0
 
 
 func _refresh_dimensions() -> void:
@@ -94,21 +169,21 @@ func _refresh_mesh() -> void:
 	if _polygon == null or _texture == null:
 		return
 
+	_resize_joint_state()
 	var safe_segments := maxi(segments, 4)
 	var points := PackedVector2Array()
 	var uvs := PackedVector2Array()
-
 	var source_size := _texture.get_size()
 
 	for index in range(safe_segments + 1):
 		var t := float(index) / float(safe_segments)
-		var center := _segment_center(t)
+		var center := _segment_center(index, t)
 		points.append(center + Vector2(-_display_width * 0.5, 0.0))
 		uvs.append(Vector2(0.0, source_size.y * (1.0 - t)))
 
 	for index in range(safe_segments, -1, -1):
 		var t := float(index) / float(safe_segments)
-		var center := _segment_center(t)
+		var center := _segment_center(index, t)
 		points.append(center + Vector2(_display_width * 0.5, 0.0))
 		uvs.append(Vector2(source_size.x, source_size.y * (1.0 - t)))
 
@@ -117,11 +192,9 @@ func _refresh_mesh() -> void:
 	_polygon.texture = _texture
 
 
-func _segment_center(t: float) -> Vector2:
-	var tip_weight := pow(t, tip_power)
-	var idle_wave := sin(_phase * 2.15 + t * 3.8) * idle_amplitude
-	var secondary_wave := sin(_phase * 3.37 + t * 6.4) * secondary_amplitude
-	var impulse_wave := sin(_phase * 8.0 + t * 4.0) * (18.0 * _impulse)
-	var x := (idle_wave + secondary_wave + _lag + _action_bend + impulse_wave) * tip_weight
-	var y_wave := sin(_phase * 1.55 + t * 5.0) * 2.5 * tip_weight
-	return Vector2(x, -display_height * t + y_wave)
+func _segment_center(index: int, t: float) -> Vector2:
+	var x := 0.0
+	if index >= 0 and index < _joint_offsets.size():
+		x = _joint_offsets[index]
+	var y := -display_height * (1.0 + _stretch) * t
+	return Vector2(x, y)
