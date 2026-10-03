@@ -2,6 +2,7 @@ extends Control
 
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 const CharacterDefinitionScript := preload("res://src/domain/character_definition.gd")
+const AhogeImageRigScript := preload("res://src/ui/ahoge_image_rig.gd")
 
 var character
 var combat_state
@@ -11,17 +12,82 @@ var _head_offset := Vector2.ZERO
 var _head_velocity := Vector2.ZERO
 var _ahoge_lag: float = 0.0
 
+var _asset_root: Node2D
+var _head_sprite: Sprite2D
+var _ahoge_rig
+var _asset_mode: bool = false
+var _last_action_state: int = -1
+
 
 func configure(character_value, combat_state_value, facing_value: float) -> void:
 	character = character_value
 	combat_state = combat_state_value
 	facing = facing_value
+	if is_inside_tree():
+		_refresh_asset_mode()
 	queue_redraw()
 
 
 func _ready() -> void:
 	clip_contents = true
+	_build_asset_nodes()
+	_refresh_asset_mode()
 	set_process(true)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _asset_mode:
+		_update_asset_pose()
+
+
+func _build_asset_nodes() -> void:
+	_asset_root = Node2D.new()
+	_asset_root.name = "ImageFighterRoot"
+	_asset_root.visible = false
+	add_child(_asset_root)
+
+	_head_sprite = Sprite2D.new()
+	_head_sprite.name = "HeadSprite"
+	_head_sprite.centered = true
+	_head_sprite.z_index = 0
+	_asset_root.add_child(_head_sprite)
+
+	_ahoge_rig = AhogeImageRigScript.new()
+	_ahoge_rig.name = "AhogeImageRig"
+	_ahoge_rig.z_index = 1
+	_asset_root.add_child(_ahoge_rig)
+
+
+func _refresh_asset_mode() -> void:
+	_asset_mode = false
+	if _asset_root != null:
+		_asset_root.visible = false
+
+	if character == null or _head_sprite == null or _ahoge_rig == null:
+		queue_redraw()
+		return
+
+	var head_path := str(character.head_asset_path)
+	var ahoge_path := str(character.ahoge_asset_path)
+	if head_path.is_empty() or ahoge_path.is_empty():
+		queue_redraw()
+		return
+	if not ResourceLoader.exists(head_path) or not ResourceLoader.exists(ahoge_path):
+		queue_redraw()
+		return
+
+	var head_texture := load(head_path) as Texture2D
+	var ahoge_texture := load(ahoge_path) as Texture2D
+	if head_texture == null or ahoge_texture == null:
+		queue_redraw()
+		return
+
+	_head_sprite.texture = head_texture
+	_ahoge_rig.configure(ahoge_texture, facing)
+	_asset_root.visible = true
+	_asset_mode = true
+	_update_asset_pose()
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -49,11 +115,59 @@ func _process(delta: float) -> void:
 
 	var lag_target := clampf(-_head_velocity.x * 0.10, -34.0, 34.0)
 	_ahoge_lag = lerpf(_ahoge_lag, lag_target, minf(delta * 8.0, 1.0))
+
+	if _asset_mode:
+		_update_asset_pose()
+		_ahoge_rig.set_motion(
+			_head_velocity.x * facing,
+			combat_state.action_state,
+			combat_state.ahoge_available
+		)
+		_apply_action_impulse(combat_state.action_state)
+
 	queue_redraw()
 
 
+func _apply_action_impulse(action_state: int) -> void:
+	if action_state == _last_action_state:
+		return
+	_last_action_state = action_state
+
+	match action_state:
+		CombatantStateScript.ActionState.STRIKE:
+			_ahoge_rig.kick(1.0)
+		CombatantStateScript.ActionState.PARRY:
+			_ahoge_rig.kick(0.55)
+		CombatantStateScript.ActionState.DODGE:
+			_ahoge_rig.kick(0.45)
+		CombatantStateScript.ActionState.STAGGER:
+			_ahoge_rig.kick(0.8)
+
+
+func _update_asset_pose() -> void:
+	if not _asset_mode or _head_sprite == null or _head_sprite.texture == null:
+		return
+
+	var texture_size := _head_sprite.texture.get_size()
+	if texture_size.y <= 0.0:
+		return
+
+	var display_height := minf(410.0, maxf(330.0, size.y * 0.86))
+	var head_scale := display_height / texture_size.y
+	var head_center := Vector2(size.x * 0.5, size.y + 44.0) + _head_offset
+
+	_head_sprite.position = head_center
+	_head_sprite.scale = Vector2(head_scale * facing, head_scale)
+
+	var crown_anchor := Vector2(
+		head_center.x + facing * 10.0,
+		head_center.y - display_height * 0.5 + 34.0
+	)
+	_ahoge_rig.position = crown_anchor
+
+
 func _draw() -> void:
-	if character == null:
+	if character == null or _asset_mode:
 		return
 
 	var head_center := Vector2(size.x * 0.5, size.y + 44.0) + _head_offset
