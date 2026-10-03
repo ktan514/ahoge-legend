@@ -2,7 +2,7 @@ extends Control
 
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 const CharacterDefinitionScript := preload("res://src/domain/character_definition.gd")
-const AhogeBoneRigScript := preload("res://src/ui/ahoge_bone_rig.gd")
+const AhogePrototypeRigScript := preload("res://src/ui/ahoge_prototype_rig.gd")
 
 @export var head_clip_horizontal_bleed: float = 180.0
 
@@ -16,6 +16,8 @@ var _head_acceleration := Vector2.ZERO
 var _ahoge_lag: float = 0.0
 var _breath_phase: float = 0.0
 var _head_rotation: float = 0.0
+var _visual_action_state: int = -1
+var _visual_action_age: float = 0.0
 
 var _asset_root: Control
 var _head_clip: Control
@@ -76,8 +78,8 @@ func _build_asset_nodes() -> void:
 	_head_sprite.z_index = 0
 	_head_layer.add_child(_head_sprite)
 
-	_ahoge_rig = AhogeBoneRigScript.new()
-	_ahoge_rig.name = "AhogeBoneRig"
+	_ahoge_rig = AhogePrototypeRigScript.new()
+	_ahoge_rig.name = "AhogePrototypeRig"
 	_ahoge_rig.z_index = 5
 	_asset_root.add_child(_ahoge_rig)
 
@@ -138,65 +140,30 @@ func _process(delta: float) -> void:
 		return
 
 	_breath_phase += delta
+	if combat_state.action_state != _visual_action_state:
+		_visual_action_state = combat_state.action_state
+		_visual_action_age = 0.0
+	else:
+		_visual_action_age += delta
 
-	var action_target := Vector2.ZERO
-	var rotation_target := 0.0
-	match combat_state.action_state:
-		CombatantStateScript.ActionState.CHARGING:
-			action_target.x = -facing * 28.0
-			rotation_target = -2.5 * facing
-		CombatantStateScript.ActionState.WINDUP:
-			action_target.x = -facing * 36.0
-			rotation_target = -3.5 * facing
-		CombatantStateScript.ActionState.STRIKE:
-			action_target.x = facing * 18.0
-			rotation_target = 4.0 * facing
-		CombatantStateScript.ActionState.PARRY:
-			action_target.y = -22.0
-			rotation_target = -2.0 * facing
-		CombatantStateScript.ActionState.DODGE:
-			action_target = Vector2(-facing * 18.0, 24.0)
-			rotation_target = 2.5 * facing
-		CombatantStateScript.ActionState.COOLDOWN:
-			action_target.x = facing * 12.0
-			rotation_target = 1.5 * facing
-		CombatantStateScript.ActionState.STAGGER:
-			action_target.x = -facing * 16.0
-			rotation_target = -4.0 * facing
-
-	var breath_scale := 1.0
-	if combat_state.action_state in [
-		CombatantStateScript.ActionState.CHARGING,
-		CombatantStateScript.ActionState.WINDUP,
-		CombatantStateScript.ActionState.STRIKE,
-		CombatantStateScript.ActionState.PARRY,
-		CombatantStateScript.ActionState.DODGE,
-		CombatantStateScript.ActionState.STAGGER,
-		CombatantStateScript.ActionState.ROUND_LOCKED,
-	]:
-		breath_scale = 0.0
-
-	var breath_offset := Vector2(
-		sin(_breath_phase * 1.35) * 4.0,
-		sin(_breath_phase * 0.92 + 0.45) * 4.5
-	) * breath_scale
-	var target := action_target + breath_offset
-
+	var charge_ratio := _visual_charge_ratio()
+	var action_target := _prototype_head_target(charge_ratio)
 	var previous_offset := _head_offset
 	var previous_velocity := _head_velocity
-	var head_response := 10.0
-	if combat_state.action_state == CombatantStateScript.ActionState.STRIKE:
-		head_response = 22.0
-	elif combat_state.action_state == CombatantStateScript.ActionState.CHARGING:
-		head_response = 8.0
-	_head_offset = _head_offset.lerp(target, minf(delta * head_response, 1.0))
-	_head_velocity = (_head_offset - previous_offset) / maxf(delta, 0.001)
-	_head_acceleration = (_head_velocity - previous_velocity) / maxf(delta, 0.001)
 
-	_head_rotation = lerpf(
-		_head_rotation,
-		rotation_target + sin(_breath_phase * 0.8) * 0.65,
-		minf(delta * 8.0, 1.0)
+	# 元prototypeはhead poseを直接描画し、そこから速度・加速度を算出する。
+	_head_offset = action_target
+
+	var raw_velocity := (_head_offset - previous_offset) / maxf(delta, 0.001)
+	_head_velocity = _head_velocity.lerp(raw_velocity, 0.48)
+
+	var raw_acceleration := (_head_velocity - previous_velocity) / maxf(delta, 0.001)
+	_head_acceleration = _head_acceleration.lerp(raw_acceleration, 0.34)
+
+	var charge_lean := _prototype_charge_lean(charge_ratio)
+	var cooldown_lean := _prototype_cooldown_lean(charge_ratio)
+	_head_rotation = rad_to_deg(
+		(-facing) * (charge_lean + cooldown_lean) * 0.035
 	)
 
 	var lag_target := clampf(-_head_velocity.x * 0.10, -34.0, 34.0)
@@ -208,11 +175,157 @@ func _process(delta: float) -> void:
 			Vector2(_head_velocity.x * facing, _head_velocity.y),
 			Vector2(_head_acceleration.x * facing, _head_acceleration.y),
 			combat_state.action_state,
-			combat_state.ahoge_available
+			combat_state.ahoge_available,
+			charge_ratio,
+			_phase_duration_for_state(combat_state.action_state, charge_ratio),
+			_max_charge_duration()
 		)
 		_apply_action_impulse(combat_state.action_state)
 
 	queue_redraw()
+
+
+func _prototype_head_target(charge_ratio: float) -> Vector2:
+	var breathe := (
+		sin(_breath_phase * 2.0 + (0.0 if facing > 0.0 else 0.7)) * 4.0
+		+ sin(_breath_phase * 0.8) * 1.6
+	)
+	var target := Vector2(0.0, breathe)
+
+	var charge_lean := _prototype_charge_lean(charge_ratio)
+	var cooldown_lean := _prototype_cooldown_lean(charge_ratio)
+
+	target.x += -facing * 78.0 * charge_lean
+	target.y += 10.0 * charge_lean
+
+	match combat_state.action_state:
+		CombatantStateScript.ActionState.WINDUP:
+			var duration := _phase_duration_for_state(
+				CombatantStateScript.ActionState.WINDUP,
+				charge_ratio
+			)
+			var q := _ease_out(clampf(_visual_action_age / duration, 0.0, 1.0))
+			var back_amp := 82.0 + 72.0 * charge_ratio
+			target.x += -facing * back_amp * q
+			target.y += (7.0 + 6.0 * charge_ratio) * q
+
+		CombatantStateScript.ActionState.STRIKE:
+			var duration := _phase_duration_for_state(
+				CombatantStateScript.ActionState.STRIKE,
+				charge_ratio
+			)
+			var u := clampf(_visual_action_age / duration, 0.0, 1.0)
+			var back_amp := 82.0 + 72.0 * charge_ratio
+			var forward_amp := 86.0 + 74.0 * charge_ratio
+
+			var phase1 := 1.0 - _ease_out(clampf(u / 0.20, 0.0, 1.0))
+			var phase2 := _ease_out(clampf((u - 0.12) / 0.42, 0.0, 1.0))
+			var phase3 := _ease_out(clampf((u - 0.46) / 0.40, 0.0, 1.0))
+
+			var retreat_remain := back_amp * phase1
+			var forward_drive := forward_amp * 0.62 * phase2
+			var final_push := forward_amp * 0.38 * phase3
+			var motion := -retreat_remain + forward_drive + final_push
+
+			target.x += facing * motion
+			target.y += 4.0 * phase1
+			target.y -= 8.0 * phase2
+			target.y -= 5.0 * phase3
+
+		CombatantStateScript.ActionState.PARRY:
+			var duration := _phase_duration_for_state(
+				CombatantStateScript.ActionState.PARRY,
+				charge_ratio
+			)
+			var u := clampf(_visual_action_age / duration, 0.0, 1.0)
+			var down := _ease_out(clampf(u / 0.18, 0.0, 1.0))
+			var up := _ease_out(clampf((u - 0.10) / 0.25, 0.0, 1.0))
+			var slam := _ease_out(clampf((u - 0.31) / 0.23, 0.0, 1.0))
+			var settle := _ease_out(clampf((u - 0.56) / 0.34, 0.0, 1.0))
+
+			target.y += 44.0 * down
+			target.y -= 118.0 * up
+			target.y += 48.0 * slam
+			target.y -= 18.0 * settle
+			target.x += facing * (14.0 * up - 8.0 * slam)
+
+		CombatantStateScript.ActionState.DODGE:
+			target += Vector2(-facing * 18.0, 24.0)
+
+		CombatantStateScript.ActionState.STAGGER:
+			target += Vector2(-facing * 34.0, 8.0)
+
+	target.x += -facing * 46.0 * cooldown_lean
+	target.y += 7.0 * cooldown_lean
+	return target
+
+
+func _prototype_charge_lean(charge_ratio: float) -> float:
+	if combat_state.action_state != CombatantStateScript.ActionState.CHARGING:
+		return 0.0
+	var threshold := 0.18
+	var pre := clampf(_visual_action_age / threshold, 0.0, 1.0)
+	return clampf(0.52 * pre + 0.65 * charge_ratio, 0.0, 1.15)
+
+
+func _prototype_cooldown_lean(charge_ratio: float) -> float:
+	if combat_state.action_state != CombatantStateScript.ActionState.COOLDOWN:
+		return 0.0
+	var duration := _phase_duration_for_state(
+		CombatantStateScript.ActionState.COOLDOWN,
+		charge_ratio
+	)
+	var p := clampf(_visual_action_age / duration, 0.0, 1.0)
+	return (
+		pow(1.0 - p, 0.58)
+		* (1.0 + sin(p * PI * 3.0) * 0.15 * (1.0 - p))
+	)
+
+
+func _visual_charge_ratio() -> float:
+	if combat_state.action_state == CombatantStateScript.ActionState.CHARGING:
+		var threshold := 0.18
+		var maximum := _max_charge_duration()
+		if _visual_action_age < threshold:
+			return 0.0
+		return clampf(
+			(_visual_action_age - threshold) / maxf(maximum - threshold, 0.001),
+			0.0,
+			1.0
+		)
+	return clampf(float(combat_state.attack_charge_ratio), 0.0, 1.0)
+
+
+func _phase_duration_for_state(action_state: int, charge_ratio: float) -> float:
+	var config = combat_state.config
+	if config == null:
+		return 0.20
+
+	match action_state:
+		CombatantStateScript.ActionState.WINDUP:
+			return maxf(config.attack_windup_seconds(charge_ratio), 0.001)
+		CombatantStateScript.ActionState.STRIKE:
+			return maxf(config.attack_strike_seconds(charge_ratio), 0.001)
+		CombatantStateScript.ActionState.COOLDOWN:
+			return maxf(config.attack_cooldown_seconds(charge_ratio), 0.001)
+		CombatantStateScript.ActionState.PARRY:
+			return maxf(float(config.parry_active_seconds), 0.001)
+		CombatantStateScript.ActionState.DODGE:
+			return maxf(float(config.dodge_active_seconds), 0.001)
+		CombatantStateScript.ActionState.STAGGER:
+			return maxf(float(config.stagger_seconds), 0.001)
+	return 0.20
+
+
+func _max_charge_duration() -> float:
+	if combat_state.config == null:
+		return 0.62
+	return maxf(float(combat_state.config.max_charge_seconds), 0.001)
+
+
+func _ease_out(value: float) -> float:
+	var x := clampf(value, 0.0, 1.0)
+	return 1.0 - pow(1.0 - x, 3.0)
 
 
 func _apply_action_impulse(action_state: int) -> void:
