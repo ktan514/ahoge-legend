@@ -1952,6 +1952,23 @@ CHARGING中はextension springを弱くして「頭が先、アホ毛が遅れ�
 STRIKE中はspringを強くし、transition impulseと合わせて「遅れたtipが頭を追い越す」を作る。
 
 
+
+#### 13.3.3 FighterVisual clipping
+
+Battleの画像FighterVisualは、頭部とアホ毛でclip責務を分離する。
+
+- `FighterVisual.clip_contents = false`
+- image modeのrootもclipしない
+- headだけ `HeadClipControl` の子へ入れ、`HeadClipControl.clip_contents = true`
+- ahoge rigは `HeadClipControl` の外側のsiblingとして置く
+- headはBattle area下端でcropし、顔全体を表示しない
+- ahogeはplayer側Control矩形を越えて中央・相手側へsweep可能
+- CHARGING / STRIKEの可動域をclip回避のため縮小しない
+- fallback code-draw modeは従来どおりFighterVisual自体をclipする
+
+これにより「頭部は画面下端から一部だけ見える」「アホ毛は戦闘空間を自由に振り抜く」を同時に満たす。
+
+
 #### 14.4.1 authoritative Round開始Countdown
 
 M1 Human Verificationで、Round終了後の85秒reset・1本取得・次Round開始が視覚的に分かりにくいことをblocking findingとして確認したため、Round開始をserver authoritativeなCountdown stateへ分離する。
