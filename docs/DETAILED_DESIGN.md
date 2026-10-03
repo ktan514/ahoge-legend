@@ -1943,6 +1943,7 @@ tip extensionは位置と速度を持つ1自由度ばねとして扱い、state 
 - head STRIKE target: +68px
 - head COOLDOWN follow-through: +20px
 - ahoge CHARGING target: -75px
+- CHARGING head lead delay: 約0.10秒（この間はahoge extension targetを0pxに保つ）
 - ahoge WINDUP target: -105px
 - ahoge STRIKE target: +150px
 - STRIKE transition tip impulse: +950〜1150px/s
