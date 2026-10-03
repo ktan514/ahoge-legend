@@ -13,7 +13,7 @@ const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
-const AhogeBoneRigScript := preload("res://src/ui/ahoge_bone_rig.gd")
+const AhogePrototypeRigScript := preload("res://src/ui/ahoge_prototype_rig.gd")
 const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
 
 var _failures: Array[String] = []
@@ -44,8 +44,8 @@ func _init() -> void:
 	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
 	_test_character_catalog_ui_contract()
-	_test_ahoge_bone_rig_contract()
-	_test_ahoge_bone_rig_motion_contract()
+	_test_ahoge_prototype_rig_contract()
+	_test_ahoge_prototype_rig_motion_contract()
 	_test_fighter_visual_clip_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
@@ -472,113 +472,130 @@ func _test_character_catalog_ui_contract() -> void:
 	)
 
 
-func _test_ahoge_bone_rig_contract() -> void:
+func _test_ahoge_prototype_rig_contract() -> void:
 	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
-	_expect_true(texture != null, "2D bone rig試験用アホ毛画像をloadできる")
+	_expect_true(texture != null, "prototype互換rig試験用アホ毛画像をloadできる")
 	if texture == null:
 		return
 
-	var rig = AhogeBoneRigScript.new()
+	var rig = AhogePrototypeRigScript.new()
 	rig.call("_ready")
 	rig.configure(texture, 1.0)
 
-	var skeleton = rig.find_child("AhogeSkeleton2D", true, false) as Skeleton2D
-	var skin = rig.find_child("AhogeSkin", true, false) as Polygon2D
-	_expect_true(skeleton != null, "アホ毛rigはSkeleton2Dを持つ")
-	_expect_true(skin != null, "アホ毛rigはPolygon2D skinを持つ")
-	if skeleton == null or skin == null:
+	var motion_root = rig.find_child("AhogeMotionRoot", true, false) as Node2D
+	var sprite = rig.find_child("AhogeSprite", true, false) as Sprite2D
+	var skeleton = rig.find_child("AhogeSkeleton2D", true, false)
+	var polygon = rig.find_child("AhogeSkin", true, false)
+
+	_expect_true(motion_root != null, "prototype互換rigはwhole-image MotionRootを持つ")
+	_expect_true(sprite != null, "prototype互換rigは元PNGを直接描画するSprite2Dを持つ")
+	_expect_true(skeleton == null, "prototype互換LONG主描画はSkeleton2Dを使用しない")
+	_expect_true(polygon == null, "prototype互換LONG主描画はPolygon2D再変形を使用しない")
+	if motion_root == null or sprite == null:
 		rig.free()
 		return
 
-	_expect_equal(rig.debug_bone_count(), int(rig.bone_count), "設定したBone数をSkeleton2D階層へ生成する")
-	_expect_equal(skin.get_bone_count(), int(rig.bone_count), "Polygon2Dへ全Bone weightを登録する")
-	_expect_true(not skin.skeleton.is_empty(), "Polygon2DはSkeleton2Dへのpathを持つ")
-	_expect_true(skin.polygon.size() >= 18, "skinは曲げ用に十分なvertexを持つ")
-	_expect_true(skin.polygons.size() >= 16, "skin topologyをrest poseで明示固定する")
-	_expect_equal(skin.uv.size(), skin.polygon.size(), "skinの各vertexへUVを持つ")
+	_expect_true(sprite.texture == texture, "アホ毛はsource PNGそのものをtextureとして維持する")
 
-	var vertex_count: int = skin.polygon.size()
-	if vertex_count > 0:
-		for vertex_index in [0, int(vertex_count / 2), vertex_count - 1]:
-			var weight_sum := 0.0
-			for bone_index in range(skin.get_bone_count()):
-				var weights: PackedFloat32Array = skin.get_bone_weights(bone_index)
-				_expect_equal(weights.size(), vertex_count, "各Bone weight配列はskin vertex数と一致する")
-				if weights.size() == vertex_count:
-					weight_sum += weights[vertex_index]
-			_expect_true(absf(weight_sum - 1.0) <= 0.01, "代表vertexのBone weight合計は1.0")
+	var source_size := texture.get_size()
+	var expected_anchor := Vector2(
+		source_size.x * 180.0 / 1254.0,
+		source_size.y * 1175.0 / 1254.0
+	)
+	_expect_true(
+		rig.debug_sprite_anchor().distance_to(expected_anchor) <= 1.0,
+		"prototype sourceのroot anchor 180,1175をtexture比率で維持する"
+	)
+
+	_expect_true(absf(float(rig.debug_angle())) <= 0.001, "初期whole angleは0")
+	_expect_true(absf(float(rig.debug_reach()) - 1.0) <= 0.001, "初期whole reachは1.0")
 
 	rig.free()
 
 
-func _test_ahoge_bone_rig_motion_contract() -> void:
+func _test_ahoge_prototype_rig_motion_contract() -> void:
 	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
-	_expect_true(texture != null, "2D bone motion試験用アホ毛画像をloadできる")
+	_expect_true(texture != null, "prototype互換motion試験用アホ毛画像をloadできる")
 	if texture == null:
 		return
 
-	var rig = AhogeBoneRigScript.new()
+	var rig = AhogePrototypeRigScript.new()
 	rig.call("_ready")
 	rig.configure(texture, 1.0)
 
-	var skeleton = rig.find_child("AhogeSkeleton2D", true, false) as Skeleton2D
-	var skin = rig.find_child("AhogeSkin", true, false) as Polygon2D
-	_expect_true(skeleton != null and skin != null, "motion試験でSkeleton2D / skinを取得できる")
-	if skeleton == null or skin == null:
-		rig.free()
-		return
-
-	var idle_tip: Vector2 = rig.debug_tip_local_position()
-	_expect_true(idle_tip.y < -150.0, "IDLEではアホ毛tipが頭頂部より上にある")
-	_expect_true(absf(float(rig.debug_total_length_scale()) - 1.0) <= 0.01, "IDLE length scaleは1.0")
-
+	# prototype同様、CHARGING中は後方へ張るだけでreachは1.0を維持する。
 	rig.set_motion(
-		Vector2(-36.0, 0.0),
-		Vector2(-140.0, 0.0),
+		Vector2.ZERO,
+		Vector2.ZERO,
 		CombatantStateScript.ActionState.CHARGING,
-		true
+		true,
+		0.5,
+		0.60,
+		0.60
 	)
-	for _index in range(12):
+	for _index in range(18):
 		rig.call("_process", 1.0 / 60.0)
-	var charge_tip: Vector2 = rig.debug_tip_local_position()
-	_expect_true(charge_tip.x < idle_tip.x + 30.0, "CHARGINGではまだ前方へ大きく飛び出さない")
 
+	_expect_true(rig.debug_angle_target() < -0.45, "CHARGINGは後方angle targetを作る")
+	_expect_true(
+		absf(float(rig.debug_reach_target()) - 1.0) <= 0.001,
+		"CHARGINGではprototype通りサイズを拡大しない"
+	)
+
+	# 通常STRIKE: 前半lag→後半releaseでwhole imageが前へ振り抜ける。
 	rig.set_motion(
-		Vector2(58.0, 0.0),
-		Vector2(220.0, 0.0),
+		Vector2.ZERO,
+		Vector2.ZERO,
 		CombatantStateScript.ActionState.STRIKE,
-		true
+		true,
+		0.0,
+		0.20,
+		0.60
 	)
-	for _index in range(24):
+	for _index in range(13):
 		rig.call("_process", 1.0 / 60.0)
 
-	var strike_tip: Vector2 = rig.debug_tip_local_position()
-	var strike_scale := float(rig.debug_total_length_scale())
-	_expect_true(strike_tip.x >= 260.0, "STRIKEでBone chainのtipが相手方向へ大きく進む")
-	_expect_true(strike_scale >= 1.8, "STRIKEの射程は複数Bone間の分散伸長で確保する")
-
-	var max_bone_rotation := float(rig.debug_max_bone_rotation())
-	_expect_true(max_bone_rotation < deg_to_rad(70.0), "prototype key poseでも1 Boneを70度以上へ折らない")
+	_expect_true(rig.debug_angle_target() >= 0.95, "通常STRIKE終盤angle targetは約1.04rad")
 	_expect_true(
-		int(rig.debug_rotated_bone_count(5.0)) >= 4,
-		"STRIKEの大arcは複数Boneへ回転を分散して作る"
+		absf(float(rig.debug_reach_target()) - 2.05) <= 0.03,
+		"通常STRIKE終盤reach targetはprototypeの2.05"
 	)
+	_expect_true(rig.debug_reach() > 1.20, "whole reachはばね遅延を伴って実際に伸びる")
 	_expect_true(
-		strike_tip.y < -20.0,
-		"prototype同様、最大伸長時もtipは頭頂部より上のhook位置を維持する"
+		rig.debug_vertical_squash() < 1.0 and rig.debug_vertical_squash() >= 0.82,
+		"reach増加時はprototype通り縦を最大18%だけ圧縮する"
 	)
 
-	rig.set_motion(
+	var motion_root = rig.find_child("AhogeMotionRoot", true, false) as Node2D
+	if motion_root != null:
+		_expect_true(
+			absf(motion_root.scale.x) > absf(motion_root.scale.y),
+			"STRIKEでは元画像全体をlocal X方向へ伸ばす"
+		)
+
+	# 最大チャージSTRIKEはsource式 2.10 + 0.42 * charge。
+	var charged = AhogePrototypeRigScript.new()
+	charged.call("_ready")
+	charged.configure(texture, 1.0)
+	charged.set_motion(
 		Vector2.ZERO,
 		Vector2.ZERO,
-		CombatantStateScript.ActionState.COOLDOWN,
-		true
+		CombatantStateScript.ActionState.STRIKE,
+		true,
+		1.0,
+		0.13,
+		0.60
 	)
-	for _index in range(120):
-		rig.call("_process", 1.0 / 60.0)
+	for _index in range(9):
+		charged.call("_process", 1.0 / 60.0)
+
 	_expect_true(
-		absf(float(rig.debug_total_length_scale()) - 1.0) <= 0.08,
-		"COOLDOWN後はBone間距離がrest lengthへ戻る"
+		absf(float(charged.debug_reach_target()) - 2.52) <= 0.03,
+		"最大チャージSTRIKE reach targetはprototype式で2.52"
+	)
+	_expect_true(
+		absf(float(charged.debug_angle_target()) - 1.24) <= 0.05,
+		"最大チャージSTRIKE angle targetはprototype式で約1.24rad"
 	)
 
 	rig.set_motion(
@@ -587,8 +604,9 @@ func _test_ahoge_bone_rig_motion_contract() -> void:
 		CombatantStateScript.ActionState.IDLE,
 		false
 	)
-	_expect_false(rig.visible, "ahoge unavailable時は2D bone rigを非表示にする")
+	_expect_false(rig.visible, "ahoge unavailable時はprototype互換rigを非表示にする")
 
+	charged.free()
 	rig.free()
 
 
@@ -608,7 +626,7 @@ func _test_fighter_visual_clip_contract() -> void:
 
 	var head_clip = fighter.find_child("HeadClipControl", true, false) as Control
 	var head_layer = fighter.find_child("HeadLayer", true, false) as Node2D
-	var ahoge_rig = fighter.find_child("AhogeBoneRig", true, false)
+	var ahoge_rig = fighter.find_child("AhogePrototypeRig", true, false)
 	_expect_true(head_clip != null, "画像FighterVisualは頭部専用clip領域を持つ")
 	if head_clip != null:
 		_expect_true(head_clip.clip_contents, "頭部専用clip領域は下端cropを有効にする")
@@ -623,7 +641,7 @@ func _test_fighter_visual_clip_contract() -> void:
 			"左右clip bleed分だけ頭部座標系を補正する"
 		)
 
-	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogeBoneRigを持つ")
+	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogePrototypeRigを持つ")
 	if head_clip != null and ahoge_rig != null:
 		_expect_true(
 			not head_clip.is_ancestor_of(ahoge_rig),
