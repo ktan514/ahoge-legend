@@ -493,14 +493,14 @@ func _test_battle_fighter_3d_contract() -> void:
 	_expect_true(hair_mesh.mesh is SphereMesh, "3D prototype髪はSphereMeshで成立する")
 	_expect_true(ahoge_mesh.mesh is ArrayMesh, "3Dアホ毛は連続tube ArrayMeshで生成する")
 
-	var idle_aabb := ahoge_mesh.mesh.get_aabb()
+	var idle_aabb: AABB = ahoge_mesh.mesh.get_aabb()
 	_expect_true(idle_aabb.size.y >= 2.0, "LONGの3Dアホ毛は待機時に十分な長さを持つ")
 	_expect_true(idle_aabb.size.z > 0.05, "3Dアホ毛は2D平面ではなく奥行きのあるtubeを持つ")
 
 	state.action_state = CombatantStateScript.ActionState.STRIKE
 	for _index in range(24):
 		fighter.call("_process", 1.0 / 60.0)
-	var strike_aabb := ahoge_mesh.mesh.get_aabb()
+	var strike_aabb: AABB = ahoge_mesh.mesh.get_aabb()
 	_expect_true(
 		strike_aabb.size.x >= idle_aabb.size.x + 3.0,
 		"STRIKEでは3Dアホ毛が前方へ大きく伸びる"
