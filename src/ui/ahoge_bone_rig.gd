@@ -10,18 +10,18 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var uv_padding: int = 2
 @export var min_half_width: float = 1.5
 
-@export var root_spring: float = 42.0
-@export var tip_spring: float = 18.0
+@export var root_spring: float = 56.0
+@export var tip_spring: float = 30.0
 @export var root_damping: float = 10.0
 @export var tip_damping: float = 5.5
 @export var idle_sway_degrees: float = 2.4
-@export var strike_total_turn_degrees: float = 92.0
+@export var strike_total_turn_degrees: float = 108.0
 @export var charge_total_turn_degrees: float = -34.0
 @export var windup_total_turn_degrees: float = -58.0
 @export var strike_length_scale: float = 2.25
 @export var stretch_spring: float = 78.0
 @export var stretch_damping: float = 13.0
-@export var strike_propagation_seconds: float = 0.13
+@export var strike_propagation_seconds: float = 0.09
 
 var _texture: Texture2D
 var _polygon: Polygon2D
