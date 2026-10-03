@@ -11,7 +11,6 @@ const RANKED_MATCHING_SCENE := preload("res://scenes/screens/ranked_matching/Ran
 const PRE_BATTLE_SCENE := preload("res://scenes/overlays/PreBattleDialogue.tscn")
 const ONLINE_BATTLE_SCENE := preload("res://scenes/screens/battle/OnlineBattle.tscn")
 const BATTLE_SCENE := preload("res://scenes/screens/battle/Battle.tscn")
-const M1_BATTLE_SCENE := preload("res://scenes/screens/battle/BattleM1Debug.tscn")
 const MATCH_RESULT_SCENE := preload("res://scenes/screens/result/MatchResult.tscn")
 const RANKING_SCENE := preload("res://scenes/screens/ranking/Ranking.tscn")
 const FRIEND_MATCH_MENU_SCENE := preload("res://scenes/screens/friend_match/FriendMatchMenu.tscn")
@@ -32,7 +31,6 @@ var _friend_last_role: String = ""
 var _friend_character_id: String = "LONG_TEST"
 var _friend_join_in_progress: bool = false
 var _friend_refresh_in_progress: bool = false
-var _m1_direct_mode: bool = false
 
 
 func _ready() -> void:
@@ -42,11 +40,6 @@ func _ready() -> void:
 	_settings_store = SettingsStoreScript.new(settings_path)
 	_settings_store.load_and_apply()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_m1_direct_mode = OS.get_cmdline_user_args().has("--m1-battle")
-	if _m1_direct_mode:
-		_show_m1_authoritative_battle()
-		return
-
 	_show_loading("CHECKING ONLINE STATE...")
 	call_deferred("_initialize_online_state")
 
@@ -916,10 +909,6 @@ func _show_local_battle(player_one_id: String, player_two_id: String) -> void:
 	screen.connect("exit_requested", Callable(self, "_show_top_menu"))
 
 
-func _show_m1_authoritative_battle() -> void:
-	var screen = _replace_screen(M1_BATTLE_SCENE)
-	screen.connect("exit_requested", Callable(self, "_on_m1_exit_requested"))
-
 
 func _show_local_match_result(summary: Dictionary) -> void:
 	var screen = MATCH_RESULT_SCENE.instantiate()
@@ -966,12 +955,6 @@ func _replace_screen_instance(instance: Control) -> void:
 	_current_screen = instance
 	add_child(_current_screen)
 
-
-func _on_m1_exit_requested() -> void:
-	if _m1_direct_mode:
-		get_tree().quit()
-	else:
-		_show_top_menu()
 
 
 func _on_exit_requested() -> void:
