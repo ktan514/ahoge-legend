@@ -1498,12 +1498,12 @@ assetが存在しないcharacterは従来のcode-draw FighterVisualへfallback�
 local Xはcharacterの向きに依存しないforward軸とする。
 `AhogeImageRig.scale.x = facing` により、左右characterで自動反転する。
 
-初期visual値:
+Human Verification反映後の基準visual値:
 
 - IDLE: action extension 0px
-- CHARGING: tipを後方へ約80px
-- WINDUP: tipを後方へ約105px
-- STRIKE: tipを前方へ約135px
+- CHARGING: tipを後方へ約90px
+- WINDUP: tipを後方へ約130px
+- STRIKE: tipを前方へ約520px
 - COOLDOWN: 0pxへばね復帰
 - PARRY: 後方へ約20px
 - DODGE: 後方へ約28px
@@ -1511,9 +1511,15 @@ local Xはcharacterの向きに依存しないforward軸とする。
 
 rootは0px固定とし、tipへ向かうほどextension比率を増やす。
 extensionはpolygon全体の平行移動ではなく、rootからtipへ連続的に増加させる。
+透明余白を含むprototype画像でも実際の毛先が追従するよう、extension weightは画像上端だけへ集中させず、上側segment全体へ滑らかに立ち上げる。
 
-CHARGING / WINDUPでは縦方向も5〜10%程度伸ばし、溜め感を出す。
-STRIKEでは10〜16%程度伸ばし、前方への振り抜きを強調する。
+CHARGING / WINDUPでは縦方向をわずかに伸ばして溜め感を出す。
+STRIKEでは横方向のextensionを主成分とし、同時に縦方向の高さを通常時のおよそ30〜40%へ圧縮して、縦長の元形状から「前方へ長く伸び、まっすぐに近づく」形へ連続変形させる。
+1280x720の基準Battle layoutでは、LONG型STRIKEの見た目上の毛先が相手頭部側の接触領域まで到達できることをHuman Verification checkpointとする。
+
+頭部前進は射程を稼ぐ手段にしない。
+STRIKE時の頭部前進は約34pxを基準とし、頭部は基本位置周辺の小さな振りに留める。
+頭部画像は下端cropを維持する一方、左右方向には少なくとも180pxのclip bleedを確保し、前後モーション時にFighterVisualの左右境界で見切れないようにする。
 
 HeadMotion由来の慣性bendとaction extensionは加算する。
 そのため攻撃時は
