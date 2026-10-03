@@ -497,7 +497,7 @@ func _test_ahoge_bone_rig_contract() -> void:
 	_expect_true(skin.polygons.size() >= 16, "skin topologyをrest poseで明示固定する")
 	_expect_equal(skin.uv.size(), skin.polygon.size(), "skinの各vertexへUVを持つ")
 
-	var vertex_count := skin.polygon.size()
+	var vertex_count: int = skin.polygon.size()
 	if vertex_count > 0:
 		for vertex_index in [0, int(vertex_count / 2), vertex_count - 1]:
 			var weight_sum := 0.0
