@@ -23,6 +23,7 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var windup_back_extension: float = 105.0
 @export var strike_forward_extension: float = 150.0
 @export var strike_impulse: float = 1050.0
+@export var charge_follow_delay: float = 0.10
 @export var parry_back_extension: float = 20.0
 @export var dodge_back_extension: float = 28.0
 @export var stagger_back_extension: float = 38.0
@@ -40,6 +41,7 @@ var _action_extension_target: float = 0.0
 var _action_extension: float = 0.0
 var _action_extension_velocity: float = 0.0
 var _action_state: int = CombatantStateScript.ActionState.IDLE
+var _action_age: float = 0.0
 var _stretch_target: float = 0.0
 var _stretch: float = 0.0
 
@@ -79,6 +81,7 @@ func set_motion(
 	_head_acceleration = head_acceleration
 
 	if action_state != _action_state:
+		_action_age = 0.0
 		_on_action_state_changed(action_state)
 	_action_state = action_state
 
@@ -138,6 +141,7 @@ func _process(delta: float) -> void:
 	if delta <= 0.0 or not _available or _texture == null:
 		return
 
+	_action_age += delta
 	_simulate_secondary_motion(delta)
 	_refresh_mesh()
 
@@ -153,16 +157,20 @@ func _simulate_secondary_motion(delta: float) -> void:
 		minf(delta * stretch_response, 1.0)
 	)
 	var extension_spring := extension_spring_idle
+	var effective_extension_target := _action_extension_target
 	match _action_state:
 		CombatantStateScript.ActionState.CHARGING:
 			extension_spring = extension_spring_charge
+			if _action_age < charge_follow_delay:
+				# 6コマ②: 頭だけを先に後退させ、アホ毛は元位置付近へ残す。
+				effective_extension_target = 0.0
 		CombatantStateScript.ActionState.WINDUP:
 			extension_spring = extension_spring_windup
 		CombatantStateScript.ActionState.STRIKE:
 			extension_spring = extension_spring_strike
 
 	var extension_accel := (
-		(_action_extension_target - _action_extension) * extension_spring
+		(effective_extension_target - _action_extension) * extension_spring
 		- _action_extension_velocity * extension_damping
 	)
 	_action_extension_velocity += extension_accel * delta
