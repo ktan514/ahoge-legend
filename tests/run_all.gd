@@ -450,6 +450,21 @@ func _test_character_catalog_ui_contract() -> void:
 		str(short_character.feature_text).contains("投げ"),
 		"SHORT_TEST特徴文はTHROW型の戦い方を説明する"
 	)
+	_expect_equal(
+		str(long_character.head_asset_path),
+		"res://assets/characters/prototype/pink_profile/head.png",
+		"LONG_TESTはprototype頭部asset pathを固定で持つ"
+	)
+	_expect_equal(
+		str(long_character.ahoge_asset_path),
+		"res://assets/characters/prototype/pink_profile/ahoge.png",
+		"LONG_TESTはprototypeアホ毛asset pathを固定で持つ"
+	)
+	_expect_true(
+		str(short_character.head_asset_path).is_empty()
+			and str(short_character.ahoge_asset_path).is_empty(),
+		"SHORT_TESTは未素材のため従来fallbackを維持する"
+	)
 
 
 func _test_combat_input_protocol() -> void:
