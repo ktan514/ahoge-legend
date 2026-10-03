@@ -1863,58 +1863,22 @@ Contact到達時点ではまだPARRY / DODGE成功結果やHitを確定しない
 通信遅延を考慮したContactEventの時刻補正と100ms上限の具体的な補正方式は後続Issueで実装する。
 
 
-### 14.4 M1 Battle Core用authoritative実画面接続
+### 14.4 M1 Battle Core検証導線の扱い
 
-工程2完了直後のM1 #53では、工程4のGameFlow完成を待たず、UI-10 Battleへ直接入るデバッグ導線を用意する。
+工程2のM1 #53では、GameFlow完成前の一時的な検証手段としてBattle直行構成を使用した。
+この構成は工程4以降の製品ランタイム仕様ではなく、M1完了後は残置しない。
 
-M1用のデバッグ構成は次とする。
+現行仕様:
 
-```text
-Godot実ウィンドウ
-├─ P1: OnlineSession
-│   ├─ Device Authentication
-│   ├─ Realtime Socket
-│   └─ LONG_TEST / マウス操作
-└─ P2: M1デバッグ用Nakama client/socket
-    ├─ 実行ごとに別Device ID
-    ├─ Realtime Socket
-    └─ SHORT_TEST / Q・E操作
+- 起動引数 `--m1-battle` は提供しない
+- `BattleM1Debug` のような専用Battle Sceneを製品ランタイムへ持たない
+- 1つのGodot process内で検証用P1/P2を自動生成する導線を持たない
+- BattleのHuman VerificationはUI-01から通常のGameFlowを通して実施する
+- Battleだけが表示され、接続待ちや入力lockのため操作不能になる特殊起動状態を作らない
+- authoritative Battleの自動検証は画面直行機能ではなく、既存protocol / combat / GameFlow smokeで担保する
 
-P1 + P2
-→ 同一Ranked Matchmaker
-→ 同一authoritative match
-→ server確定event
-→ UI-10 HUD / FighterVisual
-```
-
-M1では1つのGodot process内に2つのNakama clientを保持してよい。これは操作・描画を1画面で早期確認するためのデバッグ構成であり、本番Ranked GameFlowで1processに2playerを保持する仕様ではない。
-
-操作:
-
-- P1 左クリック押下: `ATTACK_PRESS`
-- P1 左クリック解放: `ATTACK_RELEASE`
-- P1 右クリック: `DEFEND`
-- P2 Q押下: `ATTACK_PRESS`
-- P2 Q解放: `ATTACK_RELEASE`
-- P2 E: `DEFEND`
-
-M1のBattle表示はローカル `MatchCoordinator / CombatResolver` から勝敗を再計算しない。次のauthoritative eventを表示の正本として使用する。
-
-- `COMBAT_STATE_CHANGED`: Attack / Charge / Parry / Dodge / Stagger / ROUND_LOCKED
-- `DEFENSE_RESOLVED`: PARRY / DODGE / JUST_PARRY / JUST_DODGE
-- `ATTACK_CLASH`: CLASH
-- `HIT_CONFIRMED`: Hit演出
-- `ROUND_HIT_COUNT_CHANGED`: Hit数
-- `ROUND_TIMER_CHANGED`: 85秒timer
-- `ROUND_OVERTIME_STARTED`: OVERTIME
-- `ROUND_STARTED`: Round番号
-- `BO3_SCORE_CHANGED`: 取得Round数
-- `MATCH_RESULT`: Match終了・最終score
-- `ahoge_available`: SHORT detach / regrow表示
-
-見た目の頭部・アホ毛二次動作は引き続きGodot client側で行い、serverの戦闘判定へ逆流させない。
-
-M1デバッグ起動は通常GameFlowと分離し、起動引数 `--m1-battle` からUI-10へ直接入れる。M1用の内部2client構成、固定テストキャラクター、操作キーは検証専用であり、本番仕様へ昇格させない。
+M1で確立したserver authoritative event契約、Round Countdown、HUD表示契約は現行仕様として維持する。
+撤去対象は**M1専用の起動・Scene・内部2client構成だけ**であり、戦闘ルールやauthoritative判定自体は変更しない。
 
 
 #### 13.3.2 Human motion storyboard
