@@ -1539,40 +1539,71 @@ Combat Action
 
 #### 13.3.3 LONG strike motion
 
-LONG型のvisual checkpoint:
+Human reference動画のprototype挙動をLONG型のvisual正本とする。
 
-1. IDLE
-   - 頭は基本位置
-   - アホ毛はBone chainの小さい揺れ
-2. CHARGING
-   - 頭が先に後退
-   - Bone chainは慣性で一瞬rest位置へ残る
-3. WINDUP
-   - root側から順に後方へ曲がる
-4. STRIKE開始
-   - 頭が前へ振られる
-   - tip側Boneは一瞬遅れる
-5. STRIKE展開
-   - Bone0→Bone6へ回転が伝播
-   - 各Bone間距離が段階的に伸びる
-6. CONTACT visual
-   - 毛先が相手頭部側へ到達
-   - 中間部の太さ・画像連続性を維持する
-7. COOLDOWN
-   - overshoot後にrest poseへ戻る
+観察した特徴:
+- IDLEではC字状の元シルエットを維持する
+- 攻撃開始時に頭部そのものは大きく前進しない
+- アホ毛全体が根元を支点に前方へ倒れ込む
+- 中央部は大きな弧を作り、完全な直線にはしない
+- 毛先側は最後まで湾曲を残し、CONTACT付近で下向きへhookする
+- 根元から毛先までの太さ・texture連続性を維持する
+- 最大伸長状態を短時間保持した後、素早くC字rest poseへ戻る
+- 大きな動きは物理だけに任せず、制御されたkey poseを正本とし、慣性・ばねはその周囲の二次動作として加える
 
-初期Bone間stretchはSTRIKE時に全長約2.1〜2.3倍まで許可し、1区間だけを極端に引き延ばさない。
+7 Bone prototypeでは、STRIKE最大姿勢のrelative rotation目安を次とする。
+
+```text
+Bone0  +58°  rootを前方へ倒す
+Bone1   +8°
+Bone2  -10°
+Bone3  -12°  中央部を広いarcへする
+Bone4   -2°
+Bone5  +18°
+Bone6  +32°  tip hookを作る
+```
+
+これは各Boneの**相対角度**であり、全Boneへ同一角度を配らない。
+左右反転はFighterVisualのfacing transformで行い、pose table自体は共通とする。
+
+visual timing初期値:
+
+```text
+WINDUP
+  -> 後方へ小さく溜める
+
+STRIKE 0.00〜約0.06秒
+  -> key poseへ高速展開
+
+STRIKE 約0.06秒以降
+  -> 最大arc / reachを維持
+
+COOLDOWN開始〜約0.16秒
+  -> key poseからrest C字へ高速復帰
+
+以降
+  -> secondary springのみで収束
+```
+
+射程補正はuniformな画像scaleではなくBone間距離へ分散する。
+root側の伸長は小さく、tip側ほど伸長を大きくし、最大時の全長はrestのおよそ2倍前後を初期基準とする。
+1区間だけを極端に伸ばさない。
+
+HeadMotion初期基準:
+- CHARGING: 後方 約28px
+- WINDUP: 後方 約36px
+- STRIKE: 前方 約18px
+
+頭部移動はattack reachの主成分にしない。
 
 Human Verification:
-- 画像が裂けない
-- meshが消えない
-- 毛先まで連続した1本の毛として見える
+- prototype動画と同様にC字restから大きな前方arcへ変形する
+- 中央部が直線棒にならない
+- tipが最後にhookして相手側へ到達する
+- 画像が裂けない / 消えない
 - 根元が頭部から外れない
-- STRIKEで相手側まで届く
-- STRIKE中も中間部が極端に細くならない
-- COOLDOWNで自然にrest形状へ戻る
-
-3D procedural prototypeは本Battle表示から撤去する。
+- 最大姿勢から0.2秒程度で自然に戻り始める
+- 太さ・texture continuityを維持する
 
 ### 13.3 ロング型
 
