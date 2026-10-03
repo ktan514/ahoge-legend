@@ -392,7 +392,7 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
 
       if (isActiveRoundPhase(state)) {
         // active Round中は15秒deadlineを開始しない。
-        // Roundそのものを進行し、同Round終了までいつでも復帰可能にする。
+        // 片側切断なら同Round終了まで復帰可能とする。
         delete state.reconnectDeadlineTickByUser[presence.userId];
         broadcastPlayerConnectionChanged(
           dispatcher,
@@ -424,6 +424,17 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
     }
   });
 
+  // Battle開始後に両participantが同時に不在になった場合は、
+  // 勝敗・Ratingを作らず無効試合として即終了する。
+  if (
+    !state.matchFinished &&
+    hasBattleStarted(state) &&
+    participantUserIds(state).length === 2 &&
+    Object.keys(state.presences).length === 0
+  ) {
+    state.abandoned = true;
+  }
+
   logger.info("ahoge_ranked player left. size=%d", Object.keys(state.presences).length);
   return {state: state};
 };
@@ -441,6 +452,17 @@ function allExpectedPlayersConnected(state: AhogeRankedMatchState): boolean {
     return !!state.presences[userId];
   });
 }
+
+function hasBattleStarted(state: AhogeRankedMatchState): boolean {
+  return (
+    state.roundCountdownStartTick >= 0 ||
+    state.roundTimerStartTick >= 0 ||
+    state.roundFinished ||
+    state.roundResetPending ||
+    state.roundNumber > 1
+  );
+}
+
 
 function isActiveRoundPhase(state: AhogeRankedMatchState): boolean {
   return (
@@ -1800,12 +1822,11 @@ function resolveRoundBoundaryTimeout(
 
   const participantIds = participantUserIds(state);
 
-  // Rankedで両participantが不在のまま両deadlineを超過した場合は、
-  // winnerを捏造せずABANDONEDとしてmatchを終了する。
+  // leave eventを取りこぼした場合でも、Battle開始後に両participantが
+  // 不在ならdeadlineを待たず無効試合へ収束させる。
   if (
-    state.matchMode === "ranked" &&
+    hasBattleStarted(state) &&
     Object.keys(state.presences).length === 0 &&
-    expiredUserIds.length === participantIds.length &&
     participantIds.length === 2
   ) {
     state.abandoned = true;
@@ -1868,13 +1889,28 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   resolveRoundBoundaryTimeout(dispatcher, state, tick);
 
   if (state.abandoned) {
+    // Friend Matchはroom側のIN_MATCH状態も終了させる。
+    // Match Resultは生成しないため、これはroom lifecycleだけのsettlement。
+    if (state.matchMode === "friend" && !state.friendRoomSettlementDone) {
+      const roomSettled = markFriendRoomMatchFinished(
+        nk,
+        state.friendRoomCode,
+        state.matchId,
+        state.friendMatchGeneration
+      );
+      if (!roomSettled) {
+        return {state: state};
+      }
+      state.friendRoomSettlementDone = true;
+    }
+
     const cleared = clearActiveOnlineMatchForUsers(
       nk,
       participantUserIds(state),
       state.matchId
     );
     if (cleared) {
-      logger.info("ahoge ranked match abandoned because all participants missed reconnect deadline.");
+      logger.info("ahoge match invalidated because all participants disconnected.");
       return null;
     }
     // Storage version conflictなどでlock削除に失敗した場合は次tickで再試行する。
