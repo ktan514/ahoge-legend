@@ -1910,6 +1910,47 @@ M1のBattle表示はローカル `MatchCoordinator / CombatResolver` から勝�
 
 M1デバッグ起動は通常GameFlowと分離し、起動引数 `--m1-battle` からUI-10へ直接入れる。M1用の内部2client構成、固定テストキャラクター、操作キーは検証専用であり、本番仕様へ昇格させない。
 
+
+#### 13.3.2 Human motion storyboard
+
+2026-10-03 Human referenceの6コマをUI-10のmotion正本とする。
+
+1. IDLE
+   - 頭は中央
+   - アホ毛は自然姿勢
+2. CHARGING開始
+   - 頭が先に後方へ移動
+   - アホ毛tipは慣性で元位置付近へ残る
+3. CHARGING追従
+   - 遅れてアホ毛が後方へ追従
+   - rootは頭頂部へ固定
+4. STRIKE開始
+   - 頭が先に前方へ急加速
+   - アホ毛tipは一瞬後方へ残る
+5. STRIKE追従
+   - アホ毛tipへ前向き初速が入り、頭へ追いつく
+6. CONTACT直前
+   - 頭は前方限界へ近づく
+   - アホ毛tipは頭を追い越して前方へ最大伸長
+   - tip側ほど大きく変形し、相手側へsweepする
+
+実装上、action extensionを単純lerpしない。
+tip extensionは位置と速度を持つ1自由度ばねとして扱い、state transition時に速度impulseを与える。
+
+初期値:
+- head CHARGING target: -52px
+- head WINDUP target: -64px
+- head STRIKE target: +68px
+- head COOLDOWN follow-through: +20px
+- ahoge CHARGING target: -75px
+- ahoge WINDUP target: -105px
+- ahoge STRIKE target: +150px
+- STRIKE transition tip impulse: +950〜1150px/s
+
+CHARGING中はextension springを弱くして「頭が先、アホ毛が遅れる」を作る。
+STRIKE中はspringを強くし、transition impulseと合わせて「遅れたtipが頭を追い越す」を作る。
+
+
 #### 14.4.1 authoritative Round開始Countdown
 
 M1 Human Verificationで、Round終了後の85秒reset・1本取得・次Round開始が視覚的に分かりにくいことをblocking findingとして確認したため、Round開始をserver authoritativeなCountdown stateへ分離する。
