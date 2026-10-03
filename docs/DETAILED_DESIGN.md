@@ -1462,9 +1462,9 @@ HeadMotionはアクションごとに頭部のローカル位置・回転を生�
 完全な物理シミュレーション結果をゲーム判定には使用しない。
 
 
-### 13.3 Image-based Head / Ahoge Prototype
+### 13.3 2D Head / Bone-rigged Ahoge Prototype
 
-UI-10 Battleで、正式character asset導入前に「頭部画像 + 別アホ毛画像」の分離表示とLive2D風secondary motionを検証する。
+UI-10 Battleのcharacter表示は、3D procedural prototypeを正式方針にせず、**2D頭部画像 + Bone rig済み2Dアホ毛**へ戻す。
 
 Prototype asset:
 
@@ -1477,118 +1477,102 @@ assets/characters/prototype/charactor_01/
 `LONG_TEST` の `CharacterDefinition` へ上記2pathを固定で紐づける。
 頭部とアホ毛を別々に選択・装備する機能は追加しない。
 
-#### 13.3.1 2D spline / ribbon mesh
+#### 13.3.1 Skeleton2D / Bone2D skin
 
-2026-10-03 Human Verificationで、PNG全体を矩形断面のまま圧縮・横伸長する方式は、大きなSTRIKE変形時にアホ毛が細い線へ潰れ、輪郭とハイライトが崩れることを確認した。この方式は廃止する。
-
-画像アホ毛は次の2段階で扱う。
-
-1. source PNGのalpha領域を縦方向にsamplingし、各segmentについて以下を取得する
-   - source center x
-   - source half width
-   - source UV left / right
-2. 実行時はsegment centerをスプライン状の中心線として計算し、各centerのtangentへ直交するnormal方向へsource half widthを展開してribbon meshを生成する
-
-概念:
+アホ毛は次のnode構造を持つ。
 
 ```text
-root ●
-     ╲
-      ●
-       ╲
-        ●
-          ╲
-           ● tip
-
-各●のcenterline tangentに対して
-左端 ← normal ─ center ─ normal → 右端
+AhogeBoneRig (Node2D)
+├─ AhogeSkeleton2D (Skeleton2D)
+│  └─ AhogeBone0 (Bone2D)
+│      └─ AhogeBone1
+│          └─ ...
+│              └─ AhogeBone6
+└─ AhogeSkin (Polygon2D)
 ```
 
-実装:
-- head: `Sprite2D`
-- ahoge: `MeshInstance2D + ArrayMesh` のtriangle ribbonとして使用する
-- 隣接する2断面ごとに2三角形を明示生成し、単一Polygonの自動triangulationへ依存しない
-- root側segmentは固定
-- source PNGのalpha断面から元の曲線・太さ・UVを抽出する
-- tip側ほどHeadMotion由来の二次変位量を大きくする
-- centerlineはHeadMotionのvelocity / accelerationとaction stateで変形する
-- mesh幅は中心線のtangentに対するnormal方向へ展開し、大変形中も厚みを維持する
-- ribbonが強く曲がって輪郭が自己交差しても、各segmentのtriangle pairは独立して描画可能であること
-- STRIKEではsource curveを段階的にstraightenしつつ、前方extensionをroot→tipへ滑らかに増加させる
-- STRIKE時の縦方向圧縮はcenterline poseだけへ適用し、画像断面幅そのものは潰さない
-- `ahoge_available=false` では画像ahogeを非表示にする
-- gameplay / Contact / Hit判定には使用しない
+初期prototypeは7 Boneを基準とする。正式characterではMotionProfileによりBone数を変更可能にする。
 
-assetが存在しないcharacterは従来のcode-draw FighterVisualへfallbackする。
-これによりasset追加前のCIと、SHORT_TEST等の未素材characterを壊さない。
+rest mesh:
+- source PNGのalpha領域を縦方向へsamplingする
+- 各sampleでleft / right silhouetteとUVを取得する
+- 隣接sample間を明示的なtriangle pairへ分割する
+- triangle topologyはrest poseで一度だけ生成し、action中に作り直さない
+- 曲がる位置には十分な内部vertexを持たせる
 
-#### 13.3.2 Charge / Strike sweep
+skin:
+- `Polygon2D.skeleton` を `AhogeSkeleton2D` へ接続する
+- 各vertexは位置に対応する前後2 Boneへ線形weightを持つ
+- root付近はBone0の影響を強くし、tipへ向かうにつれて後段Boneへweightを移す
+- action中はPolygon頂点を直接更新せず、Bone transformだけを更新する
 
-アホ毛は局所bendだけではなく、攻撃cycleで中心線と毛先位置を大きくsweepする。
+Bone motion:
+- root Boneは頭頂部anchorへ固定
+- HeadMotion velocity / accelerationを二次動作入力とする
+- 各Boneはroot側ほど高spring / damping、tip側ほど低spring / damping
+- idleは小さい位相差を持つ揺れ
+- CHARGING / WINDUPは後方へ段階的に曲げる
+- STRIKEはroot→tipへ回転を分散して前方へ振り抜く
+- extensionはBone間距離を複数区間へ分配して伸ばす
+- COOLDOWNでrest length / rest rotationへばね復帰する
+- `ahoge_available=false` ではskinを非表示にする
 
-local Xはcharacterの向きに依存しないforward軸とする。
-`AhogeImageRig.scale.x = facing` により、左右characterで自動反転する。
+この方式では、旧実装のように毎frame polygon輪郭を再生成・再triangulateしない。大変形でもmesh connectivityを固定し、裂け・消失・面反転を避ける。
 
-初期visual基準:
+#### 13.3.2 Head / Ahoge relation
 
-- IDLE: action extension 0px、source curveを保持
-- CHARGING: tipを後方へ約90px
-- WINDUP: tipを後方へ約130px
-- STRIKE: tipを前方へ約520px
-- COOLDOWN: 0pxへばね復帰
-- PARRY: 後方へ約20px
-- DODGE: 後方へ約28px
-- STAGGER: 後方へ約38px
-
-rootは0px固定とし、tipへ向かうほどextension比率を増やす。
-STRIKEではsource curveを完全消失させず、毛先側ほどstraightenを強める。中心線の高さは攻撃姿勢として下げられるが、断面幅はnormal方向で保持するため、旧方式のように一本線へ潰さない。
-
-1280x720の基準Battle layoutでは、LONG型STRIKEの見た目上の毛先が相手頭部側まで到達でき、かつ中間部の太さがIDLE時から大きく崩れないことをHuman Verification checkpointとする。
-
-頭部前進は射程を稼ぐ手段にしない。
-STRIKE時の頭部前進は約34pxを基準とし、頭部は基本位置周辺の小さな振りに留める。
-頭部画像は下端cropを維持する一方、左右方向には少なくとも180pxのclip bleedを確保し、前後モーション時にFighterVisualの左右境界で見切れないようにする。
-
-HeadMotion由来の慣性bendとaction extensionは加算する。
-そのため攻撃時は
+頭部は従来どおり `Sprite2D` で表示し、顔全体を出さず頭頂部だけをBattle下端から見せる。
 
 ```text
-headを後ろへ引く
-  -> ahoge centerlineが遅れて後方へ残る
-  -> STRIKEでheadが前へ振られる
-  -> rootからtipへ順にcenterlineが前方へ展開する
-  -> ribbon断面はtangentへ追従して回転し、太さを保つ
-  -> tipが相手側へ到達
-  -> spring/dampingでovershootして収束
+Combat Action
+  -> HeadMotion
+      -> Head Sprite position / rotation
+      -> Crown Anchor
+          -> Skeleton2D root
+              -> Bone chain secondary motion
+                  -> Polygon2D skin deformation
 ```
 
-Checkpoint:
-- 頭部とアホ毛が別resourceで表示できる
-- 根元が頭部へ固定される
-- source PNGの曲線と太さをIDLEで保つ
-- 頭部の左右移動でアホ毛が遅れて追従する
-- STRIKEで毛先が相手側へ到達する
-- STRIKE中も中間部が一本線へ潰れない
-- 振り抜き後に自然にsource curveへ戻る
+頭部前進で射程を稼がない。射程は主にアホ毛Bone chainの振り抜きとBone間伸長で表現する。
 
-2026-10-03 Human Verificationで2D ribbon方式も輪郭破綻が確認されたため、Battleの正式方針を3Dへ切り替える。
+頭部画像は下端cropを維持し、左右clip bleedを確保して前後モーション時の見切れを防ぐ。
 
-3D化の単位は**頭部・髪・アホ毛の固定セット全体**とする。アホ毛だけを3D化して2D頭部へ合成する方式は採用しない。
+#### 13.3.3 LONG strike motion
 
-構成:
-- Head / Hair / Ahoge: 同一3D Node3D階層
-- Ahoge root: 頭頂部の3D attachment / boneへ固定
-- Head Motion: Node3D transform
-- Ahoge Motion: bone chain / spline / procedural segment
-- Camera: Orthographic Camera3D
-- Render: SubViewport
-- Composite: SubViewportTextureをBattleの2D UIへ表示
-- HUD / Manga frame / Timer / Score: 従来どおり2D Control
+LONG型のvisual checkpoint:
 
-これにより、頭部の前後・回転・傾きとアホ毛根元を同じ3D座標系で扱う。
-3Dキャラクター表示は見た目専用であり、Hit / Contact / Round / Matchのserver authoritative判定には使用しない。
+1. IDLE
+   - 頭は基本位置
+   - アホ毛はBone chainの小さい揺れ
+2. CHARGING
+   - 頭が先に後退
+   - Bone chainは慣性で一瞬rest位置へ残る
+3. WINDUP
+   - root側から順に後方へ曲がる
+4. STRIKE開始
+   - 頭が前へ振られる
+   - tip側Boneは一瞬遅れる
+5. STRIKE展開
+   - Bone0→Bone6へ回転が伝播
+   - 各Bone間距離が段階的に伸びる
+6. CONTACT visual
+   - 毛先が相手頭部側へ到達
+   - 中間部の太さ・画像連続性を維持する
+7. COOLDOWN
+   - overshoot後にrest poseへ戻る
 
-初期3D prototypeでは外部DCC assetを必須にせず、Godot内のprimitive / procedural meshで頭部・髪・アホ毛の制御系を先に検証してよい。制御境界が確定した後、正式なBlender / glTFモデルへ差し替えられる構造とする。
+初期Bone間stretchはSTRIKE時に全長約2.1〜2.3倍まで許可し、1区間だけを極端に引き延ばさない。
+
+Human Verification:
+- 画像が裂けない
+- meshが消えない
+- 毛先まで連続した1本の毛として見える
+- 根元が頭部から外れない
+- STRIKEで相手側まで届く
+- STRIKE中も中間部が極端に細くならない
+- COOLDOWNで自然にrest形状へ戻る
+
+3D procedural prototypeは本Battle表示から撤去する。
 
 ### 13.3 ロング型
 
