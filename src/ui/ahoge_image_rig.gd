@@ -3,7 +3,12 @@ extends Node2D
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 
 @export var display_height: float = 248.0
-@export var segments: int = 22
+@export var segments: int = 26
+@export var alpha_threshold: float = 0.04
+@export var alpha_search_radius: int = 12
+@export var uv_padding: int = 2
+@export var min_section_half_width: float = 1.5
+
 @export var velocity_influence: float = 3.2
 @export var acceleration_influence: float = 0.55
 @export var max_bend: float = 58.0
@@ -13,8 +18,9 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var tip_damping: float = 4.8
 @export var propagation: float = 0.42
 @export var tip_power: float = 1.7
+
 @export var stretch_response: float = 7.0
-@export var flatten_response: float = 12.0
+@export var pose_response: float = 12.0
 @export var extension_spring_idle: float = 18.0
 @export var extension_spring_charge: float = 28.0
 @export var extension_spring_windup: float = 36.0
@@ -24,7 +30,8 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var windup_back_extension: float = 130.0
 @export var strike_forward_extension: float = 520.0
 @export var strike_impulse: float = 1800.0
-@export var strike_flatten: float = 0.68
+@export var strike_straighten: float = 0.86
+@export var strike_height_scale: float = 0.42
 @export var charge_follow_delay: float = 0.10
 @export var parry_back_extension: float = 20.0
 @export var dodge_back_extension: float = 28.0
@@ -34,7 +41,6 @@ var _polygon: Polygon2D
 var _texture: Texture2D
 var _facing: float = 1.0
 var _available: bool = true
-var _display_width: float = 120.0
 
 var _head_velocity := Vector2.ZERO
 var _head_acceleration := Vector2.ZERO
@@ -46,11 +52,19 @@ var _action_state: int = CombatantStateScript.ActionState.IDLE
 var _action_age: float = 0.0
 var _stretch_target: float = 0.0
 var _stretch: float = 0.0
-var _flatten_target: float = 0.0
-var _flatten: float = 0.0
+var _pose_target: float = 0.0
+var _pose_blend: float = 0.0
 
 var _joint_offsets := PackedFloat32Array()
 var _joint_velocities := PackedFloat32Array()
+
+# source PNGを縦方向にsamplingしたrest profile。
+# center offset / half widthはdisplay座標、UVはsource texture座標。
+var _source_center_offsets := PackedFloat32Array()
+var _source_half_widths := PackedFloat32Array()
+var _source_uv_left := PackedFloat32Array()
+var _source_uv_right := PackedFloat32Array()
+var _source_uv_y := PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -68,7 +82,7 @@ func configure(texture_value: Texture2D, facing_value: float) -> void:
 	scale.x = _facing
 	if _polygon != null:
 		_polygon.texture = _texture
-	_refresh_dimensions()
+	_sample_source_profile()
 	_resize_joint_state()
 	_refresh_mesh()
 
@@ -93,38 +107,38 @@ func set_motion(
 		CombatantStateScript.ActionState.CHARGING:
 			_action_bend_target = -18.0
 			_action_extension_target = -charge_back_extension
-			_stretch_target = 0.06
-			_flatten_target = 0.0
+			_stretch_target = 0.04
+			_pose_target = 0.0
 		CombatantStateScript.ActionState.WINDUP:
 			_action_bend_target = -26.0
 			_action_extension_target = -windup_back_extension
-			_stretch_target = 0.08
-			_flatten_target = 0.05
+			_stretch_target = 0.06
+			_pose_target = 0.10
 		CombatantStateScript.ActionState.STRIKE:
 			_action_bend_target = 54.0
 			_action_extension_target = strike_forward_extension
-			_stretch_target = 0.04
-			_flatten_target = strike_flatten
+			_stretch_target = 0.0
+			_pose_target = 1.0
 		CombatantStateScript.ActionState.PARRY:
 			_action_bend_target = -10.0
 			_action_extension_target = -parry_back_extension
 			_stretch_target = 0.015
-			_flatten_target = 0.0
+			_pose_target = 0.0
 		CombatantStateScript.ActionState.DODGE:
 			_action_bend_target = -24.0
 			_action_extension_target = -dodge_back_extension
 			_stretch_target = -0.02
-			_flatten_target = 0.0
+			_pose_target = 0.0
 		CombatantStateScript.ActionState.STAGGER:
 			_action_bend_target = -34.0
 			_action_extension_target = -stagger_back_extension
 			_stretch_target = -0.04
-			_flatten_target = 0.0
+			_pose_target = 0.0
 		_:
 			_action_bend_target = 0.0
 			_action_extension_target = 0.0
 			_stretch_target = 0.0
-			_flatten_target = 0.0
+			_pose_target = 0.0
 
 
 func kick(power: float = 1.0) -> void:
@@ -167,18 +181,18 @@ func _simulate_secondary_motion(delta: float) -> void:
 		_stretch_target + clampf(-_head_acceleration.y * 0.0025, -0.035, 0.035),
 		minf(delta * stretch_response, 1.0)
 	)
-	_flatten = lerpf(
-		_flatten,
-		_flatten_target,
-		minf(delta * flatten_response, 1.0)
+	_pose_blend = lerpf(
+		_pose_blend,
+		_pose_target,
+		minf(delta * pose_response, 1.0)
 	)
+
 	var extension_spring := extension_spring_idle
 	var effective_extension_target := _action_extension_target
 	match _action_state:
 		CombatantStateScript.ActionState.CHARGING:
 			extension_spring = extension_spring_charge
 			if _action_age < charge_follow_delay:
-				# 6コマ②: 頭だけを先に後退させ、アホ毛は元位置付近へ残す。
 				effective_extension_target = 0.0
 		CombatantStateScript.ActionState.WINDUP:
 			extension_spring = extension_spring_windup
@@ -240,13 +254,102 @@ func _resize_joint_state() -> void:
 		_joint_velocities[index] = 0.0
 
 
-func _refresh_dimensions() -> void:
+func _sample_source_profile() -> void:
+	_source_center_offsets = PackedFloat32Array()
+	_source_half_widths = PackedFloat32Array()
+	_source_uv_left = PackedFloat32Array()
+	_source_uv_right = PackedFloat32Array()
+	_source_uv_y = PackedFloat32Array()
+
 	if _texture == null:
 		return
-	var source_size := _texture.get_size()
-	if source_size.y <= 0.0:
+
+	var image := _texture.get_image()
+	if image == null or image.is_empty():
 		return
-	_display_width = display_height * source_size.x / source_size.y
+
+	var source_width := image.get_width()
+	var source_height := image.get_height()
+	if source_width <= 0 or source_height <= 0:
+		return
+
+	var used := image.get_used_rect()
+	if used.size.x <= 0 or used.size.y <= 0:
+		used = Rect2i(0, 0, source_width, source_height)
+
+	var safe_segments := maxi(segments, 4)
+	var count := safe_segments + 1
+	_source_center_offsets.resize(count)
+	_source_half_widths.resize(count)
+	_source_uv_left.resize(count)
+	_source_uv_right.resize(count)
+	_source_uv_y.resize(count)
+
+	var raw_centers := PackedFloat32Array()
+	raw_centers.resize(count)
+	var source_scale := display_height / maxf(float(used.size.y - 1), 1.0)
+
+	for index in range(count):
+		var t := float(index) / float(safe_segments)
+		var source_y_float := lerpf(
+			float(used.position.y + used.size.y - 1),
+			float(used.position.y),
+			t
+		)
+		var source_y := clampi(int(round(source_y_float)), 0, source_height - 1)
+		var span := _find_alpha_span(image, source_y, used)
+		var left := int(span.x)
+		var right := int(span.y)
+
+		if left < 0 or right < left:
+			left = used.position.x
+			right = used.position.x + used.size.x - 1
+
+		left = clampi(left - uv_padding, 0, source_width - 1)
+		right = clampi(right + uv_padding, left, source_width - 1)
+
+		var center_source := (float(left) + float(right)) * 0.5
+		var half_width_source := maxf((float(right) - float(left)) * 0.5, 0.5)
+
+		raw_centers[index] = center_source
+		_source_half_widths[index] = maxf(
+			half_width_source * source_scale,
+			min_section_half_width
+		)
+		_source_uv_left[index] = float(left)
+		_source_uv_right[index] = float(right)
+		_source_uv_y[index] = float(source_y)
+
+	var root_center := raw_centers[0]
+	for index in range(count):
+		_source_center_offsets[index] = (raw_centers[index] - root_center) * source_scale
+
+
+func _find_alpha_span(image: Image, center_y: int, used: Rect2i) -> Vector2:
+	var min_x := clampi(used.position.x, 0, image.get_width() - 1)
+	var max_x := clampi(used.position.x + used.size.x - 1, min_x, image.get_width() - 1)
+	var min_y := clampi(used.position.y, 0, image.get_height() - 1)
+	var max_y := clampi(used.position.y + used.size.y - 1, min_y, image.get_height() - 1)
+
+	for radius in range(maxi(alpha_search_radius, 0) + 1):
+		var candidates: Array[int] = [center_y]
+		if radius > 0:
+			candidates = [center_y - radius, center_y + radius]
+
+		for candidate_y in candidates:
+			if candidate_y < min_y or candidate_y > max_y:
+				continue
+			var left := -1
+			var right := -1
+			for x in range(min_x, max_x + 1):
+				if image.get_pixel(x, candidate_y).a >= alpha_threshold:
+					if left < 0:
+						left = x
+					right = x
+			if left >= 0:
+				return Vector2(float(left), float(right))
+
+	return Vector2(-1.0, -1.0)
 
 
 func _refresh_mesh() -> void:
@@ -255,21 +358,54 @@ func _refresh_mesh() -> void:
 
 	_resize_joint_state()
 	var safe_segments := maxi(segments, 4)
+	var count := safe_segments + 1
+	if _source_center_offsets.size() != count:
+		_sample_source_profile()
+	if _source_center_offsets.size() != count:
+		return
+
+	var centers := PackedVector2Array()
+	centers.resize(count)
+	for index in range(count):
+		var t := float(index) / float(safe_segments)
+		centers[index] = _segment_center(index, t)
+
+	var left_points := PackedVector2Array()
+	var right_points := PackedVector2Array()
+	var left_uvs := PackedVector2Array()
+	var right_uvs := PackedVector2Array()
+	left_points.resize(count)
+	right_points.resize(count)
+	left_uvs.resize(count)
+	right_uvs.resize(count)
+
+	for index in range(count):
+		var previous_index := maxi(index - 1, 0)
+		var next_index := mini(index + 1, count - 1)
+		var tangent := centers[next_index] - centers[previous_index]
+		if tangent.length_squared() <= 0.0001:
+			tangent = Vector2(0.0, -1.0)
+		else:
+			tangent = tangent.normalized()
+
+		# tangentへ直交する断面方向へ幅を展開する。
+		# STRIKEでcenterlineが横を向いても、このnormalが一緒に回るため太さが潰れない。
+		var normal := Vector2(-tangent.y, tangent.x).normalized()
+		var half_width := _source_half_widths[index]
+
+		left_points[index] = centers[index] - normal * half_width
+		right_points[index] = centers[index] + normal * half_width
+		left_uvs[index] = Vector2(_source_uv_left[index], _source_uv_y[index])
+		right_uvs[index] = Vector2(_source_uv_right[index], _source_uv_y[index])
+
 	var points := PackedVector2Array()
 	var uvs := PackedVector2Array()
-	var source_size := _texture.get_size()
-
-	for index in range(safe_segments + 1):
-		var t := float(index) / float(safe_segments)
-		var center := _segment_center(index, t)
-		points.append(center + Vector2(-_display_width * 0.5, 0.0))
-		uvs.append(Vector2(0.0, source_size.y * (1.0 - t)))
-
-	for index in range(safe_segments, -1, -1):
-		var t := float(index) / float(safe_segments)
-		var center := _segment_center(index, t)
-		points.append(center + Vector2(_display_width * 0.5, 0.0))
-		uvs.append(Vector2(source_size.x, source_size.y * (1.0 - t)))
+	for index in range(count):
+		points.append(left_points[index])
+		uvs.append(left_uvs[index])
+	for index in range(count - 1, -1, -1):
+		points.append(right_points[index])
+		uvs.append(right_uvs[index])
 
 	_polygon.polygon = points
 	_polygon.uv = uvs
@@ -277,17 +413,25 @@ func _refresh_mesh() -> void:
 
 
 func _segment_center(index: int, t: float) -> Vector2:
-	var x := 0.0
-	if index >= 0 and index < _joint_offsets.size():
-		x = _joint_offsets[index]
+	var source_x := 0.0
+	if index >= 0 and index < _source_center_offsets.size():
+		source_x = _source_center_offsets[index]
 
-	# 透明余白がある画像でも実際の毛先まで伸長が伝わるよう、
-	# 上側segment全体へ滑らかにextensionを配る。rootだけは固定する。
-	var extension_weight := smoothstep(0.08, 0.92, t)
+	var joint_x := 0.0
+	if index >= 0 and index < _joint_offsets.size():
+		joint_x = _joint_offsets[index]
+
+	var pose_weight := smoothstep(0.04, 1.0, t)
+	var straighten_amount := clampf(
+		_pose_blend * strike_straighten * pose_weight,
+		0.0,
+		0.95
+	)
+	var x := source_x * (1.0 - straighten_amount) + joint_x
+
+	var extension_weight := smoothstep(0.08, 0.94, t)
 	x += _action_extension * extension_weight
 
-	# STRIKEでは縦長の元形状を横方向へ引き伸ばす。
-	# tipへ到達する見た目を頭部前進ではなくアホ毛変形で作る。
-	var height_scale := maxf(0.18, (1.0 + _stretch) * (1.0 - _flatten))
-	var y := -display_height * height_scale * t
+	var pose_height := lerpf(1.0, strike_height_scale, clampf(_pose_blend, 0.0, 1.0))
+	var y := -display_height * (1.0 + _stretch) * pose_height * t
 	return Vector2(x, y)
