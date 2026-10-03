@@ -1461,6 +1461,43 @@ HeadMotionはアクションごとに頭部のローカル位置・回転を生�
 
 完全な物理シミュレーション結果をゲーム判定には使用しない。
 
+
+### 13.3 Image-based Head / Ahoge Prototype
+
+UI-10 Battleで、正式character asset導入前に「頭部画像 + 別アホ毛画像」の分離表示とLive2D風secondary motionを検証する。
+
+Prototype asset:
+
+```text
+assets/characters/prototype/pink_profile/
+├─ head.png
+└─ ahoge.png
+```
+
+`LONG_TEST` の `CharacterDefinition` へ上記2pathを固定で紐づける。
+頭部とアホ毛を別々に選択・装備する機能は追加しない。
+
+実装:
+- head: `Sprite2D`
+- ahoge: subdivided `Polygon2D`
+- root側segmentは固定
+- tip側ほど変位量を大きくする
+- idle時は複数sin波を合成して連続的にくねらせる
+- HeadMotionのvelocityを入力し、移動方向と逆へ遅れてしなる
+- STRIKE / CHARGING / STAGGER等のaction stateをvisual bendへ加える
+- `ahoge_available=false` では画像ahogeを非表示にする
+- gameplay / Contact / Hit判定には使用しない
+
+assetが存在しないcharacterは従来のcode-draw FighterVisualへfallbackする。
+これによりasset追加前のCIと、SHORT_TEST等の未素材characterを壊さない。
+
+Checkpoint:
+- 頭部とアホ毛が別resourceで表示できる
+- 根元が頭部へ固定される
+- idle時にアホ毛が連続的にぬるぬる動く
+- 頭部の左右移動でアホ毛が遅れて追従する
+- action時に揺れが増幅する
+
 ### 13.3 ロング型
 
 主表現:
