@@ -1506,12 +1506,14 @@ root ●
 
 実装:
 - head: `Sprite2D`
-- ahoge: subdivided `Polygon2D` をribbon meshとして使用する
+- ahoge: `MeshInstance2D + ArrayMesh` のtriangle ribbonとして使用する
+- 隣接する2断面ごとに2三角形を明示生成し、単一Polygonの自動triangulationへ依存しない
 - root側segmentは固定
 - source PNGのalpha断面から元の曲線・太さ・UVを抽出する
 - tip側ほどHeadMotion由来の二次変位量を大きくする
 - centerlineはHeadMotionのvelocity / accelerationとaction stateで変形する
 - mesh幅は中心線のtangentに対するnormal方向へ展開し、大変形中も厚みを維持する
+- ribbonが強く曲がって輪郭が自己交差しても、各segmentのtriangle pairは独立して描画可能であること
 - STRIKEではsource curveを段階的にstraightenしつつ、前方extensionをroot→tipへ滑らかに増加させる
 - STRIKE時の縦方向圧縮はcenterline poseだけへ適用し、画像断面幅そのものは潰さない
 - `ahoge_available=false` では画像ahogeを非表示にする
@@ -2894,6 +2896,36 @@ Round進行中に片側だけが切断した場合、match全体は停止しな�
 - active Round中は15秒deadlineを開始しない
 
 同じRound中に切断playerが復帰した場合、経過秒数に関係なく再joinを許可し、最新authoritative snapshotへ同期してそのRoundを継続する。
+
+#### 21.5.1a 両player切断時の無効試合
+
+Battle開始後、expected participant 2名がともにpresenceを失った時点で、server authoritativeにそのMatchを**無効試合**として終了する。
+
+対象:
+- Ranked Match
+- Friend Match
+- active Round
+- Round Result hold
+- 次Round Countdown / Round開始待機
+
+判定:
+- participantはexpected user 2名である
+- Battle開始後である
+- `state.presences` にexpected participantが1名も残っていない
+
+処理:
+- `abandoned=true` としてmatch loopを終了対象にする
+- winner / loserを生成しない
+- `MATCH_RESULT` を生成しない
+- Round Win / Hit数を勝敗へ変換しない
+- Player Ratingを更新しない
+- Ahoge Ratingを更新しない
+- 両participantの `active_online_match` lockを削除する
+- Friend Matchではroom側のIN_MATCH状態を終了扱いへ戻し、次のroom操作を阻害しない
+- 再ログイン時に元Battleへ復帰させない
+
+片側だけが切断した場合は従来の再接続契約を維持する。
+「両方が切断したので引き分け」とは扱わず、戦績に残らない無効試合とする。
 
 #### 21.5.2 Round境界の復帰待機
 
