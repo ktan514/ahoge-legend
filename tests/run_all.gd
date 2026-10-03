@@ -13,8 +13,8 @@ const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
-const BattleFighter3DScript := preload("res://src/ui/battle_fighter_3d.gd")
-const BattleArena3DScript := preload("res://src/ui/battle_arena_3d.gd")
+const AhogeBoneRigScript := preload("res://src/ui/ahoge_bone_rig.gd")
+const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -44,8 +44,9 @@ func _init() -> void:
 	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
 	_test_character_catalog_ui_contract()
-	_test_battle_fighter_3d_contract()
-	_test_battle_arena_3d_contract()
+	_test_ahoge_bone_rig_contract()
+	_test_ahoge_bone_rig_motion_contract()
+	_test_fighter_visual_clip_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -471,76 +472,160 @@ func _test_character_catalog_ui_contract() -> void:
 	)
 
 
-func _test_battle_fighter_3d_contract() -> void:
-	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
-	var state = CombatantStateScript.new(CombatConfigScript.new())
-	var fighter = BattleFighter3DScript.new()
-	fighter.configure(character, state, 1.0, -4.15)
-	fighter.call("_ready")
-
-	var head_mesh = fighter.find_child("HeadMesh3D", true, false) as MeshInstance3D
-	var hair_mesh = fighter.find_child("HairMesh3D", true, false) as MeshInstance3D
-	var ahoge_mesh = fighter.find_child("AhogeMesh3D", true, false) as MeshInstance3D
-
-	_expect_true(head_mesh != null, "Battle 3D fighterは3D頭部meshを持つ")
-	_expect_true(hair_mesh != null, "Battle 3D fighterは3D髪meshを持つ")
-	_expect_true(ahoge_mesh != null, "Battle 3D fighterは3Dアホ毛meshを持つ")
-	if head_mesh == null or hair_mesh == null or ahoge_mesh == null:
-		fighter.free()
+func _test_ahoge_bone_rig_contract() -> void:
+	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
+	_expect_true(texture != null, "2D bone rig試験用アホ毛画像をloadできる")
+	if texture == null:
 		return
 
-	_expect_true(head_mesh.mesh is SphereMesh, "3D prototype頭部はSphereMeshで成立する")
-	_expect_true(hair_mesh.mesh is SphereMesh, "3D prototype髪はSphereMeshで成立する")
-	_expect_true(ahoge_mesh.mesh is ArrayMesh, "3Dアホ毛は連続tube ArrayMeshで生成する")
+	var rig = AhogeBoneRigScript.new()
+	rig.call("_ready")
+	rig.configure(texture, 1.0)
 
-	var idle_aabb: AABB = ahoge_mesh.mesh.get_aabb()
-	_expect_true(idle_aabb.size.y >= 2.0, "LONGの3Dアホ毛は待機時に十分な長さを持つ")
-	_expect_true(idle_aabb.size.z > 0.05, "3Dアホ毛は2D平面ではなく奥行きのあるtubeを持つ")
+	var skeleton = rig.find_child("AhogeSkeleton2D", true, false) as Skeleton2D
+	var skin = rig.find_child("AhogeSkin", true, false) as Polygon2D
+	_expect_true(skeleton != null, "アホ毛rigはSkeleton2Dを持つ")
+	_expect_true(skin != null, "アホ毛rigはPolygon2D skinを持つ")
+	if skeleton == null or skin == null:
+		rig.free()
+		return
 
-	state.action_state = CombatantStateScript.ActionState.STRIKE
+	_expect_equal(skeleton.get_bone_count(), int(rig.bone_count), "設定したBone数をSkeleton2Dへ生成する")
+	_expect_equal(skin.get_bone_count(), int(rig.bone_count), "Polygon2Dへ全Bone weightを登録する")
+	_expect_true(not skin.skeleton.is_empty(), "Polygon2DはSkeleton2Dへのpathを持つ")
+	_expect_true(skin.polygon.size() >= 18, "skinは曲げ用に十分なvertexを持つ")
+	_expect_true(skin.polygons.size() >= 16, "skin topologyをrest poseで明示固定する")
+	_expect_equal(skin.uv.size(), skin.polygon.size(), "skinの各vertexへUVを持つ")
+
+	var vertex_count := skin.polygon.size()
+	if vertex_count > 0:
+		for vertex_index in [0, int(vertex_count / 2), vertex_count - 1]:
+			var weight_sum := 0.0
+			for bone_index in range(skin.get_bone_count()):
+				var weights: PackedFloat32Array = skin.get_bone_weights(bone_index)
+				_expect_equal(weights.size(), vertex_count, "各Bone weight配列はskin vertex数と一致する")
+				if weights.size() == vertex_count:
+					weight_sum += weights[vertex_index]
+			_expect_true(absf(weight_sum - 1.0) <= 0.01, "代表vertexのBone weight合計は1.0")
+
+	rig.free()
+
+
+func _test_ahoge_bone_rig_motion_contract() -> void:
+	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
+	_expect_true(texture != null, "2D bone motion試験用アホ毛画像をloadできる")
+	if texture == null:
+		return
+
+	var rig = AhogeBoneRigScript.new()
+	rig.call("_ready")
+	rig.configure(texture, 1.0)
+
+	var skeleton = rig.find_child("AhogeSkeleton2D", true, false) as Skeleton2D
+	var skin = rig.find_child("AhogeSkin", true, false) as Polygon2D
+	_expect_true(skeleton != null and skin != null, "motion試験でSkeleton2D / skinを取得できる")
+	if skeleton == null or skin == null:
+		rig.free()
+		return
+
+	var idle_tip: Vector2 = rig.debug_tip_local_position()
+	_expect_true(idle_tip.y < -150.0, "IDLEではアホ毛tipが頭頂部より上にある")
+	_expect_true(absf(float(rig.debug_total_length_scale()) - 1.0) <= 0.01, "IDLE length scaleは1.0")
+
+	rig.set_motion(
+		Vector2(-36.0, 0.0),
+		Vector2(-140.0, 0.0),
+		CombatantStateScript.ActionState.CHARGING,
+		true
+	)
+	for _index in range(12):
+		rig.call("_process", 1.0 / 60.0)
+	var charge_tip: Vector2 = rig.debug_tip_local_position()
+	_expect_true(charge_tip.x < idle_tip.x + 30.0, "CHARGINGではまだ前方へ大きく飛び出さない")
+
+	rig.set_motion(
+		Vector2(58.0, 0.0),
+		Vector2(220.0, 0.0),
+		CombatantStateScript.ActionState.STRIKE,
+		true
+	)
 	for _index in range(24):
-		fighter.call("_process", 1.0 / 60.0)
-	var strike_aabb: AABB = ahoge_mesh.mesh.get_aabb()
+		rig.call("_process", 1.0 / 60.0)
+
+	var strike_tip: Vector2 = rig.debug_tip_local_position()
+	var strike_scale := float(rig.debug_total_length_scale())
+	_expect_true(strike_tip.x >= 260.0, "STRIKEでBone chainのtipが相手方向へ大きく進む")
+	_expect_true(strike_scale >= 1.8, "STRIKEの射程は複数Bone間の分散伸長で確保する")
+
+	var max_bone_rotation := 0.0
+	for bone_index in range(skeleton.get_bone_count()):
+		var bone := skeleton.get_bone(bone_index)
+		max_bone_rotation = maxf(max_bone_rotation, absf(bone.rotation))
+	_expect_true(max_bone_rotation < deg_to_rad(35.0), "1本のBoneだけを極端に折らず回転を分散する")
+
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.COOLDOWN,
+		true
+	)
+	for _index in range(120):
+		rig.call("_process", 1.0 / 60.0)
 	_expect_true(
-		strike_aabb.size.x >= idle_aabb.size.x + 3.0,
-		"STRIKEでは3Dアホ毛が前方へ大きく伸びる"
+		absf(float(rig.debug_total_length_scale()) - 1.0) <= 0.08,
+		"COOLDOWN後はBone間距離がrest lengthへ戻る"
 	)
 
-	state.ahoge_available = false
-	fighter.call("_process", 1.0 / 60.0)
-	_expect_false(ahoge_mesh.visible, "ahoge unavailable時は3Dアホ毛を非表示にする")
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.IDLE,
+		false
+	)
+	_expect_false(rig.visible, "ahoge unavailable時は2D bone rigを非表示にする")
+
+	rig.free()
+
+
+func _test_fighter_visual_clip_contract() -> void:
+	var fighter = FighterVisualScript.new()
+	fighter.size = Vector2(420.0, 460.0)
+
+	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
+	var state = CombatantStateScript.new(CombatConfigScript.new())
+	fighter.configure(character, state, 1.0)
+	fighter.call("_ready")
+
+	_expect_false(
+		fighter.clip_contents,
+		"画像FighterVisualはアホ毛sweepをplayer矩形でclipしない"
+	)
+
+	var head_clip = fighter.find_child("HeadClipControl", true, false) as Control
+	var head_layer = fighter.find_child("HeadLayer", true, false) as Node2D
+	var ahoge_rig = fighter.find_child("AhogeBoneRig", true, false)
+	_expect_true(head_clip != null, "画像FighterVisualは頭部専用clip領域を持つ")
+	if head_clip != null:
+		_expect_true(head_clip.clip_contents, "頭部専用clip領域は下端cropを有効にする")
+		_expect_true(
+			head_clip.offset_left <= -180.0 and head_clip.offset_right >= 180.0,
+			"頭部clip領域は左右へ180px以上bleedし前後モーションを見切らせない"
+		)
+	_expect_true(head_layer != null, "頭部clip拡張用の座標補正layerを持つ")
+	if head_layer != null:
+		_expect_true(
+			head_layer.position.x >= 180.0,
+			"左右clip bleed分だけ頭部座標系を補正する"
+		)
+
+	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogeBoneRigを持つ")
+	if head_clip != null and ahoge_rig != null:
+		_expect_true(
+			not head_clip.is_ancestor_of(ahoge_rig),
+			"アホ毛rigは頭部clip領域の外側へ置く"
+		)
 
 	fighter.free()
-
-
-func _test_battle_arena_3d_contract() -> void:
-	var p1_character = CharacterCatalogScript.get_by_id("LONG_TEST")
-	var p2_character = CharacterCatalogScript.get_by_id("SHORT_TEST")
-	var p1_state = CombatantStateScript.new(CombatConfigScript.new())
-	var p2_state = CombatantStateScript.new(CombatConfigScript.new())
-
-	var arena = BattleArena3DScript.new()
-	arena.size = Vector2(920.0, 460.0)
-	arena.configure(p1_character, p1_state, p2_character, p2_state)
-	arena.call("_ready")
-
-	var viewport = arena.find_child("Battle3DViewport", true, false) as SubViewport
-	var camera = arena.find_child("BattleCamera3D", true, false) as Camera3D
-	var p1 = arena.find_child("PlayerOne3D", true, false)
-	var p2 = arena.find_child("PlayerTwo3D", true, false)
-
-	_expect_true(viewport != null, "Battle 3D arenaはSubViewportを持つ")
-	_expect_true(camera != null, "Battle 3D arenaはCamera3Dを持つ")
-	_expect_true(p1 != null and p2 != null, "左右fighterを同一3D arenaへ配置する")
-	if viewport != null:
-		_expect_true(viewport.transparent_bg, "3D arena背景は2D Manga UIへ合成できる透明背景")
-		_expect_true(viewport.size.x >= 2 and viewport.size.y >= 2, "Battle 3D viewportは有効な描画sizeを持つ")
-	if camera != null:
-		_expect_equal(camera.projection, Camera3D.PROJECTION_ORTHOGONAL, "Battle 3D cameraは正投影")
-	if p1 != null and p2 != null:
-		_expect_true(p1.get_parent() == p2.get_parent(), "左右fighterは同じ3D座標系を共有する")
-
-	arena.free()
 
 
 func _test_combat_input_protocol() -> void:
