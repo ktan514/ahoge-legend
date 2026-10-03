@@ -4,6 +4,8 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 const CharacterDefinitionScript := preload("res://src/domain/character_definition.gd")
 const AhogeImageRigScript := preload("res://src/ui/ahoge_image_rig.gd")
 
+@export var head_clip_horizontal_bleed: float = 180.0
+
 var character
 var combat_state
 var facing: float = 1.0
@@ -41,8 +43,10 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_RESIZED and _asset_mode:
-		_update_asset_pose()
+	if what == NOTIFICATION_RESIZED:
+		_update_head_clip_bounds()
+		if _asset_mode:
+			_update_asset_pose()
 
 
 func _build_asset_nodes() -> void:
@@ -64,6 +68,7 @@ func _build_asset_nodes() -> void:
 	_head_layer = Node2D.new()
 	_head_layer.name = "HeadLayer"
 	_head_clip.add_child(_head_layer)
+	_update_head_clip_bounds()
 
 	_head_sprite = Sprite2D.new()
 	_head_sprite.name = "HeadSprite"
@@ -75,6 +80,21 @@ func _build_asset_nodes() -> void:
 	_ahoge_rig.name = "AhogeImageRig"
 	_ahoge_rig.z_index = 5
 	_asset_root.add_child(_ahoge_rig)
+
+
+func _update_head_clip_bounds() -> void:
+	if _head_clip == null or _head_layer == null:
+		return
+
+	# 頭部は下端だけをcropしたい。Controlのclipは矩形なので、
+	# 左右へbleedを持たせ、前後モーションでfighter列の端に見切れないようにする。
+	var bleed := maxf(head_clip_horizontal_bleed, 0.0)
+	_head_clip.offset_left = -bleed
+	_head_clip.offset_top = 0.0
+	_head_clip.offset_right = bleed
+	_head_clip.offset_bottom = 0.0
+	# clip領域の原点を左へ広げた分だけ座標系を戻し、既存head_centerを維持する。
+	_head_layer.position = Vector2(bleed, 0.0)
 
 
 func _refresh_asset_mode() -> void:
@@ -123,13 +143,13 @@ func _process(delta: float) -> void:
 	var rotation_target := 0.0
 	match combat_state.action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			action_target.x = -facing * 52.0
+			action_target.x = -facing * 42.0
 			rotation_target = -2.5 * facing
 		CombatantStateScript.ActionState.WINDUP:
-			action_target.x = -facing * 64.0
+			action_target.x = -facing * 52.0
 			rotation_target = -3.5 * facing
 		CombatantStateScript.ActionState.STRIKE:
-			action_target.x = facing * 68.0
+			action_target.x = facing * 34.0
 			rotation_target = 4.0 * facing
 		CombatantStateScript.ActionState.PARRY:
 			action_target.y = -22.0
@@ -138,7 +158,7 @@ func _process(delta: float) -> void:
 			action_target = Vector2(-facing * 18.0, 24.0)
 			rotation_target = 2.5 * facing
 		CombatantStateScript.ActionState.COOLDOWN:
-			action_target.x = facing * 20.0
+			action_target.x = facing * 12.0
 			rotation_target = 1.5 * facing
 		CombatantStateScript.ActionState.STAGGER:
 			action_target.x = -facing * 16.0
