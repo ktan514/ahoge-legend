@@ -522,12 +522,12 @@ func _run_both_disconnected_abandon_scenario(
 		_fail("両者不在abandon試験でRound 1 countdownが開始しませんでした。")
 		return false
 
-	# Round開始境界で両者を離脱させる。
-	# roundCountdownActive中なので両participantへ15秒deadlineが設定される。
+	# Battle開始後に両者を離脱させる。
+	# 両participantが不在になった時点で15秒を待たず無効試合になる。
 	online_session.clear_runtime_session_preserving_match()
 	await _second_socket.leave_match_async(_second_match_id)
 
-	var clear_deadline := Time.get_ticks_msec() + 19000
+	var clear_deadline := Time.get_ticks_msec() + 5000
 	var p2_active_cleared := false
 	while Time.get_ticks_msec() < clear_deadline:
 		var active_rpc = await second_client.rpc_async(
@@ -542,7 +542,7 @@ func _run_both_disconnected_abandon_scenario(
 		await create_timer(0.10).timeout
 
 	if not p2_active_cleared:
-		_fail("両者不在deadline超過後もP2 active match lockが残っています。")
+		_fail("両者切断の無効試合後もP2 active match lockが残っています。")
 		return false
 
 	var reauth: Dictionary = await online_session.authenticate_local_device()
@@ -552,7 +552,7 @@ func _run_both_disconnected_abandon_scenario(
 
 	var p1_active: Dictionary = await online_session.refresh_active_online_match()
 	if not bool(p1_active.get("ok", false)) or bool(p1_active.get("active", false)):
-		_fail("両者不在deadline超過後もP1 active match lockが残っています。")
+		_fail("両者切断の無効試合後もP1 active match lockが残っています。")
 		return false
 
 	var restored: Dictionary = await online_session.restore_unresolved_match_with_retry()
@@ -569,7 +569,7 @@ func _run_both_disconnected_abandon_scenario(
 		second_session
 	)
 	if not _same_rating_record(p1_rating_before, p1_rating_after) 			or not _same_rating_record(p2_rating_before, p2_rating_after):
-		_fail("両者不在ABANDONでPlayer Ratingが変動しました。")
+		_fail("両者切断の無効試合でPlayer Ratingが変動しました。")
 		return false
 
 	var p2_active_verify = await second_client.rpc_async(
@@ -584,7 +584,7 @@ func _run_both_disconnected_abandon_scenario(
 		_fail("ABANDON後のP2 active matchが再出現しました。")
 		return false
 
-	print("AHOGE LEGEND both-disconnected abandon smoke: PASS match_id=%s" % abandon_match_id)
+	print("AHOGE LEGEND both-disconnected invalid match smoke: PASS match_id=%s" % abandon_match_id)
 	return true
 
 
