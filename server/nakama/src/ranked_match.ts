@@ -126,6 +126,7 @@ interface AhogeRankedMatchState {
   ratingSettlementRetryTick: number;
   activeMatchResultPersisted: boolean;
   activeMatchResultRetryTick: number;
+  abandoned: boolean;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -260,7 +261,8 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       ratingSettlementDone: false,
       ratingSettlementRetryTick: 0,
       activeMatchResultPersisted: false,
-      activeMatchResultRetryTick: 0
+      activeMatchResultRetryTick: 0,
+      abandoned: false
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -1796,7 +1798,21 @@ function resolveRoundBoundaryTimeout(
     }
   );
 
-  // 両者同時切断は別契約。片側だけのRound境界timeoutだけを処理する。
+  const participantIds = participantUserIds(state);
+
+  // Rankedで両participantが不在のまま両deadlineを超過した場合は、
+  // winnerを捏造せずABANDONEDとしてmatchを終了する。
+  if (
+    state.matchMode === "ranked" &&
+    Object.keys(state.presences).length === 0 &&
+    expiredUserIds.length === participantIds.length &&
+    participantIds.length === 2
+  ) {
+    state.abandoned = true;
+    return;
+  }
+
+  // 片側だけのRound境界timeoutだけをDISCONNECT_FORFEITとして処理する。
   if (expiredUserIds.length !== 1) {
     return;
   }
@@ -1809,7 +1825,6 @@ function resolveRoundBoundaryTimeout(
   }
 
   let winnerUserId = "";
-  const participantIds = participantUserIds(state);
   for (let index = 0; index < participantIds.length; index += 1) {
     const userId = participantIds[index];
     if (userId !== loserUserId && state.presences[userId]) {
@@ -1851,6 +1866,21 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   messages
 ) {
   resolveRoundBoundaryTimeout(dispatcher, state, tick);
+
+  if (state.abandoned) {
+    const cleared = clearActiveOnlineMatchForUsers(
+      nk,
+      participantUserIds(state),
+      state.matchId
+    );
+    if (cleared) {
+      logger.info("ahoge ranked match abandoned because all participants missed reconnect deadline.");
+      return null;
+    }
+    // Storage version conflictなどでlock削除に失敗した場合は次tickで再試行する。
+    return {state: state};
+  }
+
   settleRankedRatingIfNeeded(nk, logger, state, tick);
   settleFriendRoomIfNeeded(nk, state, tick);
   persistActiveMatchResultIfNeeded(nk, state, tick);
