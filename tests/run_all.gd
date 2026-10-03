@@ -479,7 +479,7 @@ func _test_ahoge_bone_rig_contract() -> void:
 		return
 
 	var rig = AhogeBoneRigScript.new()
-	rig.call("_ready")
+	get_root().add_child(rig)
 	rig.configure(texture, 1.0)
 
 	var skeleton = rig.find_child("AhogeSkeleton2D", true, false) as Skeleton2D
@@ -594,7 +594,7 @@ func _test_fighter_visual_clip_contract() -> void:
 	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
 	var state = CombatantStateScript.new(CombatConfigScript.new())
 	fighter.configure(character, state, 1.0)
-	fighter.call("_ready")
+	get_root().add_child(fighter)
 
 	_expect_false(
 		fighter.clip_contents,
