@@ -112,44 +112,44 @@ func _simulate_whole_motion(delta: float) -> void:
 			reach_target = 1.0
 
 		CombatantStateScript.ActionState.WINDUP:
-			var q := clampf(_action_age / _phase_duration, 0.0, 1.0)
+			var windup_q := clampf(_action_age / _phase_duration, 0.0, 1.0)
 			if _charge_ratio > 0.0:
 				angle_target = -0.38 - 0.40 * _charge_ratio
 				reach_target = 1.0
 			else:
-				var follow := _ease_out(q)
+				var follow := _ease_out(windup_q)
 				angle_target -= 0.62 * follow
 				reach_target = lerpf(1.0, 0.80, follow)
 
 		CombatantStateScript.ActionState.STRIKE:
-			var u := clampf(_action_age / _phase_duration, 0.0, 1.0)
+			var strike_u := clampf(_action_age / _phase_duration, 0.0, 1.0)
 			if _charge_ratio > 0.0:
-				var release_progress := _ease_out(
-					clampf((u - 0.035) / 0.74, 0.0, 1.0)
+				var charged_release := _ease_out(
+					clampf((strike_u - 0.035) / 0.74, 0.0, 1.0)
 				)
 				angle_target = lerpf(
 					-0.38 - 0.40 * _charge_ratio,
 					1.04 + 0.20 * _charge_ratio,
-					release_progress
+					charged_release
 				)
 				reach_target = lerpf(
 					1.0,
 					2.10 + 0.42 * _charge_ratio,
-					release_progress
+					charged_release
 				)
 			else:
-				var lag := sin(clampf(u / 0.44, 0.0, 1.0) * PI)
-				var release_progress := _ease_out(
-					clampf((u - 0.30) / 0.70, 0.0, 1.0)
+				var lag := sin(clampf(strike_u / 0.44, 0.0, 1.0) * PI)
+				var normal_release := _ease_out(
+					clampf((strike_u - 0.30) / 0.70, 0.0, 1.0)
 				)
-				angle_target += -0.50 * lag + 1.04 * release_progress
-				reach_target = lerpf(0.82, 2.05, release_progress)
+				angle_target += -0.50 * lag + 1.04 * normal_release
+				reach_target = lerpf(0.82, 2.05, normal_release)
 
 		CombatantStateScript.ActionState.PARRY:
-			var u := clampf(_action_age / _phase_duration, 0.0, 1.0)
-			var rise := _ease_out(clampf((u - 0.08) / 0.26, 0.0, 1.0))
-			var strike_down := _ease_out(clampf((u - 0.30) / 0.25, 0.0, 1.0))
-			var settle := _ease_out(clampf((u - 0.56) / 0.34, 0.0, 1.0))
+			var parry_u := clampf(_action_age / _phase_duration, 0.0, 1.0)
+			var rise := _ease_out(clampf((parry_u - 0.08) / 0.26, 0.0, 1.0))
+			var strike_down := _ease_out(clampf((parry_u - 0.30) / 0.25, 0.0, 1.0))
+			var settle := _ease_out(clampf((parry_u - 0.56) / 0.34, 0.0, 1.0))
 			var vertical_inertia := (
 				-_head_velocity.y * 0.00225
 				-_head_acceleration.y * 0.000045
