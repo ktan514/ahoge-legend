@@ -104,11 +104,7 @@ func _simulate_whole_motion(delta: float) -> void:
 				0.0,
 				1.0
 			)
-			angle_target = (
-				-0.28
-				-0.48 * tension
-				+ angle_target * 0.12
-			)
+			angle_target = -0.28 - 0.48 * tension + angle_target * 0.12
 			reach_target = 1.0
 
 		CombatantStateScript.ActionState.WINDUP:
@@ -151,14 +147,10 @@ func _simulate_whole_motion(delta: float) -> void:
 			var strike_down := _ease_out(clampf((parry_u - 0.30) / 0.25, 0.0, 1.0))
 			var settle := _ease_out(clampf((parry_u - 0.56) / 0.34, 0.0, 1.0))
 			var vertical_inertia := (
-				-_head_velocity.y * 0.00225
-				-_head_acceleration.y * 0.000045
+				-_head_velocity.y * 0.00225 - _head_acceleration.y * 0.000045
 			)
 			angle_target += (
-				vertical_inertia
-				+1.28 * rise
-				-1.72 * strike_down
-				+0.52 * settle
+				vertical_inertia + 1.28 * rise - 1.72 * strike_down + 0.52 * settle
 			)
 			reach_target = 1.0
 
