@@ -488,17 +488,31 @@ func _test_ahoge_image_rig_uv_contract() -> void:
 		rig.free()
 		return
 
+	var expected_vertices := (int(rig.segments) + 1) * 2
 	var uv: PackedVector2Array = polygon.uv
-	_expect_true(uv.size() > 0, "画像アホ毛rigはUVを生成する")
+	_expect_equal(uv.size(), expected_vertices, "ribbon meshは各segmentの左右UVを持つ")
 	if uv.size() > 0:
-		var max_x := 0.0
-		var max_y := 0.0
+		var min_x := INF
+		var max_x := -INF
+		var min_y := INF
+		var max_y := -INF
 		for point in uv:
+			min_x = minf(min_x, point.x)
 			max_x = maxf(max_x, point.x)
+			min_y = minf(min_y, point.y)
 			max_y = maxf(max_y, point.y)
 		var source_size := texture.get_size()
-		_expect_true(max_x >= source_size.x - 1.0, "画像アホ毛UVはtexture全幅を参照する")
-		_expect_true(max_y >= source_size.y - 1.0, "画像アホ毛UVはtexture全高を参照する")
+		_expect_true(min_x >= 0.0 and max_x <= source_size.x, "ribbon UVはtexture横範囲内")
+		_expect_true(min_y >= 0.0 and max_y <= source_size.y, "ribbon UVはtexture縦範囲内")
+		_expect_true(max_x - min_x >= 4.0, "alpha断面から有効な横幅UVを抽出する")
+		_expect_true(max_y - min_y >= source_size.y * 0.25, "alpha断面を縦方向へ十分samplingする")
+
+	var points: PackedVector2Array = polygon.polygon
+	_expect_equal(points.size(), expected_vertices, "ribbon meshは各segmentの左右頂点を持つ")
+	if points.size() == expected_vertices:
+		var root_right_index := points.size() - 1
+		var root_center := (points[0] + points[root_right_index]) * 0.5
+		_expect_true(root_center.length() <= 0.1, "ribbon root centerは頭部anchorへ固定する")
 
 	rig.free()
 
@@ -519,19 +533,32 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.free()
 		return
 
+	var safe_segments := int(rig.segments)
 	var before: PackedVector2Array = polygon.polygon
-	var tip_index := int(rig.segments)
-	_expect_true(before.size() > tip_index, "secondary motion試験でtip頂点を取得できる")
-	if before.size() <= tip_index:
+	var tip_index := safe_segments
+	var tip_right_index := before.size() - 1 - tip_index
+	var mid_index := int(safe_segments / 2)
+	var mid_right_index := before.size() - 1 - mid_index
+	_expect_true(
+		before.size() > tip_index
+			and tip_right_index >= 0
+			and before.size() > mid_index
+			and mid_right_index >= 0,
+		"ribbon meshのtip / middle断面を取得できる"
+	)
+	if (
+		before.size() <= tip_index
+		or tip_right_index < 0
+		or before.size() <= mid_index
+		or mid_right_index < 0
+	):
 		rig.free()
 		return
 
-	var tip_right_index := tip_index + 1
-	_expect_true(before.size() > tip_right_index, "secondary motion試験でtip右端を取得できる")
-	if before.size() <= tip_right_index:
-		rig.free()
-		return
-	var before_x := (before[tip_index].x + before[tip_right_index].x) * 0.5
+	var before_tip_center := (before[tip_index] + before[tip_right_index]) * 0.5
+	var before_mid_width := before[mid_index].distance_to(before[mid_right_index])
+	_expect_true(before_mid_width >= 3.0, "IDLE時のribbon中間部は視認可能な太さを持つ")
+
 	rig.set_motion(
 		Vector2(9.0, 0.0),
 		Vector2(3.0, 0.0),
@@ -542,11 +569,13 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var idle_after: PackedVector2Array = polygon.polygon
-	var idle_tip_x := (idle_after[tip_index].x + idle_after[tip_right_index].x) * 0.5
-	var idle_moved := absf(idle_tip_x - before_x)
+	var idle_tip_center := (
+		idle_after[tip_index] + idle_after[idle_after.size() - 1 - tip_index]
+	) * 0.5
+	var idle_moved := idle_tip_center.distance_to(before_tip_center)
 	_expect_true(idle_moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
 
-	# 6コマ試験は直前の人工的な速度入力を残さず、IDLEへ収束してから開始する。
+	# 人工的な速度入力を残さず、IDLEへ収束してから攻撃cycleを開始する。
 	rig.set_motion(
 		Vector2.ZERO,
 		Vector2.ZERO,
@@ -557,9 +586,12 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var settled: PackedVector2Array = polygon.polygon
-	var settled_tip_x := (
-		settled[tip_index].x + settled[tip_right_index].x
+	var settled_tip_center := (
+		settled[tip_index] + settled[settled.size() - 1 - tip_index]
 	) * 0.5
+	var settled_mid_width := settled[mid_index].distance_to(
+		settled[settled.size() - 1 - mid_index]
+	)
 
 	rig.set_motion(
 		Vector2(-36.0, 0.0),
@@ -571,11 +603,11 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var charge_lag: PackedVector2Array = polygon.polygon
-	var charge_lag_tip_x := (
-		charge_lag[tip_index].x + charge_lag[tip_right_index].x
+	var charge_lag_tip_center := (
+		charge_lag[tip_index] + charge_lag[charge_lag.size() - 1 - tip_index]
 	) * 0.5
 	_expect_true(
-		charge_lag_tip_x > settled_tip_x + 0.25,
+		charge_lag_tip_center.x > settled_tip_center.x + 0.25,
 		"CHARGING開始直後は頭が先に後退しアホ毛tipが相対的に前へ残る"
 	)
 
@@ -589,10 +621,13 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var charge_after: PackedVector2Array = polygon.polygon
-	var charge_tip_x := (
-		charge_after[tip_index].x + charge_after[tip_right_index].x
+	var charge_tip_center := (
+		charge_after[tip_index] + charge_after[charge_after.size() - 1 - tip_index]
 	) * 0.5
-	_expect_true(charge_tip_x <= -45.0, "CHARGINGでアホ毛tipが後方へ大きく伸びる")
+	_expect_true(
+		charge_tip_center.x <= settled_tip_center.x - 45.0,
+		"CHARGINGでアホ毛tipがrest位置から後方へ大きく移動する"
+	)
 
 	rig.set_motion(
 		Vector2(58.0, 0.0),
@@ -604,11 +639,11 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var strike_lag: PackedVector2Array = polygon.polygon
-	var strike_lag_tip_x := (
-		strike_lag[tip_index].x + strike_lag[tip_right_index].x
+	var strike_lag_tip_center := (
+		strike_lag[tip_index] + strike_lag[strike_lag.size() - 1 - tip_index]
 	) * 0.5
 	_expect_true(
-		strike_lag_tip_x < 45.0,
+		strike_lag_tip_center.x < settled_tip_center.x + 120.0,
 		"STRIKE開始直後はアホ毛tipが一瞬遅れて残る"
 	)
 
@@ -622,20 +657,31 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 		rig.call("_process", 1.0 / 60.0)
 
 	var strike_after: PackedVector2Array = polygon.polygon
-	var strike_tip_x := (
-		strike_after[tip_index].x + strike_after[tip_right_index].x
+	var strike_tip_center := (
+		strike_after[tip_index] + strike_after[strike_after.size() - 1 - tip_index]
 	) * 0.5
-	var strike_tip_y := (
-		strike_after[tip_index].y + strike_after[tip_right_index].y
-	) * 0.5
-	_expect_true(strike_tip_x >= 430.0, "STRIKEでアホ毛tipが相手側まで届く量へ伸びる")
+	var strike_mid_width := strike_after[mid_index].distance_to(
+		strike_after[strike_after.size() - 1 - mid_index]
+	)
+	var strike_cross_section := (
+		strike_after[strike_after.size() - 1 - mid_index] - strike_after[mid_index]
+	)
+
 	_expect_true(
-		strike_tip_x - charge_tip_x >= 500.0,
+		strike_tip_center.x >= settled_tip_center.x + 430.0,
+		"STRIKEでアホ毛tipがrest位置から相手側まで届く量へ伸びる"
+	)
+	_expect_true(
+		strike_tip_center.x - charge_tip_center.x >= 500.0,
 		"CHARGING後方位置からSTRIKE前方位置へ大きく振り抜ける"
 	)
 	_expect_true(
-		strike_tip_y >= -130.0,
-		"STRIKEで縦長形状を圧縮し前方へ長く伸びる形へ変形する"
+		strike_mid_width >= settled_mid_width * 0.85,
+		"STRIKE大変形中もribbon中間部の太さを保持して一本線へ潰れない"
+	)
+	_expect_true(
+		absf(strike_cross_section.y) >= absf(strike_cross_section.x) * 0.35,
+		"横方向へ伸びたcenterlineに合わせて断面normalも回転する"
 	)
 
 	rig.free()
