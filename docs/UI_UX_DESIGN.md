@@ -1704,3 +1704,15 @@ Top Menuはconcept boardの01 Top Menuを基準とする。
 - hover / focus時のfeedbackは色変化 + 微小slideだけで成立させる
 - mouse hoverで説明ポップアップを重ねない
 - menu項目の意味はlabel画像そのものから理解できることを前提とする
+
+
+### 16.6 Battle character image prototype
+
+UI-10のcharacter表示は、prototype checkpointとして頭部画像とアホ毛画像を分離する。
+
+- 頭部: character固有のhead asset
+- アホ毛: 同じCharacterDefinitionへ固定された別asset
+- アホ毛はrootを頭部へ固定し、tipほど大きく曲がる
+- idleでも停止させず、Live2Dのsecondary motionのように緩く連続変形する
+- HeadMotion / action stateへ追従して遅れ・反動を加える
+- visual-onlyでserver authoritativeなContact判定を変更しない
