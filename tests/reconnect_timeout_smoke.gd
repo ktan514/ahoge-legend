@@ -416,12 +416,7 @@ func _run() -> void:
 		second_client,
 		second_session,
 		p1_user_id,
-		p2_user_id,
 		p1_joined,
-		round_one_started,
-		round_two_started,
-		p1_hit_count,
-		p1_states,
 		abandon_rating_p1_before,
 		abandon_rating_p2_before
 	):
@@ -440,12 +435,7 @@ func _run_both_disconnected_abandon_scenario(
 	second_client,
 	second_session,
 	p1_user_id: String,
-	p2_user_id: String,
 	p1_joined: Array,
-	round_one_started: Array,
-	round_two_started: Array,
-	p1_hit_count: Array,
-	p1_states: Array[Dictionary],
 	p1_rating_before: Dictionary,
 	p2_rating_before: Dictionary
 ) -> bool:
@@ -457,10 +447,6 @@ func _run_both_disconnected_abandon_scenario(
 		await _second_socket.leave_match_async(_second_match_id)
 
 	p1_joined[0] = ""
-	round_one_started[0] = false
-	round_two_started[0] = false
-	p1_hit_count[0] = 0
-	p1_states.clear()
 	_second_match_id = ""
 	_second_ticket = ""
 	_second_failure = ""
@@ -469,6 +455,13 @@ func _run_both_disconnected_abandon_scenario(
 	_second_connection_events.clear()
 	_second_hit_count = 0
 	_second_input_sequence = 0
+
+	var countdown_started := [false]
+	online_session.round_countdown_changed.connect(
+		func(round_number: int, countdown_value: int, _server_tick: int) -> void:
+			if round_number == 1 and countdown_value > 0:
+				countdown_started[0] = true
+	)
 
 	var p1_start: Dictionary = await online_session.start_ranked_matchmaking(
 		1500,
@@ -507,28 +500,19 @@ func _run_both_disconnected_abandon_scenario(
 		return false
 
 	var abandon_match_id := str(p1_joined[0])
-	var start_deadline := Time.get_ticks_msec() + 7000
-	while Time.get_ticks_msec() < start_deadline and not bool(round_one_started[0]):
+	var countdown_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < countdown_deadline and not bool(countdown_started[0]):
 		await create_timer(0.02).timeout
-	if not bool(round_one_started[0]):
-		_fail("両者不在abandon試験でRound 1が開始しませんでした。")
+	if not bool(countdown_started[0]):
+		_fail("両者不在abandon試験でRound 1 countdownが開始しませんでした。")
 		return false
 
-	if not await _p1_finish_opening_round(
-		online_session,
-		p1_hit_count,
-		p1_states
-	):
-		return false
-
-	# Round Result hold中に両者を離脱させる。
-	await create_timer(0.20).timeout
+	# Round開始境界で両者を離脱させる。
+	# roundCountdownActive中なので両participantへ15秒deadlineが設定される。
 	online_session.clear_runtime_session_preserving_match()
 	await _second_socket.leave_match_async(_second_match_id)
 
-	# Result hold終了後に次Round境界deadlineが開始し、
-	# 両者とも15秒を超過した時点でABANDONされる。
-	var clear_deadline := Time.get_ticks_msec() + 22000
+	var clear_deadline := Time.get_ticks_msec() + 19000
 	var p2_active_cleared := false
 	while Time.get_ticks_msec() < clear_deadline:
 		var active_rpc = await second_client.rpc_async(
