@@ -124,7 +124,8 @@ func kick(power: float = 1.0) -> void:
 func _on_action_state_changed(action_state: int) -> void:
 	match action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			_action_extension_velocity -= 120.0
+			# 頭が先に後退し、アホ毛は慣性で一瞬その場へ残す。
+			pass
 		CombatantStateScript.ActionState.WINDUP:
 			_action_extension_velocity -= 160.0
 		CombatantStateScript.ActionState.STRIKE:
