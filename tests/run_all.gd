@@ -534,9 +534,39 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 	for _index in range(60):
 		rig.call("_process", 1.0 / 60.0)
 
-	var after: PackedVector2Array = polygon.polygon
-	var moved := absf(after[tip_index].x - before_x)
-	_expect_true(moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
+	var idle_after: PackedVector2Array = polygon.polygon
+	var idle_moved := absf(idle_after[tip_index].x - before_x)
+	_expect_true(idle_moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
+
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.CHARGING,
+		true
+	)
+	for _index in range(30):
+		rig.call("_process", 1.0 / 60.0)
+
+	var charge_after: PackedVector2Array = polygon.polygon
+	var charge_tip_x := charge_after[tip_index].x
+	_expect_true(charge_tip_x <= -45.0, "CHARGINGでアホ毛tipが後方へ大きく伸びる")
+
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.STRIKE,
+		true
+	)
+	for _index in range(18):
+		rig.call("_process", 1.0 / 60.0)
+
+	var strike_after: PackedVector2Array = polygon.polygon
+	var strike_tip_x := strike_after[tip_index].x
+	_expect_true(strike_tip_x >= 65.0, "STRIKEでアホ毛tipが前方へ大きく伸びる")
+	_expect_true(
+		strike_tip_x - charge_tip_x >= 110.0,
+		"CHARGING後方位置からSTRIKE前方位置へ明確に振り抜ける"
+	)
 
 	rig.free()
 
