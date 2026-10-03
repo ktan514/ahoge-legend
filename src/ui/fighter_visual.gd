@@ -15,7 +15,9 @@ var _ahoge_lag: float = 0.0
 var _breath_phase: float = 0.0
 var _head_rotation: float = 0.0
 
-var _asset_root: Node2D
+var _asset_root: Control
+var _head_clip: Control
+var _head_layer: Node2D
 var _head_sprite: Sprite2D
 var _ahoge_rig
 var _asset_mode: bool = false
@@ -44,25 +46,40 @@ func _notification(what: int) -> void:
 
 
 func _build_asset_nodes() -> void:
-	_asset_root = Node2D.new()
+	_asset_root = Control.new()
 	_asset_root.name = "ImageFighterRoot"
+	_asset_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_asset_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_asset_root.clip_contents = false
 	_asset_root.visible = false
 	add_child(_asset_root)
+
+	_head_clip = Control.new()
+	_head_clip.name = "HeadClipControl"
+	_head_clip.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_head_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_head_clip.clip_contents = true
+	_asset_root.add_child(_head_clip)
+
+	_head_layer = Node2D.new()
+	_head_layer.name = "HeadLayer"
+	_head_clip.add_child(_head_layer)
 
 	_head_sprite = Sprite2D.new()
 	_head_sprite.name = "HeadSprite"
 	_head_sprite.centered = true
 	_head_sprite.z_index = 0
-	_asset_root.add_child(_head_sprite)
+	_head_layer.add_child(_head_sprite)
 
 	_ahoge_rig = AhogeImageRigScript.new()
 	_ahoge_rig.name = "AhogeImageRig"
-	_ahoge_rig.z_index = 1
+	_ahoge_rig.z_index = 5
 	_asset_root.add_child(_ahoge_rig)
 
 
 func _refresh_asset_mode() -> void:
 	_asset_mode = false
+	clip_contents = true
 	if _asset_root != null:
 		_asset_root.visible = false
 
@@ -89,6 +106,9 @@ func _refresh_asset_mode() -> void:
 	_ahoge_rig.configure(ahoge_texture, facing)
 	_asset_root.visible = true
 	_asset_mode = true
+	# 画像modeではアホ毛をFighterVisual矩形でclipしない。
+	# 頭部だけHeadClipControlが下端cropを担当する。
+	clip_contents = false
 	_update_asset_pose()
 	queue_redraw()
 
