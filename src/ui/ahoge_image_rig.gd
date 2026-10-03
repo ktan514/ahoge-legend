@@ -14,10 +14,15 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var propagation: float = 0.42
 @export var tip_power: float = 1.7
 @export var stretch_response: float = 7.0
-@export var action_extension_response: float = 16.0
-@export var charge_back_extension: float = 80.0
+@export var extension_spring_idle: float = 18.0
+@export var extension_spring_charge: float = 10.0
+@export var extension_spring_windup: float = 18.0
+@export var extension_spring_strike: float = 62.0
+@export var extension_damping: float = 7.0
+@export var charge_back_extension: float = 75.0
 @export var windup_back_extension: float = 105.0
-@export var strike_forward_extension: float = 135.0
+@export var strike_forward_extension: float = 150.0
+@export var strike_impulse: float = 1050.0
 @export var parry_back_extension: float = 20.0
 @export var dodge_back_extension: float = 28.0
 @export var stagger_back_extension: float = 38.0
@@ -33,6 +38,8 @@ var _head_acceleration := Vector2.ZERO
 var _action_bend_target: float = 0.0
 var _action_extension_target: float = 0.0
 var _action_extension: float = 0.0
+var _action_extension_velocity: float = 0.0
+var _action_state: int = CombatantStateScript.ActionState.IDLE
 var _stretch_target: float = 0.0
 var _stretch: float = 0.0
 
@@ -70,6 +77,10 @@ func set_motion(
 	visible = available
 	_head_velocity = head_velocity
 	_head_acceleration = head_acceleration
+
+	if action_state != _action_state:
+		_on_action_state_changed(action_state)
+	_action_state = action_state
 
 	match action_state:
 		CombatantStateScript.ActionState.CHARGING:
@@ -110,6 +121,18 @@ func kick(power: float = 1.0) -> void:
 		_joint_velocities[index] += 95.0 * power * pow(t, 1.8)
 
 
+func _on_action_state_changed(action_state: int) -> void:
+	match action_state:
+		CombatantStateScript.ActionState.CHARGING:
+			_action_extension_velocity -= 120.0
+		CombatantStateScript.ActionState.WINDUP:
+			_action_extension_velocity -= 160.0
+		CombatantStateScript.ActionState.STRIKE:
+			_action_extension_velocity += strike_impulse
+		CombatantStateScript.ActionState.STAGGER:
+			_action_extension_velocity -= 260.0
+
+
 func _process(delta: float) -> void:
 	if delta <= 0.0 or not _available or _texture == null:
 		return
@@ -128,10 +151,25 @@ func _simulate_secondary_motion(delta: float) -> void:
 		_stretch_target + clampf(-_head_acceleration.y * 0.0025, -0.035, 0.035),
 		minf(delta * stretch_response, 1.0)
 	)
-	_action_extension = lerpf(
+	var extension_spring := extension_spring_idle
+	match _action_state:
+		CombatantStateScript.ActionState.CHARGING:
+			extension_spring = extension_spring_charge
+		CombatantStateScript.ActionState.WINDUP:
+			extension_spring = extension_spring_windup
+		CombatantStateScript.ActionState.STRIKE:
+			extension_spring = extension_spring_strike
+
+	var extension_accel := (
+		(_action_extension_target - _action_extension) * extension_spring
+		- _action_extension_velocity * extension_damping
+	)
+	_action_extension_velocity += extension_accel * delta
+	_action_extension += _action_extension_velocity * delta
+	_action_extension = clampf(
 		_action_extension,
-		_action_extension_target,
-		minf(delta * action_extension_response, 1.0)
+		-windup_back_extension * 1.35,
+		strike_forward_extension * 1.35
 	)
 
 	var inertial_target := (
