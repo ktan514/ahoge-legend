@@ -143,13 +143,13 @@ func _process(delta: float) -> void:
 	var rotation_target := 0.0
 	match combat_state.action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			action_target.x = -facing * 42.0
+			action_target.x = -facing * 28.0
 			rotation_target = -2.5 * facing
 		CombatantStateScript.ActionState.WINDUP:
-			action_target.x = -facing * 52.0
+			action_target.x = -facing * 36.0
 			rotation_target = -3.5 * facing
 		CombatantStateScript.ActionState.STRIKE:
-			action_target.x = facing * 34.0
+			action_target.x = facing * 18.0
 			rotation_target = 4.0 * facing
 		CombatantStateScript.ActionState.PARRY:
 			action_target.y = -22.0
