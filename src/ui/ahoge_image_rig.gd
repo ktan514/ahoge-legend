@@ -14,15 +14,17 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var propagation: float = 0.42
 @export var tip_power: float = 1.7
 @export var stretch_response: float = 7.0
+@export var flatten_response: float = 12.0
 @export var extension_spring_idle: float = 18.0
 @export var extension_spring_charge: float = 28.0
 @export var extension_spring_windup: float = 36.0
-@export var extension_spring_strike: float = 80.0
-@export var extension_damping: float = 7.0
-@export var charge_back_extension: float = 75.0
-@export var windup_back_extension: float = 105.0
-@export var strike_forward_extension: float = 150.0
-@export var strike_impulse: float = 1050.0
+@export var extension_spring_strike: float = 105.0
+@export var extension_damping: float = 8.0
+@export var charge_back_extension: float = 90.0
+@export var windup_back_extension: float = 130.0
+@export var strike_forward_extension: float = 520.0
+@export var strike_impulse: float = 1800.0
+@export var strike_flatten: float = 0.68
 @export var charge_follow_delay: float = 0.10
 @export var parry_back_extension: float = 20.0
 @export var dodge_back_extension: float = 28.0
@@ -44,6 +46,8 @@ var _action_state: int = CombatantStateScript.ActionState.IDLE
 var _action_age: float = 0.0
 var _stretch_target: float = 0.0
 var _stretch: float = 0.0
+var _flatten_target: float = 0.0
+var _flatten: float = 0.0
 
 var _joint_offsets := PackedFloat32Array()
 var _joint_velocities := PackedFloat32Array()
@@ -89,31 +93,38 @@ func set_motion(
 		CombatantStateScript.ActionState.CHARGING:
 			_action_bend_target = -18.0
 			_action_extension_target = -charge_back_extension
-			_stretch_target = 0.08
+			_stretch_target = 0.06
+			_flatten_target = 0.0
 		CombatantStateScript.ActionState.WINDUP:
 			_action_bend_target = -26.0
 			_action_extension_target = -windup_back_extension
-			_stretch_target = 0.10
+			_stretch_target = 0.08
+			_flatten_target = 0.05
 		CombatantStateScript.ActionState.STRIKE:
-			_action_bend_target = 42.0
+			_action_bend_target = 54.0
 			_action_extension_target = strike_forward_extension
-			_stretch_target = 0.16
+			_stretch_target = 0.04
+			_flatten_target = strike_flatten
 		CombatantStateScript.ActionState.PARRY:
 			_action_bend_target = -10.0
 			_action_extension_target = -parry_back_extension
 			_stretch_target = 0.015
+			_flatten_target = 0.0
 		CombatantStateScript.ActionState.DODGE:
 			_action_bend_target = -24.0
 			_action_extension_target = -dodge_back_extension
 			_stretch_target = -0.02
+			_flatten_target = 0.0
 		CombatantStateScript.ActionState.STAGGER:
 			_action_bend_target = -34.0
 			_action_extension_target = -stagger_back_extension
 			_stretch_target = -0.04
+			_flatten_target = 0.0
 		_:
 			_action_bend_target = 0.0
 			_action_extension_target = 0.0
 			_stretch_target = 0.0
+			_flatten_target = 0.0
 
 
 func kick(power: float = 1.0) -> void:
@@ -155,6 +166,11 @@ func _simulate_secondary_motion(delta: float) -> void:
 		_stretch,
 		_stretch_target + clampf(-_head_acceleration.y * 0.0025, -0.035, 0.035),
 		minf(delta * stretch_response, 1.0)
+	)
+	_flatten = lerpf(
+		_flatten,
+		_flatten_target,
+		minf(delta * flatten_response, 1.0)
 	)
 	var extension_spring := extension_spring_idle
 	var effective_extension_target := _action_extension_target
@@ -265,8 +281,13 @@ func _segment_center(index: int, t: float) -> Vector2:
 	if index >= 0 and index < _joint_offsets.size():
 		x = _joint_offsets[index]
 
-	var extension_weight := pow(t, 1.25)
+	# 透明余白がある画像でも実際の毛先まで伸長が伝わるよう、
+	# 上側segment全体へ滑らかにextensionを配る。rootだけは固定する。
+	var extension_weight := smoothstep(0.08, 0.92, t)
 	x += _action_extension * extension_weight
 
-	var y := -display_height * (1.0 + _stretch) * t
+	# STRIKEでは縦長の元形状を横方向へ引き伸ばす。
+	# tipへ到達する見た目を頭部前進ではなくアホ毛変形で作る。
+	var height_scale := maxf(0.18, (1.0 + _stretch) * (1.0 - _flatten))
+	var y := -display_height * height_scale * t
 	return Vector2(x, y)
