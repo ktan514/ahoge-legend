@@ -10,18 +10,23 @@ const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 @export var uv_padding: int = 2
 @export var min_half_width: float = 1.5
 
-@export var root_spring: float = 56.0
-@export var tip_spring: float = 30.0
-@export var root_damping: float = 10.0
-@export var tip_damping: float = 5.5
-@export var idle_sway_degrees: float = 2.4
-@export var strike_total_turn_degrees: float = 108.0
-@export var charge_total_turn_degrees: float = -34.0
-@export var windup_total_turn_degrees: float = -58.0
-@export var strike_length_scale: float = 2.25
-@export var stretch_spring: float = 78.0
-@export var stretch_damping: float = 13.0
-@export var strike_propagation_seconds: float = 0.09
+@export var root_spring: float = 180.0
+@export var tip_spring: float = 120.0
+@export var root_damping: float = 22.0
+@export var tip_damping: float = 16.0
+@export var idle_sway_degrees: float = 2.0
+@export var strike_length_scale: float = 2.05
+@export var stretch_spring: float = 105.0
+@export var stretch_damping: float = 18.0
+@export var strike_expand_seconds: float = 0.06
+@export var strike_recover_seconds: float = 0.16
+
+const CHARGE_POSE_DEGREES := [-7.0, -5.0, -4.0, -2.0, 0.0, 2.0, 4.0]
+const WINDUP_POSE_DEGREES := [-15.0, -10.0, -6.0, -2.0, 2.0, 6.0, 10.0]
+const STRIKE_POSE_DEGREES := [58.0, 8.0, -10.0, -12.0, -2.0, 18.0, 32.0]
+const PARRY_POSE_DEGREES := [18.0, 10.0, 4.0, -2.0, -6.0, -8.0, -10.0]
+const DODGE_POSE_DEGREES := [-20.0, -12.0, -8.0, -4.0, 0.0, 4.0, 8.0]
+const STAGGER_POSE_DEGREES := [-26.0, -18.0, -12.0, -6.0, 0.0, 8.0, 14.0]
 
 var _texture: Texture2D
 var _polygon: Polygon2D
@@ -35,6 +40,7 @@ var _head_acceleration := Vector2.ZERO
 var _action_state: int = CombatantStateScript.ActionState.IDLE
 var _action_age: float = 0.0
 var _idle_phase: float = 0.0
+var _recovering_from_strike: bool = false
 
 var _bone_angles := PackedFloat32Array()
 var _bone_angular_velocities := PackedFloat32Array()
@@ -81,7 +87,14 @@ func set_motion(
 	_head_acceleration = head_acceleration
 
 	if action_state != _action_state:
+		var previous_state := _action_state
 		_action_age = 0.0
+		_recovering_from_strike = (
+			action_state == CombatantStateScript.ActionState.COOLDOWN
+			and previous_state == CombatantStateScript.ActionState.STRIKE
+		)
+		if action_state != CombatantStateScript.ActionState.COOLDOWN:
+			_recovering_from_strike = false
 		_on_action_state_changed(action_state)
 	_action_state = action_state
 
@@ -349,14 +362,15 @@ func _reset_pose() -> void:
 func _on_action_state_changed(action_state: int) -> void:
 	match action_state:
 		CombatantStateScript.ActionState.STRIKE:
-			_length_velocity += 4.2
+			# prototypeの瞬発感だけをimpulseで足し、主形状はkey poseを正本にする。
+			_length_velocity += 1.6
 			for index in range(_bone_angular_velocities.size()):
 				var t := float(index) / maxf(float(_bone_angular_velocities.size() - 1), 1.0)
-				_bone_angular_velocities[index] += deg_to_rad(26.0) * pow(t, 1.5)
+				_bone_angular_velocities[index] += deg_to_rad(5.0) * pow(t, 1.6)
 		CombatantStateScript.ActionState.STAGGER:
 			for index in range(_bone_angular_velocities.size()):
 				var t := float(index) / maxf(float(_bone_angular_velocities.size() - 1), 1.0)
-				_bone_angular_velocities[index] -= deg_to_rad(18.0) * pow(t, 1.4)
+				_bone_angular_velocities[index] -= deg_to_rad(10.0) * pow(t, 1.4)
 
 
 func _simulate_bones(delta: float) -> void:
@@ -364,18 +378,14 @@ func _simulate_bones(delta: float) -> void:
 	if count <= 0:
 		return
 
-	var length_target := 1.0
-	match _action_state:
-		CombatantStateScript.ActionState.WINDUP:
-			length_target = 1.04
-		CombatantStateScript.ActionState.STRIKE:
-			length_target = strike_length_scale
+	var strike_envelope := _strike_pose_envelope()
+	var length_target := lerpf(1.0, strike_length_scale, strike_envelope)
 
 	var length_accel := (length_target - _length_scale) * stretch_spring
 	length_accel -= _length_velocity * stretch_damping
 	_length_velocity += length_accel * delta
 	_length_scale += _length_velocity * delta
-	_length_scale = clampf(_length_scale, 0.88, strike_length_scale * 1.06)
+	_length_scale = clampf(_length_scale, 0.92, strike_length_scale * 1.04)
 
 	for index in range(count):
 		var t := float(index) / maxf(float(count - 1), 1.0)
@@ -389,51 +399,65 @@ func _simulate_bones(delta: float) -> void:
 
 
 func _target_angle_for_bone(index: int, t: float) -> float:
-	var count := maxf(float(_bone_angles.size()), 1.0)
-	var total_turn := 0.0
-	var action_weight := 1.0
+	var pose_degrees := 0.0
 
 	match _action_state:
 		CombatantStateScript.ActionState.CHARGING:
-			total_turn = deg_to_rad(charge_total_turn_degrees)
+			pose_degrees = _sample_pose(CHARGE_POSE_DEGREES, t)
 		CombatantStateScript.ActionState.WINDUP:
-			total_turn = deg_to_rad(windup_total_turn_degrees)
-		CombatantStateScript.ActionState.STRIKE:
-			total_turn = deg_to_rad(strike_total_turn_degrees)
-			var delay := t * strike_propagation_seconds
-			action_weight = smoothstep(
-				delay,
-				delay + maxf(strike_propagation_seconds, 0.01),
-				_action_age
-			)
+			pose_degrees = _sample_pose(WINDUP_POSE_DEGREES, t)
+		CombatantStateScript.ActionState.STRIKE, CombatantStateScript.ActionState.COOLDOWN:
+			pose_degrees = _sample_pose(STRIKE_POSE_DEGREES, t) * _strike_pose_envelope()
 		CombatantStateScript.ActionState.PARRY:
-			total_turn = deg_to_rad(-28.0)
+			pose_degrees = _sample_pose(PARRY_POSE_DEGREES, t)
 		CombatantStateScript.ActionState.DODGE:
-			total_turn = deg_to_rad(-36.0)
+			pose_degrees = _sample_pose(DODGE_POSE_DEGREES, t)
 		CombatantStateScript.ActionState.STAGGER:
-			total_turn = deg_to_rad(-48.0)
-		_:
-			total_turn = 0.0
-
-	var distributed := total_turn / count
-	var action_angle := distributed * action_weight * lerpf(0.72, 1.24, t)
+			pose_degrees = _sample_pose(STAGGER_POSE_DEGREES, t)
 
 	var local_velocity := _head_velocity.x
 	var local_accel := _head_acceleration.x
 	var inertial := clampf(
-		-local_velocity * 0.00065 - local_accel * 0.000045,
-		deg_to_rad(-7.0),
-		deg_to_rad(7.0)
+		-local_velocity * 0.00055 - local_accel * 0.000035,
+		deg_to_rad(-5.0),
+		deg_to_rad(5.0)
 	) * pow(t, 1.55)
 
 	var idle := 0.0
 	if _action_state == CombatantStateScript.ActionState.IDLE:
 		idle = deg_to_rad(idle_sway_degrees) * (
 			sin(_idle_phase * 1.8 + float(index) * 0.52)
-			+ sin(_idle_phase * 0.93 + float(index) * 0.31) * 0.38
-		) * lerpf(0.18, 1.0, t)
+			+ sin(_idle_phase * 0.93 + float(index) * 0.31) * 0.32
+		) * lerpf(0.16, 1.0, t)
 
-	return action_angle + inertial + idle
+	return deg_to_rad(pose_degrees) + inertial + idle
+
+
+func _sample_pose(profile: Array, t: float) -> float:
+	if profile.is_empty():
+		return 0.0
+	if profile.size() == 1:
+		return float(profile[0])
+
+	var position := clampf(t, 0.0, 1.0) * float(profile.size() - 1)
+	var low := clampi(int(floor(position)), 0, profile.size() - 1)
+	var high := mini(low + 1, profile.size() - 1)
+	return lerpf(float(profile[low]), float(profile[high]), position - float(low))
+
+
+func _strike_pose_envelope() -> float:
+	if _action_state == CombatantStateScript.ActionState.STRIKE:
+		return smoothstep(0.0, maxf(strike_expand_seconds, 0.01), _action_age)
+	if (
+		_action_state == CombatantStateScript.ActionState.COOLDOWN
+		and _recovering_from_strike
+	):
+		return 1.0 - smoothstep(
+			0.0,
+			maxf(strike_recover_seconds, 0.01),
+			_action_age
+		)
+	return 0.0
 
 
 func _apply_pose() -> void:
@@ -445,7 +469,16 @@ func _apply_pose() -> void:
 		if index == 0:
 			bone.position = Vector2.ZERO
 		else:
-			bone.position = Vector2(0.0, -_rest_segment_length * _length_scale)
+			var segment_t := float(index - 1) / maxf(float(_bones.size() - 2), 1.0)
+			var distributed_scale := lerpf(
+				1.0 + (_length_scale - 1.0) * 0.55,
+				_length_scale,
+				pow(segment_t, 0.9)
+			)
+			bone.position = Vector2(
+				0.0,
+				-_rest_segment_length * distributed_scale
+			)
 		bone.rotation = _bone_angles[index]
 
 
@@ -455,14 +488,20 @@ func debug_tip_local_position() -> Vector2:
 
 	var point := Vector2.ZERO
 	var cumulative_angle := 0.0
-	var segment_length := _rest_segment_length * _length_scale
 
 	for index in range(_bones.size() - 1):
 		cumulative_angle += _bone_angles[index]
+		var segment_t := float(index) / maxf(float(_bones.size() - 2), 1.0)
+		var distributed_scale := lerpf(
+			1.0 + (_length_scale - 1.0) * 0.55,
+			_length_scale,
+			pow(segment_t, 0.9)
+		)
+		var segment_length := _rest_segment_length * distributed_scale
 		point += Vector2(0.0, -segment_length).rotated(cumulative_angle)
 
 	cumulative_angle += _bone_angles[_bones.size() - 1]
-	point += Vector2(0.0, -segment_length * 0.35).rotated(cumulative_angle)
+	point += Vector2(0.0, -_rest_segment_length * _length_scale * 0.35).rotated(cumulative_angle)
 	return point
 
 
@@ -479,3 +518,12 @@ func debug_max_bone_rotation() -> float:
 	for bone in _bones:
 		result = maxf(result, absf(bone.rotation))
 	return result
+
+
+func debug_rotated_bone_count(threshold_degrees: float = 5.0) -> int:
+	var count := 0
+	var threshold := deg_to_rad(absf(threshold_degrees))
+	for bone in _bones:
+		if absf(bone.rotation) >= threshold:
+			count += 1
+	return count
