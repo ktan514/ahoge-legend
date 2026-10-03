@@ -129,7 +129,8 @@ func _clear_skeleton() -> void:
 	if _skeleton == null:
 		return
 	for child in _skeleton.get_children():
-		child.queue_free()
+		_skeleton.remove_child(child)
+		child.free()
 
 
 func _build_skeleton() -> void:
@@ -323,8 +324,13 @@ func _bind_skin_weights(vertex_count: int, section_count: int) -> void:
 		var low_weight := 1.0 - high_weight
 		for vertex_offset in range(2):
 			var vertex_index := section_index * 2 + vertex_offset
-			weights_by_bone[low][vertex_index] += low_weight
-			weights_by_bone[high][vertex_index] += high_weight
+			var low_weights: PackedFloat32Array = weights_by_bone[low]
+			low_weights[vertex_index] += low_weight
+			weights_by_bone[low] = low_weights
+			if high != low and high_weight > 0.0:
+				var high_weights: PackedFloat32Array = weights_by_bone[high]
+				high_weights[vertex_index] += high_weight
+				weights_by_bone[high] = high_weights
 
 	for bone_index in range(_bones.size()):
 		var bone_path := _skeleton.get_path_to(_bones[bone_index])
