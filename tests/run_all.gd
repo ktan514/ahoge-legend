@@ -625,10 +625,17 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 	var strike_tip_x := (
 		strike_after[tip_index].x + strike_after[tip_right_index].x
 	) * 0.5
-	_expect_true(strike_tip_x >= 65.0, "STRIKEでアホ毛tipが前方へ大きく伸びる")
+	var strike_tip_y := (
+		strike_after[tip_index].y + strike_after[tip_right_index].y
+	) * 0.5
+	_expect_true(strike_tip_x >= 430.0, "STRIKEでアホ毛tipが相手側まで届く量へ伸びる")
 	_expect_true(
-		strike_tip_x - charge_tip_x >= 110.0,
-		"CHARGING後方位置からSTRIKE前方位置へ明確に振り抜ける"
+		strike_tip_x - charge_tip_x >= 500.0,
+		"CHARGING後方位置からSTRIKE前方位置へ大きく振り抜ける"
+	)
+	_expect_true(
+		strike_tip_y >= -130.0,
+		"STRIKEで縦長形状を圧縮し前方へ長く伸びる形へ変形する"
 	)
 
 	rig.free()
@@ -649,10 +656,21 @@ func _test_fighter_visual_clip_contract() -> void:
 	)
 
 	var head_clip = fighter.find_child("HeadClipControl", true, false) as Control
+	var head_layer = fighter.find_child("HeadLayer", true, false) as Node2D
 	var ahoge_rig = fighter.find_child("AhogeImageRig", true, false)
 	_expect_true(head_clip != null, "画像FighterVisualは頭部専用clip領域を持つ")
 	if head_clip != null:
 		_expect_true(head_clip.clip_contents, "頭部専用clip領域は下端cropを有効にする")
+		_expect_true(
+			head_clip.offset_left <= -180.0 and head_clip.offset_right >= 180.0,
+			"頭部clip領域は左右へ180px以上bleedし前後モーションを見切らせない"
+		)
+	_expect_true(head_layer != null, "頭部clip拡張用の座標補正layerを持つ")
+	if head_layer != null:
+		_expect_true(
+			head_layer.position.x >= 180.0,
+			"左右clip bleed分だけ頭部座標系を補正する"
+		)
 
 	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogeImageRigを持つ")
 	if head_clip != null and ahoge_rig != null:
