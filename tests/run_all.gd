@@ -13,6 +13,7 @@ const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
 const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
+const AhogeImageRigScript := preload("res://src/ui/ahoge_image_rig.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -42,6 +43,7 @@ func _init() -> void:
 	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
 	_test_character_catalog_ui_contract()
+	_test_ahoge_image_rig_uv_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -465,6 +467,37 @@ func _test_character_catalog_ui_contract() -> void:
 			and str(short_character.ahoge_asset_path).is_empty(),
 		"SHORT_TESTは未素材のため従来fallbackを維持する"
 	)
+
+
+func _test_ahoge_image_rig_uv_contract() -> void:
+	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
+	_expect_true(texture != null, "prototypeアホ毛画像をloadできる")
+	if texture == null:
+		return
+
+	var rig = AhogeImageRigScript.new()
+	rig.call("_ready")
+	rig.configure(texture, 1.0)
+
+	var polygon = rig.find_child("AhogePolygon", true, false) as Polygon2D
+	_expect_true(polygon != null, "画像アホ毛rigはPolygon2Dを生成する")
+	if polygon == null:
+		rig.free()
+		return
+
+	var uv := polygon.uv
+	_expect_true(uv.size() > 0, "画像アホ毛rigはUVを生成する")
+	if uv.size() > 0:
+		var max_x := 0.0
+		var max_y := 0.0
+		for point in uv:
+			max_x = maxf(max_x, point.x)
+			max_y = maxf(max_y, point.y)
+		var source_size := texture.get_size()
+		_expect_true(max_x >= source_size.x - 1.0, "画像アホ毛UVはtexture全幅を参照する")
+		_expect_true(max_y >= source_size.y - 1.0, "画像アホ毛UVはtexture全高を参照する")
+
+	rig.free()
 
 
 func _test_combat_input_protocol() -> void:
