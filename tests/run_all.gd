@@ -545,6 +545,24 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 	_expect_true(idle_moved >= 4.0, "頭部速度入力でアホ毛先端が視認可能量動く")
 
 	rig.set_motion(
+		Vector2(-36.0, 0.0),
+		Vector2(-140.0, 0.0),
+		CombatantStateScript.ActionState.CHARGING,
+		true
+	)
+	for _index in range(4):
+		rig.call("_process", 1.0 / 60.0)
+
+	var charge_lag: PackedVector2Array = polygon.polygon
+	var charge_lag_tip_x := (
+		charge_lag[tip_index].x + charge_lag[tip_right_index].x
+	) * 0.5
+	_expect_true(
+		charge_lag_tip_x > before_x,
+		"CHARGING開始直後は頭が先に後退しアホ毛tipが相対的に前へ残る"
+	)
+
+	rig.set_motion(
 		Vector2.ZERO,
 		Vector2.ZERO,
 		CombatantStateScript.ActionState.CHARGING,
@@ -560,12 +578,30 @@ func _test_ahoge_image_rig_secondary_motion_contract() -> void:
 	_expect_true(charge_tip_x <= -45.0, "CHARGINGでアホ毛tipが後方へ大きく伸びる")
 
 	rig.set_motion(
+		Vector2(58.0, 0.0),
+		Vector2(220.0, 0.0),
+		CombatantStateScript.ActionState.STRIKE,
+		true
+	)
+	for _index in range(2):
+		rig.call("_process", 1.0 / 60.0)
+
+	var strike_lag: PackedVector2Array = polygon.polygon
+	var strike_lag_tip_x := (
+		strike_lag[tip_index].x + strike_lag[tip_right_index].x
+	) * 0.5
+	_expect_true(
+		strike_lag_tip_x < 45.0,
+		"STRIKE開始直後はアホ毛tipが一瞬遅れて残る"
+	)
+
+	rig.set_motion(
 		Vector2.ZERO,
 		Vector2.ZERO,
 		CombatantStateScript.ActionState.STRIKE,
 		true
 	)
-	for _index in range(18):
+	for _index in range(16):
 		rig.call("_process", 1.0 / 60.0)
 
 	var strike_after: PackedVector2Array = polygon.polygon
