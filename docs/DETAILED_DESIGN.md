@@ -1571,7 +1571,24 @@ Checkpoint:
 - STRIKE中も中間部が一本線へ潰れない
 - 振り抜き後に自然にsource curveへ戻る
 
-この2D ribbon方式で正式キャラクター品質を満たせない場合は、アホ毛のみを3D mesh + bone / splineで構成し、正投影カメラで2D Battleへ合成する2.5D方式へ移行する。ゲーム全体の3D化は前提としない。
+2026-10-03 Human Verificationで2D ribbon方式も輪郭破綻が確認されたため、Battleの正式方針を3Dへ切り替える。
+
+3D化の単位は**頭部・髪・アホ毛の固定セット全体**とする。アホ毛だけを3D化して2D頭部へ合成する方式は採用しない。
+
+構成:
+- Head / Hair / Ahoge: 同一3D Node3D階層
+- Ahoge root: 頭頂部の3D attachment / boneへ固定
+- Head Motion: Node3D transform
+- Ahoge Motion: bone chain / spline / procedural segment
+- Camera: Orthographic Camera3D
+- Render: SubViewport
+- Composite: SubViewportTextureをBattleの2D UIへ表示
+- HUD / Manga frame / Timer / Score: 従来どおり2D Control
+
+これにより、頭部の前後・回転・傾きとアホ毛根元を同じ3D座標系で扱う。
+3Dキャラクター表示は見た目専用であり、Hit / Contact / Round / Matchのserver authoritative判定には使用しない。
+
+初期3D prototypeでは外部DCC assetを必須にせず、Godot内のprimitive / procedural meshで頭部・髪・アホ毛の制御系を先に検証してよい。制御境界が確定した後、正式なBlender / glTFモデルへ差し替えられる構造とする。
 
 ### 13.3 ロング型
 
