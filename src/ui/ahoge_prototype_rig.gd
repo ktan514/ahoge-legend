@@ -199,8 +199,14 @@ func _apply_visual_transform() -> void:
 		if viewport_width > 0.0:
 			base_scale = maxf(minimum_base_scale, viewport_width / 5200.0)
 	var vertical_squash := lerpf(1.0, 0.82, clampf((_whole_reach - 1.0) / 1.45, 0.0, 1.0))
-	_motion_root.rotation = _whole_angle
-	_motion_root.scale = Vector2(base_scale * _whole_reach, base_scale * vertical_squash)
+	# 接触補正後の行列にはskewが含まれる。rotation/scaleだけの代入では
+	# その歪みが残るため、毎frameの基準行列を内部の運動状態だけから作る。
+	_motion_root.transform = Transform2D(
+		_whole_angle,
+		Vector2(base_scale * _whole_reach, base_scale * vertical_squash),
+		0.0,
+		Vector2.ZERO
+	)
 
 
 func _update_sprite_anchor() -> void:
