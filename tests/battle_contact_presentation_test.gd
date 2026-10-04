@@ -43,8 +43,10 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float, opponent_i
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(viewport)
 	var hud = HudScene.instantiate()
-	hud.size = Vector2(resolution)
 	viewport.add_child(hud)
+	# FULL_RECTは親サイズを参照する。親へ追加する前のsize指定で
+	# 解像度をoffsetへ重ねず、追加後にanchorとoffsetを確定する。
+	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var director = hud.contact_director
 	director.set_process(false)
 	var config = ConfigScript.new()
@@ -63,7 +65,24 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float, opponent_i
 	var defender = director.fighters[1 - side]
 	var area: Control = hud.find_child("BattleArea", true, false) as Control
 	var label: String = "%d_%d_%d_%d_%s" % [resolution.x, fps, side, int(charge), opponent_id]
-	var record: Dictionary = {"label": label, "strike_seconds": config.attack_strike_seconds(charge)}
+	var record: Dictionary = {"label": label, "strike_seconds": config.attack_strike_seconds(charge), "viewport_size": [resolution.x, resolution.y], "hud_size": [hud.size.x, hud.size.y]}
+	var screen_rect: Rect2 = Rect2(Vector2.ZERO, Vector2(resolution))
+	var layout_ok: bool = hud.global_position.is_equal_approx(Vector2.ZERO) and hud.size.is_equal_approx(Vector2(resolution))
+	_expect(layout_ok, "HUDの原点・寸法が描画解像度と一致しません: " + label)
+	if area == null:
+		_expect(false, "Battle領域がありません: " + label)
+		layout_ok = false
+	else:
+		var area_rect: Rect2 = area.get_global_transform() * Rect2(Vector2.ZERO, area.size)
+		var area_inside: bool = area_rect.has_area() and screen_rect.grow(0.5).encloses(area_rect)
+		_expect(area_inside, "Battle領域がキャプチャ範囲外です: " + label)
+		layout_ok = layout_ok and area_inside
+	if not layout_ok:
+		record["layout_valid"] = false
+		records.append(record)
+		viewport.free()
+		return
+	record["layout_valid"] = true
 	var phases: Array = [
 		[StateScript.ActionState.IDLE, 0.1],
 		[StateScript.ActionState.CHARGING, config.max_charge_seconds if charge > 0.0 else 0.02],
@@ -99,7 +118,9 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float, opponent_i
 				attacker.visible = false
 				var without: Image = await _image(viewport)
 				attacker.visible = true
-				var changed: int = _contact_pixels(image, without, defender.contact_canvas_position())
+				var target: Vector2 = defender.contact_canvas_position()
+				_expect(screen_rect.has_point(target), "接触点がキャプチャ画像外です: " + label)
+				var changed: int = _contact_pixels(image, without, target)
 				record["visible_tip_pixels_near_target"] = changed
 				_expect(changed >= 2, "接触位置の近傍に描画された毛先がありません: " + label)
 			if capture_sequence:
