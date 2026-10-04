@@ -38,8 +38,6 @@ jobs:
           sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           sudo apt-get update -qq
           sudo apt-get install -y xvfb libgl1-mesa-dri
-          git archive --format=zip HEAD > artifacts/ahoge-mesh/project_source.zip
-          cp godot.zip artifacts/ahoge-mesh/godot.zip
       - name: Import
         run: ./scripts/godot-import.sh
       - name: 素材import後の画素を診断
@@ -52,6 +50,8 @@ jobs:
         run: python tools/ahoge_mesh/verify_geometry.py
       - name: OpenGL実描画とSprite比較
         run: xvfb-run -a ./scripts/godot-strict.sh --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --path . --script res://tests/ahoge_mesh_render_test.gd
+      - name: 実時間の攻撃と割込みを描画
+        run: xvfb-run -a ./scripts/godot-strict.sh --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --path . --script res://tests/ahoge_mesh_cycle_test.gd
       - name: 描画検証資料を保存
         if: always()
         uses: actions/upload-artifact@v4

@@ -14,7 +14,7 @@ func _run() -> void:
 	print("Imported source: size=%s bytes=%d mipmaps=%s" % [image.get_size(), image.get_data().size(), image.has_mipmaps()])
 	var bytes := image.get_data()
 	for offset in range(0, bytes.size(), 4):
-		if bytes[offset + 3] < 8:
+		if bytes[offset + 3] < 20:
 			bytes[offset] = 0
 			bytes[offset + 1] = 0
 			bytes[offset + 2] = 0

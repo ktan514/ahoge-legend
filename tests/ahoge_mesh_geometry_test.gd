@@ -30,13 +30,16 @@ func _run() -> void:
 	var straight: PackedVector2Array = profile.centerline_keys[-1]
 	for index in range(int(straight.size() * 0.8), straight.size() - 1):
 		var direction: Vector2 = straight[index + 1] - straight[index]
-		_expect(absf(wrapf(direction.angle() - deg_to_rad(-70.0), -PI, PI)) < deg_to_rad(0.2), "毛先側20%が目標方向へ直線化")
+		_expect(absf(wrapf(direction.angle() - deg_to_rad(profile.unfold_target_angle_degrees), -PI, PI)) < deg_to_rad(0.2), "毛先側20%が目標方向へ直線化")
 	var invalid = ProfileAsset.duplicate(true)
 	invalid.section_left_offsets_px[2] = 20.0
 	_expect(not invalid.prepare().is_empty(), "壊れた制作断面を拒否")
 	var texture := load(profile.source_texture_path) as Texture2D
 	_expect(profile.validate_source(texture).is_empty(), "現行ピンク素材のSHA-256一致")
 	_expect(profile.validate_source(ImageTexture.create_from_image(texture.get_image())).is_empty(), "export向けの正規化画素識別")
+	var tampered: Image = texture.get_image()
+	tampered.set_pixel(558, 1124, Color(0.0, 0.0, 0.0, 1.0))
+	_expect(not profile.validate_source(ImageTexture.create_from_image(tampered)).is_empty(), "同じ寸法でも可視画素が異なる素材を拒否")
 	var wrong_image := Image.create(16, 16, false, Image.FORMAT_RGBA8)
 	_expect(not profile.validate_source(ImageTexture.create_from_image(wrong_image)).is_empty(), "別素材を拒否")
 	DirAccess.make_dir_recursive_absolute("res://artifacts/ahoge-mesh")

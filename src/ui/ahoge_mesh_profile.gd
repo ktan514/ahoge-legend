@@ -60,12 +60,14 @@ func validate_source(texture_value: Texture2D) -> String:
 	if image.is_compressed() and image.decompress() != OK:
 		return "素材の圧縮画素を展開できません"
 	image.convert(Image.FORMAT_RGBA8)
+	if image.has_mipmaps():
+		image.clear_mipmaps()
 	var hashing := HashingContext.new()
 	if hashing.start(HashingContext.HASH_SHA256) != OK:
 		return "素材の識別処理を開始できません"
 	var bytes: PackedByteArray = image.get_data()
 	for offset in range(0, bytes.size(), 4):
-		if bytes[offset + 3] < 8:
+		if bytes[offset + 3] < 20:
 			bytes[offset] = 0
 			bytes[offset + 1] = 0
 			bytes[offset + 2] = 0

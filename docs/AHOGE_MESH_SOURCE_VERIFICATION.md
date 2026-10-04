@@ -5,3 +5,11 @@
 最初の幾何学試験では、原本照合と形状補間の検査は成功したが、原本から計算した透明縁正規化SHAとimport済み画素の照合が不一致だった。寸法だけの検査へ弱めず、`ahoge_mesh_source_diagnostic.gd` で実際のimport済みPNGとバイト長・mipmap有無・正規化SHAを採取する。
 
 診断中はexact HEADのソースarchiveと使用したGodot配布ZIPも7日間の検証artifactへ保存し、同じエンジンで実描画を再現できるようにする。製品への同梱や通常起動の変更ではない。検証artifactは`.gdignore`で素材import対象から除外する。
+
+## 診断結果
+
+Godotの現行texture importはalphaを変更せず、18,362画素のRGBを変更していた。変更画素のalphaは0〜19/255に限られていた。したがってexport照合では全alphaを保持し、alpha<20のRGBだけを0に正規化する。可視本体のRGBと全輪郭alphaは引き続き識別する。原本PNG照合は従来どおり全バイトのSHA-256とする。
+
+原本とimport済み画像の両方で確認した正規化SHA-256は `4ca536dc8460e1cab500e1834f536e4b76cf0c790818fbd2a28b884e318b0aeb`。同じ寸法でも根元の可視画素を変えた画像は拒否する試験を追加した。mipmapの追加に依存しないようbase imageへ戻して検査する。
+
+診断に使ったエンジンとソースarchiveは一回の診断artifactへ保存した。以後の通常検証artifactに重複するエンジンZIPを含めない。

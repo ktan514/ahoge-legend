@@ -2,7 +2,7 @@ extends Control
 
 const CombatantStateScript := preload("res://src/domain/combatant_state.gd")
 const CharacterDefinitionScript := preload("res://src/domain/character_definition.gd")
-const AhogePrototypeRigScript := preload("res://src/ui/ahoge_prototype_rig.gd")
+const AhogePrototypeRigScript := preload("res://src/ui/ahoge_mesh_rig.gd")
 
 @export var head_clip_horizontal_bleed: float = 180.0
 
@@ -360,11 +360,12 @@ func _update_asset_pose() -> void:
 	_head_sprite.scale = Vector2(head_scale * facing, head_scale)
 	_head_sprite.rotation = deg_to_rad(_head_rotation)
 
-	var crown_anchor := Vector2(
-		head_center.x + facing * 10.0,
-		head_center.y - display_height * 0.5 + 34.0
+	# 素材側の根元と頭部側の接点は別データ。同じhead transformで移動・回転する。
+	var attachment: Vector2 = _ahoge_rig.mesh_head_attachment_reference()
+	var local_attachment := (attachment - Vector2(0.5, 0.5)) * texture_size
+	_ahoge_rig.position = _asset_root.get_global_transform().affine_inverse() * (
+		_head_sprite.get_global_transform() * local_attachment
 	)
-	_ahoge_rig.position = crown_anchor
 
 
 func _draw() -> void:
