@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from shapely.geometry import Polygon
@@ -17,6 +18,37 @@ def read(relative: str) -> dict:
     return value
 
 
+def verify_velocities(cases: list[dict]) -> list[dict]:
+    results = []
+    for case in cases:
+        parts = case["label"].split("_")
+        if int(parts[1]) != 120:
+            continue
+        facing = 1.0 if int(parts[2]) == 0 else -1.0
+        trace = case["trace"]
+        assert len(trace) > 4, "速度検査用のframe不足"
+        # 現行仕様のcontact_ratio=0.70。試験が記録した実STRIKE時間を使う。
+        contact_time = float(trace[-1]["time"]) * 0.70
+        peaks, speeds = {}, {}
+        for name in ("root", "middle", "tip"):
+            measured = []
+            for first, second in zip(trace, trace[1:]):
+                t0, t1 = float(first["time"]), float(second["time"])
+                assert t1 > t0, "時系列が逆転または重複"
+                if t1 > contact_time + 1e-6:
+                    continue
+                speed = (float(second[name][0]) - float(first[name][0])) * facing / (t1 - t0)
+                assert math.isfinite(speed), "速度が有限値ではない"
+                measured.append((speed, t1))
+            assert measured, "接触前の速度が未検査"
+            speeds[name], peaks[name] = max(measured)
+        assert peaks["root"] < peaks["middle"] < peaks["tip"], f"ムチの速度ピーク順序が不正: {case['label']} {peaks}"
+        assert speeds["tip"] > max(speeds["root"], speeds["middle"]), f"毛先が最速ではない: {case['label']} {speeds}"
+        results.append({"label": case["label"], "peak_times_seconds": peaks, "peak_forward_speed_px_s": speeds})
+    assert len(results) == 8, "速度検査の条件数が8ではない"
+    return results
+
+
 def main() -> None:
     summaries = {}
     for path, count in [("contact/report.json", 48), ("parry/report.json", 48), ("actions/report.json", 24)]:
@@ -29,7 +61,6 @@ def main() -> None:
     assert actions["checks"] > 1000 and actions["geometry_frames"] > 100
     contact = read("contact/report.json")
     for case in contact["cases"]:
-        # フィールド名が異なる結果も誤って合格にしない。
         width = case.get("section_width", {})
         assert width.get("sampled_sections", 0) > 0, f"幅検査が未実施: {case.get('label')}"
     geometry = read("actions/geometry_samples.json")
@@ -40,9 +71,10 @@ def main() -> None:
         points = sample["vertices"]
         polygon = Polygon([points[int(i)] for i in boundary])
         assert polygon.is_valid and polygon.area > 0, f"三動作の外周が自己交差: {sample['label']} state={sample['state']}"
-    result = {"status": "PASS", "cases": summaries, "boundary_samples": len(samples), "continuous_proof": False}
+    velocities = verify_velocities(actions["cases"])
+    result = {"status": "PASS", "cases": summaries, "boundary_samples": len(samples), "velocity_cases": velocities, "continuous_proof": False}
     (ROOT / "actions/verification.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    print("三動作の実行結果・外周検査: PASS", summaries, "形状数", len(samples))
+    print("三動作の実行結果・外周・速度順序検査: PASS", summaries, "形状数", len(samples), "速度条件", len(velocities))
 
 
 if __name__ == "__main__":
