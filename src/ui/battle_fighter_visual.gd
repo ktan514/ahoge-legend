@@ -3,6 +3,8 @@ extends "res://src/ui/fighter_visual.gd"
 const ParryMotionScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(30.0, 22.0)
+const WHIP_REACH_POWER: float = 6.0
+const WHIP_TURN_END: float = 0.95
 
 var arena_canvas_rect: Rect2 = Rect2()
 var last_contact_error: float = INF
@@ -168,7 +170,6 @@ func present_toward(target_canvas: Vector2) -> void:
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
 	var base: Transform2D = _neutral_transform()
-	# 既存の幅検証にも当該frameの補正前基準を提供する。
 	_base_motion_transform = base
 	var source_tip: Vector2 = vertices[-1]
 	if action_motion.blocked:
@@ -182,18 +183,20 @@ func present_toward(target_canvas: Vector2) -> void:
 			_contact_frozen = true
 		var aim: Vector2 = target_canvas
 		if q > 1.0 and not confirmed:
-			# 接触後は相手を追尾せず、固定した接触位置から短く振り抜く。
 			var after: float = smoothstep(contact_seconds, action_motion.duration, action_motion.elapsed)
 			aim = _contact_anchor_canvas + Vector2(FOLLOW_THROUGH_PX.x * facing, FOLLOW_THROUGH_PX.y) * after
 		var target_local: Vector2 = _ahoge_rig.to_local(aim)
-		var base_tip: Vector2 = base * source_tip
-		if base_tip.length() > 0.01 and target_local.length() > 0.01:
-			var axis: Vector2 = base_tip.normalized()
-			var reach_weight: float = pow(clampf(q, 0.0, 1.0), 2.0)
-			var turn_weight: float = smoothstep(0.0, 0.72, q)
-			var ratio: float = lerpf(1.0, target_local.length() / base_tip.length(), reach_weight)
+		# 巻き込んだ現在の先端へ全体角度を合わせ続けない。
+		# 接触時の形を固定した基準とし、現在形のしなりをそのまま描く。
+		var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
+		var contact_tip: Vector2 = base * contact_vertices[-1]
+		if contact_tip.length() > 0.01 and target_local.length() > 0.01:
+			var axis: Vector2 = contact_tip.normalized()
+			var reach_weight: float = pow(clampf(q, 0.0, 1.0), WHIP_REACH_POWER)
+			var turn_weight: float = smoothstep(0.0, WHIP_TURN_END, q)
+			var ratio: float = lerpf(1.0, target_local.length() / contact_tip.length(), reach_weight)
 			var stretch: Transform2D = Transform2D(Vector2.RIGHT + axis * ((ratio - 1.0) * axis.x), Vector2.DOWN + axis * ((ratio - 1.0) * axis.y), Vector2.ZERO)
-			var turn: float = wrapf(target_local.angle() - base_tip.angle(), -PI, PI) * turn_weight
+			var turn: float = wrapf(target_local.angle() - contact_tip.angle(), -PI, PI) * turn_weight
 			base = Transform2D(turn, Vector2.ZERO) * stretch * base
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
