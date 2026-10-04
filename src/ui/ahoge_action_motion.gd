@@ -89,7 +89,9 @@ func advance(next_state: int, delta: float, phase_duration: float, max_charge: f
 	if blocked:
 		_reset_pose()
 		return
-	elapsed += delta
+	# 防御の最初の表示は現在形状を保持する。サーバーの防御開始は遅らせない。
+	if not (changed and state == StateScript.ActionState.PARRY):
+		elapsed += delta
 	_compute_pose()
 
 
