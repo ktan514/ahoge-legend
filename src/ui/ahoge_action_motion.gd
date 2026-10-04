@@ -2,7 +2,7 @@ extends RefCounted
 
 const StateScript := preload("res://src/domain/combatant_state.gd")
 const ParryScript := preload("res://src/ui/ahoge_parry_motion.gd")
-const BACK_BEND: float = -1.4
+const BACK_BEND: float = -1.15
 const TIP_DROP: float = 1.8
 const RECOVER_SECONDS: float = 0.24
 const FOLLOW_BEND: float = 0.12
