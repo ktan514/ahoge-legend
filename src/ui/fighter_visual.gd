@@ -178,7 +178,8 @@ func _process(delta: float) -> void:
 			combat_state.ahoge_available,
 			charge_ratio,
 			_phase_duration_for_state(combat_state.action_state, charge_ratio),
-			_max_charge_duration()
+			_max_charge_duration(),
+			float(combat_state.config.attack_contact_ratio) if combat_state.config != null else 0.70
 		)
 		_apply_action_impulse(combat_state.action_state)
 
@@ -360,11 +361,9 @@ func _update_asset_pose() -> void:
 	_head_sprite.scale = Vector2(head_scale * facing, head_scale)
 	_head_sprite.rotation = deg_to_rad(_head_rotation)
 
-	var crown_anchor := Vector2(
-		head_center.x + facing * 10.0,
-		head_center.y - display_height * 0.5 + 34.0
-	)
-	_ahoge_rig.position = crown_anchor
+	# 頭頂部の接続位置にも、頭部と同じ左右反転・回転を適用する。
+	var crown_offset := Vector2(facing * 10.0, -display_height * 0.5 + 34.0)
+	_ahoge_rig.position = head_center + crown_offset.rotated(deg_to_rad(_head_rotation))
 
 
 func _draw() -> void:
