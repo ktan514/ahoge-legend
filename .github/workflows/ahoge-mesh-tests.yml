@@ -24,9 +24,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: 素材検証の依存を準備
-        run: python -m pip install 'Pillow==11.3.0'
+        run: python -m pip install 'Pillow==11.3.0' 'numpy==2.3.5' 'shapely==2.1.2'
       - name: 現行素材の寸法と輪郭を記録
         run: python tools/ahoge_mesh/inspect_source.py
+      - name: Godotを準備
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat .godot-version | tr -d '[:space:]')"
+          mkdir -p .ci-bin
+          curl -L --fail --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${version}-stable/Godot_v${version}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d .ci-bin
+          mv .ci-bin/Godot* .ci-bin/godot
+          chmod +x .ci-bin/godot
+          echo "$PWD/.ci-bin" >> "$GITHUB_PATH"
+      - name: Godot素材を読み込む
+        run: ./scripts/godot-import.sh
+      - name: 実描画と固定メッシュを保存
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: xvfb-run -a godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_render_test.gd
+      - name: 補間全区間と描画差を検査
+        run: python tools/ahoge_mesh/verify_geometry_and_render.py
       - name: 描画検証資料を保存
         if: always()
         uses: actions/upload-artifact@v4
