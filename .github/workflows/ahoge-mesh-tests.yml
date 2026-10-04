@@ -10,7 +10,13 @@ on:
       - 'tools/ahoge_mesh/**'
       - '.github/workflows/ahoge-mesh-tests.yml'
   push:
-    branches: [main]
+    paths:
+      - 'assets/characters/**'
+      - 'src/ui/ahoge_*'
+      - 'src/ui/fighter_visual.gd'
+      - 'tests/ahoge_mesh*'
+      - 'tools/ahoge_mesh/**'
+      - '.github/workflows/ahoge-mesh-tests.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,8 +49,12 @@ jobs:
           sudo apt-get install -y xvfb libgl1-mesa-dri
       - name: Import
         run: ./scripts/godot-import.sh
+      - name: 通常Godot回帰試験
+        run: ./scripts/godot-strict.sh --headless --path . --script res://tests/run_all.gd
       - name: 固定メッシュの幾何学検証
         run: ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_geometry_test.gd
+      - name: 補間全区間の面積と境界交差検証
+        run: python tools/ahoge_mesh/verify_geometry.py
       - name: OpenGL実描画とSprite比較
         run: xvfb-run -a ./scripts/godot-strict.sh --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy --path . --script res://tests/ahoge_mesh_render_test.gd
       - name: 描画検証資料を保存

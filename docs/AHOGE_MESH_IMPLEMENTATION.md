@@ -1,6 +1,6 @@
 # 固定アホ毛メッシュ実装・検証記録
 
-関連: #102 / PR #105 / `AHOGE_MESH_DEFORMATION_DESIGN.md`
+関連: #102 / PR #105 / PR #106 / `AHOGE_MESH_DEFORMATION_DESIGN.md`
 
 ## 仕様の具体化
 
@@ -25,13 +25,17 @@ Editorでは原本SHA-256、原本PNGが含まれないexportでは正規化RGBA
 
 ## 検証
 
-`python tools/ahoge_mesh/inspect_source.py` は原本・輪郭・SHA-256を保存する。`Ahoge mesh verification` はheadless幾何学検査に加え、XvfbとOpenGLで実際に描画しSpriteとのalpha比較、途中形状、表示された先端・根元、固定UV/index/RIDを検査する。画像は7日間CI artifactへ保存する。
+`python tools/ahoge_mesh/inspect_source.py` は原本・輪郭・SHA-256を保存する。`Ahoge mesh verification` はheadless幾何学検査に加え、XvfbとOpenGLで実際に描画しSpriteとのalpha比較、途中形状、表示された先端・根元、固定UV/index/RIDを検査する。画像は7日間CI artifactへ保存する。PRのmerge treeだけでなく、作業ブランチのpushでもexact HEADの検査を行う。
 
-補間区間の各三角形の符号付き面積を2次式で評価し、両端だけでなく内部極値を検査する。非隣接境界の重なりは別検証とする。素材監査やNode存在だけで描画合格とはしない。
+補間区間の各三角形の符号付き面積を2次式で評価し、両端だけでなく内部極値を検査する。Pythonの独立検査は面の共有辺・単一閉境界も確認する。非隣接境界の交差は、動く端点の方向判定が0になる時刻（2次式の根）と区間中点で検査する。同一直線上を動く辺では端点の座標が一致する時刻も含める。浮動小数点許容差は原画像座標で1e-5とし、離散サンプルのみの確認と区別する。
+
+## 並行変更の保護
+
+`0beed52`からの作業中に元ブランチへ同名3ファイルの別実装が追加された。fast-forward失敗を確認後、上書きを行わず `feature/102-ahoge-straighten-render` / PR #106へ作業を分離した。元ブランチを巻き戻さない。統合時は両実装のAPI・制作データ・試験を照合する。
 
 ## 現在の到達点
 
 - 現行素材に沿った固定メッシュと直線化キー、頂点更新deformerを追加。
-- 幾何学・実描画試験を追加。実行結果を確認してから通常Battleへ接続する。
+- 幾何学・連続区間・実描画試験を追加。実行結果を確認してから通常Battleへ接続する。
 - 既存Sprite表示と全体運動のコードはまだ変更していない。
 - Human Verification未実施。PRはマージしない。
