@@ -2,21 +2,9 @@ name: Ahoge mesh verification
 
 on:
   pull_request:
-    paths:
-      - 'assets/characters/**'
-      - 'src/ui/ahoge_*'
-      - 'src/ui/fighter_visual.gd'
-      - 'tests/ahoge_mesh*'
-      - 'tools/ahoge_mesh/**'
-      - '.github/workflows/ahoge-mesh-tests.yml'
+    paths: ['assets/characters/**', 'src/ui/ahoge_*', 'src/ui/fighter_visual.gd', 'tests/ahoge_mesh*', 'tools/ahoge_mesh/**', '.github/workflows/ahoge-mesh-tests.yml']
   push:
-    paths:
-      - 'assets/characters/**'
-      - 'src/ui/ahoge_*'
-      - 'src/ui/fighter_visual.gd'
-      - 'tests/ahoge_mesh*'
-      - 'tools/ahoge_mesh/**'
-      - '.github/workflows/ahoge-mesh-tests.yml'
+    paths: ['assets/characters/**', 'src/ui/ahoge_*', 'src/ui/fighter_visual.gd', 'tests/ahoge_mesh*', 'tools/ahoge_mesh/**', '.github/workflows/ahoge-mesh-tests.yml']
   workflow_dispatch:
 
 permissions:
@@ -38,7 +26,10 @@ jobs:
       - name: 素材検証の依存を準備
         run: python -m pip install 'Pillow==11.3.0'
       - name: 現行素材の寸法と輪郭を記録
-        run: python tools/ahoge_mesh/inspect_source.py
+        run: |
+          mkdir -p artifacts/ahoge-mesh
+          touch artifacts/.gdignore
+          python tools/ahoge_mesh/inspect_source.py
       - name: Godotと描画環境を準備
         shell: bash
         run: |
@@ -47,8 +38,12 @@ jobs:
           sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           sudo apt-get update -qq
           sudo apt-get install -y xvfb libgl1-mesa-dri
+          git archive --format=zip HEAD > artifacts/ahoge-mesh/project_source.zip
+          cp godot.zip artifacts/ahoge-mesh/godot.zip
       - name: Import
         run: ./scripts/godot-import.sh
+      - name: 素材import後の画素を診断
+        run: ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_source_diagnostic.gd
       - name: 通常Godot回帰試験
         run: ./scripts/godot-strict.sh --headless --path . --script res://tests/run_all.gd
       - name: 固定メッシュの幾何学検証

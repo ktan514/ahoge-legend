@@ -1,0 +1,7 @@
+# アホ毛素材のimport照合
+
+固定メッシュは現行素材だけへ使用する。原本PNGのSHA-256と、Godot import後にexportされる画素のSHA-256は分けて検証する。
+
+最初の幾何学試験では、原本照合と形状補間の検査は成功したが、原本から計算した透明縁正規化SHAとimport済み画素の照合が不一致だった。寸法だけの検査へ弱めず、`ahoge_mesh_source_diagnostic.gd` で実際のimport済みPNGとバイト長・mipmap有無・正規化SHAを採取する。
+
+診断中はexact HEADのソースarchiveと使用したGodot配布ZIPも7日間の検証artifactへ保存し、同じエンジンで実描画を再現できるようにする。製品への同梱や通常起動の変更ではない。検証artifactは`.gdignore`で素材import対象から除外する。
