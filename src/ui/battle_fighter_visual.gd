@@ -3,7 +3,8 @@ extends "res://src/ui/fighter_visual.gd"
 const ParryMotionScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(30.0, 22.0)
-const WHIP_REACH_POWER: float = 6.0
+const WHIP_NORMAL_REACH_POWER: float = 4.0
+const WHIP_CHARGED_REACH_POWER: float = 6.0
 const WHIP_TURN_END: float = 0.95
 
 var arena_canvas_rect: Rect2 = Rect2()
@@ -186,13 +187,13 @@ func present_toward(target_canvas: Vector2) -> void:
 			var after: float = smoothstep(contact_seconds, action_motion.duration, action_motion.elapsed)
 			aim = _contact_anchor_canvas + Vector2(FOLLOW_THROUGH_PX.x * facing, FOLLOW_THROUGH_PX.y) * after
 		var target_local: Vector2 = _ahoge_rig.to_local(aim)
-		# 巻き込んだ現在の先端へ全体角度を合わせ続けない。
 		# 接触時の形を固定した基準とし、現在形のしなりをそのまま描く。
 		var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
 		var contact_tip: Vector2 = base * contact_vertices[-1]
 		if contact_tip.length() > 0.01 and target_local.length() > 0.01:
 			var axis: Vector2 = contact_tip.normalized()
-			var reach_weight: float = pow(clampf(q, 0.0, 1.0), WHIP_REACH_POWER)
+			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
+			var reach_weight: float = pow(clampf(q, 0.0, 1.0), power)
 			var turn_weight: float = smoothstep(0.0, WHIP_TURN_END, q)
 			var ratio: float = lerpf(1.0, target_local.length() / contact_tip.length(), reach_weight)
 			var stretch: Transform2D = Transform2D(Vector2.RIGHT + axis * ((ratio - 1.0) * axis.x), Vector2.DOWN + axis * ((ratio - 1.0) * axis.y), Vector2.ZERO)
