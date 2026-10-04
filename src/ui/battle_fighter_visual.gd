@@ -1,6 +1,6 @@
 extends "res://src/ui/fighter_visual.gd"
 
-# Battle専用。メッシュの接続・形状キーと基準の二次運動は親実装へ委譲する。
+# Battle専用。固定メッシュ・形状キーと基準の二次運動は親実装へ委譲する。
 var arena_canvas_rect: Rect2 = Rect2()
 var last_contact_error: float = INF
 var last_safety_scale: float = 1.0
@@ -12,6 +12,9 @@ var _head_contact_px: Vector2 = Vector2.ZERO
 var _presentation_state: int = -1
 var _recovery_head_from: Vector2 = Vector2.ZERO
 var _confirmed_age: float = 100.0
+var _interrupt_age: float = 100.0
+var _interrupt_from: float = 0.0
+var _base_motion_transform: Transform2D = Transform2D.IDENTITY
 var _mesh_node
 var _motion_node: Node2D
 
@@ -31,12 +34,21 @@ func _process(delta: float) -> void:
 	if int(combat_state.action_state) != _presentation_state:
 		_recovery_head_from = _head_offset
 		_presentation_state = int(combat_state.action_state)
-		if _presentation_state not in [CombatantStateScript.ActionState.STRIKE, CombatantStateScript.ActionState.COOLDOWN]:
+		_interrupt_age = 0.0
+		_interrupt_from = 0.0
+		if _presentation_state in [CombatantStateScript.ActionState.COOLDOWN, CombatantStateScript.ActionState.PARRY, CombatantStateScript.ActionState.DODGE, CombatantStateScript.ActionState.STAGGER]:
+			_interrupt_from = last_presentation_weight
+		if _presentation_state != CombatantStateScript.ActionState.COOLDOWN:
 			_confirmed_age = 100.0
+	if not bool(combat_state.ahoge_available) or _presentation_state == CombatantStateScript.ActionState.ROUND_LOCKED:
+		_confirmed_age = 100.0
+		_interrupt_from = 0.0
 	_confirmed_age += delta
+	_interrupt_age += delta
 	super._process(delta)
 	if _asset_mode:
 		_ahoge_rig.call("_process", delta)
+		_base_motion_transform = _motion_node.transform
 
 
 func _cache_head_image() -> void:
@@ -48,10 +60,9 @@ func _cache_head_image() -> void:
 	_head_image = _head_image_texture.get_image()
 	if _head_image == null or _head_image.is_empty():
 		return
-	if _head_image.is_compressed():
-		if _head_image.decompress() != OK:
-			_head_image = null
-			return
+	if _head_image.is_compressed() and _head_image.decompress() != OK:
+		_head_image = null
+		return
 	_head_used = Rect2(_head_image.get_used_rect())
 	# 素材の実輪郭。左右はHeadSpriteの反転で処理する。
 	var x: int = clampi(int(_head_used.position.x + _head_used.size.x * 0.73), 0, _head_image.get_width() - 1)
@@ -85,9 +96,10 @@ func _prototype_head_target(charge_ratio: float) -> Vector2:
 			forward = recovered.x * facing
 	target.x = clampf(forward, -36.0, 28.0) * facing
 	_cache_head_image()
-	if arena_canvas_rect.has_area() and _head_used.has_area() and _head_sprite != null:
+	if _asset_mode and arena_canvas_rect.has_area() and _head_used.has_area():
 		var local_bounds: Rect2 = get_global_transform().affine_inverse() * arena_canvas_rect
-		var extent: Rect2 = _head_local_extent()
+		var angle: float = -facing * (_prototype_charge_lean(charge_ratio) + _prototype_cooldown_lean(charge_ratio)) * 0.035
+		var extent: Rect2 = _head_local_extent(angle)
 		var low: float = local_bounds.position.x + 10.0 - size.x * 0.5 - extent.position.x
 		var high: float = local_bounds.end.x - 10.0 - size.x * 0.5 - extent.end.x
 		if low <= high:
@@ -95,9 +107,9 @@ func _prototype_head_target(charge_ratio: float) -> Vector2:
 	return target
 
 
-func _head_local_extent() -> Rect2:
+func _head_local_extent(angle: float) -> Rect2:
 	var local: Rect2 = Rect2(_head_used.position - _head_image_texture.get_size() * 0.5, _head_used.size)
-	var basis: Transform2D = Transform2D(deg_to_rad(_head_rotation), _head_sprite.scale, 0.0, Vector2.ZERO)
+	var basis: Transform2D = Transform2D(angle, _head_sprite.scale, 0.0, Vector2.ZERO)
 	return basis * local
 
 
@@ -126,23 +138,23 @@ func present_toward(target_canvas: Vector2) -> void:
 	if not _asset_mode or _mesh_node == null or not _mesh_node.configured or not _ahoge_rig.visible:
 		return
 	var amount: float = float(_ahoge_rig.debug_straighten())
+	amount = maxf(amount, _interrupt_from * (1.0 - smoothstep(0.0, 0.16, _interrupt_age)))
 	if _confirmed_age < 0.16:
-		var confirmed: float = 1.0 - smoothstep(0.05, 0.16, _confirmed_age)
-		amount = maxf(amount, confirmed)
+		amount = maxf(amount, 1.0 - smoothstep(0.05, 0.16, _confirmed_age))
 	_mesh_node.set_straighten(amount)
 	last_presentation_weight = amount
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
 	if vertices.is_empty():
 		return
-	# 親rigがこのframeに生成した基準変換から解く。前frameの補正を累積しない。
-	var base: Transform2D = _motion_node.transform
+	# 当該frameの基準変換から解く。同じframeの再描画でも補正を累積しない。
+	var base: Transform2D = _base_motion_transform
 	var source_tip: Vector2 = vertices[-1]
 	var base_tip: Vector2 = base * source_tip
 	var target_local: Vector2 = _ahoge_rig.to_local(target_canvas)
 	if amount > 0.0 and base_tip.length() > 0.01 and target_local.length() > 0.01:
 		var axis: Vector2 = base_tip.normalized()
 		var ratio: float = lerpf(1.0, target_local.length() / base_tip.length(), amount)
-		# 根元→先端軸のみを伸縮する。直交する幅に射程倍率を重ねない。
+		# 根元→先端軸のみ伸縮し、直交する幅へ射程倍率を重ねない。
 		var stretch: Transform2D = Transform2D(
 			Vector2.RIGHT + axis * ((ratio - 1.0) * axis.x),
 			Vector2.DOWN + axis * ((ratio - 1.0) * axis.y),
