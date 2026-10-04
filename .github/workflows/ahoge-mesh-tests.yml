@@ -50,6 +50,8 @@ jobs:
           echo "$PWD/.ci-bin" >> "$GITHUB_PATH"
       - name: Godot素材を読み込む
         run: ./scripts/godot-import.sh
+      - name: 接触補正の歪みを次フレームへ残さない
+        run: timeout 60s ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_transform_test.gd
       - name: 実描画と固定メッシュを保存
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
