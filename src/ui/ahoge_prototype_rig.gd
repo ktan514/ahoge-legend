@@ -108,6 +108,16 @@ func _process(delta: float) -> void:
 
 
 func _simulate_whole_motion(delta: float) -> void:
+	if _mesh_active and _action_state == CombatantStateScript.ActionState.PARRY:
+		# 近距離パリィは先端の形状で払う。前の攻撃のばねを再発させない。
+		# 現在の実表示から中立姿勢への連続移行はBattleFighterVisualが担当する。
+		_whole_angle = 0.0
+		_whole_angle_velocity = 0.0
+		_whole_reach = 1.0
+		_whole_reach_velocity = 0.0
+		_last_angle_target = 0.0
+		_last_reach_target = 1.0
+		return
 	var forward_v := _head_velocity.x
 	var forward_a := _head_acceleration.x
 	var angle_target := forward_v * 0.00135 + forward_a * 0.000028
@@ -138,6 +148,7 @@ func _simulate_whole_motion(delta: float) -> void:
 				angle_target += -0.50 * lag + 1.04 * normal_release
 				reach_target = lerpf(0.82, 2.05, normal_release)
 		CombatantStateScript.ActionState.PARRY:
+			# メッシュ未対応素材の従来表示のみ。LONGには上の専用分岐を使う。
 			var parry_u := clampf(_action_age / _phase_duration, 0.0, 1.0)
 			var rise := _ease_out(clampf((parry_u - 0.08) / 0.26, 0.0, 1.0))
 			var strike_down := _ease_out(clampf((parry_u - 0.30) / 0.25, 0.0, 1.0))
@@ -199,8 +210,7 @@ func _apply_visual_transform() -> void:
 		if viewport_width > 0.0:
 			base_scale = maxf(minimum_base_scale, viewport_width / 5200.0)
 	var vertical_squash := lerpf(1.0, 0.82, clampf((_whole_reach - 1.0) / 1.45, 0.0, 1.0))
-	# 接触補正後の行列にはskewが含まれる。rotation/scaleだけの代入では
-	# その歪みが残るため、毎frameの基準行列を内部の運動状態だけから作る。
+	# 毎frameの基準行列は内部状態から作り、接触補正のskewを持ち越さない。
 	_motion_root.transform = Transform2D(
 		_whole_angle,
 		Vector2(base_scale * _whole_reach, base_scale * vertical_squash),
