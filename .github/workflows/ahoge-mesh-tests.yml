@@ -25,7 +25,7 @@ concurrency:
 jobs:
   mesh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,23 +55,29 @@ jobs:
       - name: 実描画と固定メッシュを保存
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: timeout 120s xvfb-run -a godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_render_test.gd
+        run: timeout 120s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_render_test.gd
       - name: 補間全区間と描画差を検査
         run: python tools/ahoge_mesh/verify_geometry_and_render.py
       - name: 通常と最大チャージの実時間で描画を検査
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: timeout 180s xvfb-run -a godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_cycle_test.gd
+        run: timeout 180s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_cycle_test.gd
       - name: 接触表示試験を構文確認する
         run: godot --headless --path . --check-only --script res://tests/battle_contact_presentation_test.gd
       - name: 相手を配置した実対戦HUDで接触と見切れを検査
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: timeout 240s xvfb-run -a godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/battle_contact_presentation_test.gd
+        run: timeout 240s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/battle_contact_presentation_test.gd
+      - name: 溜め・ムチ打ち・パリィの連続動作を実描画で検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 240s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_action_test.gd
       - name: 湾曲を保つ近距離パリィを実描画で検査
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: timeout 180s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_parry_test.gd
+      - name: 三動作の条件数と外周を照合する
+        run: python tools/ahoge_mesh/verify_action_report.py
       - name: 描画検証資料を保存
         if: always()
         uses: actions/upload-artifact@v4
