@@ -6,7 +6,9 @@ on:
       - 'assets/characters/**'
       - 'src/ui/ahoge_*'
       - 'src/ui/fighter_visual.gd'
+      - 'src/ui/battle_*'
       - 'tests/ahoge_mesh*'
+      - 'tests/battle_contact*'
       - 'tools/ahoge_mesh/**'
       - '.github/workflows/ahoge-mesh-tests.yml'
   push:
@@ -15,6 +17,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ahoge-mesh-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   mesh:
@@ -54,6 +60,12 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: timeout 180s xvfb-run -a godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_cycle_test.gd
+      - name: 接触表示試験を構文確認する
+        run: godot --headless --path . --check-only --script res://tests/battle_contact_presentation_test.gd
+      - name: 相手を配置した実対戦HUDで接触と見切れを検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 240s xvfb-run -a godot --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/battle_contact_presentation_test.gd
       - name: 描画検証資料を保存
         if: always()
         uses: actions/upload-artifact@v4
