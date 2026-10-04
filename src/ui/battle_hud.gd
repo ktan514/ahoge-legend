@@ -1,6 +1,7 @@
 extends Control
 
-const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
+const FighterVisualScript := preload("res://src/ui/battle_fighter_visual.gd")
+const ContactDirectorScript := preload("res://src/ui/battle_contact_director.gd")
 const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
 const MangaBackdropScript := preload("res://src/ui/theme/manga_backdrop.gd")
 
@@ -23,6 +24,7 @@ var _player_one_score: Label
 var _player_two_score: Label
 var _player_one_visual
 var _player_two_visual
+var contact_director
 var _message_generation: int = 0
 
 const IMPACT_MESSAGE_SECONDS := 0.24
@@ -111,7 +113,7 @@ func _ready() -> void:
 	_player_two_score.add_theme_color_override("font_color", MangaThemeScript.WHITE)
 	p2_box.add_child(_player_two_score)
 
-	# Compatibility field: no longer the visible scoreboard source.
+	# 旧呼出側との互換用。可視scoreboardの情報源にはしない。
 	_header = Label.new()
 	_header.visible = false
 	root.add_child(_header)
@@ -137,6 +139,8 @@ func _ready() -> void:
 	arena_stack.add_child(battle_caption)
 
 	var battle_area := HBoxContainer.new()
+	battle_area.name = "BattleArea"
+	battle_area.clip_contents = true
 	battle_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	battle_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	battle_area.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -147,7 +151,8 @@ func _ready() -> void:
 	player_one_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	player_one_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_player_one_visual = FighterVisualScript.new()
-	_player_one_visual.custom_minimum_size = Vector2(420, 460)
+	_player_one_visual.name = "PlayerOneVisual"
+	_player_one_visual.custom_minimum_size = Vector2(420, 380)
 	_player_one_visual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_player_one_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	player_one_box.add_child(_player_one_visual)
@@ -162,7 +167,8 @@ func _ready() -> void:
 	player_two_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	player_two_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_player_two_visual = FighterVisualScript.new()
-	_player_two_visual.custom_minimum_size = Vector2(420, 460)
+	_player_two_visual.name = "PlayerTwoVisual"
+	_player_two_visual.custom_minimum_size = Vector2(420, 380)
 	_player_two_visual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_player_two_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	player_two_box.add_child(_player_two_visual)
@@ -220,7 +226,7 @@ func _ready() -> void:
 	_countdown.add_theme_font_size_override("font_size", 72)
 	_countdown.add_theme_color_override("font_color", MangaThemeScript.IMPACT_YELLOW)
 	_countdown.add_theme_color_override("font_outline_color", MangaThemeScript.INK_0)
-	_countdown.add_theme_constant_override("outline_size", 8)
+	_countdown.add_theme_constant_override("outline_size", 6)
 	_countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	countdown_layer.add_child(_countdown)
 
@@ -237,6 +243,10 @@ func _ready() -> void:
 	_network_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	countdown_layer.add_child(_network_overlay)
 
+	contact_director = ContactDirectorScript.new()
+	contact_director.name = "BattleContactDirector"
+	add_child(contact_director)
+	contact_director.configure(_player_one_visual, _player_two_visual, battle_area)
 	_apply_mouse_passthrough(self)
 
 
@@ -250,11 +260,7 @@ func set_combatants(player_one_character, player_one_state, player_two_character
 func set_connection_status(text: String) -> void:
 	_connection.text = text
 	var normalized := text.to_upper()
-	_connection.visible = (
-		normalized.contains("RECONNECT")
-		or normalized.contains("WAITING")
-		or normalized.contains("FAILED")
-	)
+	_connection.visible = normalized.contains("RECONNECT") or normalized.contains("WAITING") or normalized.contains("FAILED")
 
 
 func set_help_text(text: String) -> void:
@@ -267,19 +273,11 @@ func set_exit_button_text(text: String) -> void:
 
 
 func show_round_result(winner_label: String, round_number: int, p1_score: int, p2_score: int) -> void:
-	_countdown.text = "ROUND %d\n%s\n%d - %d" % [
-		round_number,
-		winner_label,
-		p1_score,
-		p2_score,
-	]
+	_countdown.text = "ROUND %d\n%s\n%d - %d" % [round_number, winner_label, p1_score, p2_score]
 
 
 func show_round_countdown(round_number: int, countdown_value: int) -> void:
-	if countdown_value > 0:
-		_countdown.text = "ROUND %d\n%d" % [round_number, countdown_value]
-	else:
-		_countdown.text = "GO!"
+	_countdown.text = "ROUND %d\n%d" % [round_number, countdown_value] if countdown_value > 0 else "GO!"
 
 
 func clear_round_countdown() -> void:
@@ -303,62 +301,26 @@ func clear_network_overlay() -> void:
 
 func render(match_flow, player_one_state, player_two_state) -> void:
 	var snapshot: Dictionary = match_flow.snapshot()
-	_render_snapshot(
-		snapshot,
-		match_flow.config.rounds_to_win_match,
-		match_flow.config.hits_to_win_round,
-		player_one_state,
-		player_two_state
-	)
+	_render_snapshot(snapshot, match_flow.config.rounds_to_win_match, match_flow.config.hits_to_win_round, player_one_state, player_two_state)
 
 
 func render_authoritative(snapshot: Dictionary, player_one_state, player_two_state) -> void:
 	_render_snapshot(snapshot, 2, 5, player_one_state, player_two_state)
 
 
-func _render_snapshot(
-	snapshot: Dictionary,
-	rounds_to_win: int,
-	hits_to_win: int,
-	player_one_state,
-	player_two_state
-) -> void:
+func _render_snapshot(snapshot: Dictionary, rounds_to_win: int, hits_to_win: int, player_one_state, player_two_state) -> void:
 	var display_seconds := int(snapshot.get("remaining_seconds", 85))
 	var p1_rounds := int(snapshot.get("player_one_rounds", 0))
 	var p2_rounds := int(snapshot.get("player_two_rounds", 0))
 	var p1_hits := int(snapshot.get("player_one_hits", 0))
 	var p2_hits := int(snapshot.get("player_two_hits", 0))
-
-	_header.text = "P1 %d/%d %d/%d | P2 %d/%d %d/%d" % [
-		p1_rounds,
-		rounds_to_win,
-		p1_hits,
-		hits_to_win,
-		p2_hits,
-		hits_to_win,
-		p2_rounds,
-		rounds_to_win,
-	]
-	_player_one_score.text = "ROUND %d/%d   HIT %d/%d" % [
-		p1_rounds,
-		rounds_to_win,
-		p1_hits,
-		hits_to_win,
-	]
-	_player_two_score.text = "HIT %d/%d   ROUND %d/%d" % [
-		p2_hits,
-		hits_to_win,
-		p2_rounds,
-		rounds_to_win,
-	]
-
+	_header.text = "P1 %d/%d %d/%d | P2 %d/%d %d/%d" % [p1_rounds, rounds_to_win, p1_hits, hits_to_win, p2_hits, hits_to_win, p2_rounds, rounds_to_win]
+	_player_one_score.text = "ROUND %d/%d   HIT %d/%d" % [p1_rounds, rounds_to_win, p1_hits, hits_to_win]
+	_player_two_score.text = "HIT %d/%d   ROUND %d/%d" % [p2_hits, hits_to_win, p2_rounds, rounds_to_win]
 	_timer.text = "OT" if bool(snapshot.get("overtime", false)) else str(display_seconds)
 	_round_label.text = "ROUND %d" % int(snapshot.get("round_number", 1))
 	_status.text = "MATCH FINISHED" if bool(snapshot.get("match_finished", false)) else ""
-	_states.text = "P1: %s | P2: %s" % [
-		player_one_state.action_state_name(),
-		player_two_state.action_state_name(),
-	]
+	_states.text = "P1: %s | P2: %s" % [player_one_state.action_state_name(), player_two_state.action_state_name()]
 
 
 func flash_message(text: String) -> void:
@@ -409,7 +371,6 @@ func _humanize_network_text(text: String) -> String:
 func _apply_mouse_passthrough(control: Control) -> void:
 	if not control is BaseButton:
 		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
 	for child in control.get_children():
 		if child is Control:
 			_apply_mouse_passthrough(child)
