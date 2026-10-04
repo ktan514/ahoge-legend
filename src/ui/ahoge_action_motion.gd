@@ -6,6 +6,7 @@ const BACK_BEND: float = -1.15
 const TIP_DROP: float = 1.8
 const RECOVER_SECONDS: float = 0.24
 const FOLLOW_BEND: float = 0.12
+const FOLLOW_SECONDS: float = 0.10
 
 var configured: bool = false
 var state: int = -1
@@ -31,6 +32,8 @@ var _from_sweep: float = 0.0
 var _from_hang: float = 0.0
 var _charge: float = 0.0
 var _max_charge: float = 0.62
+# STRIKE終了時までに進んだ振り抜き時間。負値なら継続しない。
+var _continued_follow_seconds: float = -1.0
 
 
 func configure(profile) -> bool:
@@ -71,6 +74,12 @@ func advance(next_state: int, delta: float, phase_duration: float, max_charge: f
 		return
 	var changed: bool = next_state != state
 	if changed:
+		var carry: float = -1.0
+		if state == StateScript.ActionState.STRIKE and next_state == StateScript.ActionState.COOLDOWN and not blocked:
+			var contact_seconds: float = duration * contact_ratio
+			if elapsed >= contact_seconds:
+				carry = elapsed - contact_seconds
+		_continued_follow_seconds = carry
 		_from_angles = current_angles.duplicate()
 		_from_straighten = straighten
 		_from_sweep = sweep
@@ -118,14 +127,23 @@ func _compute_pose() -> void:
 			sweep = _from_sweep * (1.0 - windup)
 		StateScript.ActionState.STRIKE:
 			var q: float = elapsed / maxf(duration * contact_ratio, 0.001)
-			var after: float = clampf((elapsed / duration - contact_ratio) / maxf(1.0 - contact_ratio, 0.001), 0.0, 1.0)
+			var after: float = follow_progress()
 			for i in range(current_angles.size()):
 				var s: float = fractions[i]
-				var release: float = release_at(q, s)
-				current_angles[i] = lerpf(_from_angles[i], straight_angles[i], release)
-				current_angles[i] += FOLLOW_BEND * sin(after * PI) * smoothstep(0.40, 1.0, s)
+				current_angles[i] = lerpf(_from_angles[i], straight_angles[i], release_at(q, s))
+				current_angles[i] += FOLLOW_BEND * after * smoothstep(0.40, 1.0, s)
 			straighten = release_at(q, 1.0)
 			hang = _from_hang * (1.0 - straighten)
+		StateScript.ActionState.COOLDOWN:
+			if _continued_follow_seconds >= 0.0:
+				var final_angles: PackedFloat32Array = final_follow_angles()
+				var recovering: float = recovery_seconds()
+				for i in range(current_angles.size()):
+					var trailing: float = lerpf(straight_angles[i], final_angles[i], follow_progress())
+					current_angles[i] = lerpf(trailing, rest_angles[i], smoothstep(0.0, 0.18 + 0.06 * fractions[i], recovering))
+				straighten = 1.0 - smoothstep(0.0, RECOVER_SECONDS, recovering)
+			else:
+				_recover_from_entry()
 		StateScript.ActionState.PARRY:
 			var join: float = smoothstep(0.0, ParryScript.ENTRY_SECONDS, elapsed)
 			for i in range(current_angles.size()):
@@ -134,21 +152,51 @@ func _compute_pose() -> void:
 			hang = _from_hang * (1.0 - join)
 			sweep = lerpf(_from_sweep, ParryScript.sweep_at(elapsed, duration), join)
 		_:
-			for i in range(current_angles.size()):
-				var back: float = smoothstep(0.0, 0.18 + 0.06 * fractions[i], elapsed)
-				current_angles[i] = lerpf(_from_angles[i], rest_angles[i], back)
-			var recover: float = 1.0 - smoothstep(0.0, RECOVER_SECONDS, elapsed)
-			straighten = _from_straighten * recover
-			hang = _from_hang * recover
-			sweep = _from_sweep * (1.0 - smoothstep(0.0, ParryScript.EXIT_SECONDS, elapsed))
+			_recover_from_entry()
 	vertices = vertices_from_angles(current_angles)
 	if absf(sweep) > 0.000001:
 		vertices = ParryScript.deform(_profile, vertices, sweep)
 
 
+func _recover_from_entry() -> void:
+	for i in range(current_angles.size()):
+		var back: float = smoothstep(0.0, 0.18 + 0.06 * fractions[i], elapsed)
+		current_angles[i] = lerpf(_from_angles[i], rest_angles[i], back)
+	var recover: float = 1.0 - smoothstep(0.0, RECOVER_SECONDS, elapsed)
+	straighten = _from_straighten * recover
+	hang = _from_hang * recover
+	sweep = _from_sweep * (1.0 - smoothstep(0.0, ParryScript.EXIT_SECONDS, elapsed))
+
+
 static func release_at(q: float, s: float) -> float:
-	# 根元側の区間が先行し、先端は接触直前まで遅れる。
 	return smoothstep(0.02 + 0.35 * s, 0.42 + 0.58 * s, q)
+
+
+func follow_seconds() -> float:
+	if blocked:
+		return -1.0
+	if state == StateScript.ActionState.STRIKE:
+		return elapsed - duration * contact_ratio
+	if state == StateScript.ActionState.COOLDOWN and _continued_follow_seconds >= 0.0:
+		return _continued_follow_seconds + elapsed
+	return -1.0
+
+
+func follow_progress() -> float:
+	return smoothstep(0.0, FOLLOW_SECONDS, maxf(follow_seconds(), 0.0))
+
+
+func recovery_seconds() -> float:
+	if state == StateScript.ActionState.COOLDOWN and _continued_follow_seconds >= 0.0:
+		return maxf(0.0, follow_seconds() - FOLLOW_SECONDS)
+	return elapsed
+
+
+func final_follow_angles() -> PackedFloat32Array:
+	var result: PackedFloat32Array = straight_angles.duplicate()
+	for i in range(result.size()):
+		result[i] += FOLLOW_BEND * smoothstep(0.40, 1.0, fractions[i])
+	return result
 
 
 func force_contact() -> bool:
@@ -166,6 +214,7 @@ func force_contact() -> bool:
 		_from_straighten = 1.0
 		_from_hang = 0.0
 		_from_sweep = 0.0
+		_continued_follow_seconds = 0.0
 		elapsed = 0.0
 	return true
 
@@ -197,3 +246,4 @@ func _reset_pose() -> void:
 	straighten = 0.0
 	hang = 0.0
 	sweep = 0.0
+	_continued_follow_seconds = -1.0

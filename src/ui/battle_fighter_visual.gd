@@ -2,7 +2,8 @@ extends "res://src/ui/fighter_visual.gd"
 
 const ParryMotionScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
-const FOLLOW_THROUGH_PX: Vector2 = Vector2(30.0, 22.0)
+const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
+const FOLLOW_EDGE_MARGIN: float = 12.0
 const WHIP_NORMAL_REACH_POWER: float = 4.0
 const WHIP_CHARGED_REACH_POWER: float = 6.0
 const WHIP_TURN_END: float = 0.95
@@ -26,6 +27,7 @@ var _force_contact: bool = false
 var _parry_blocks_old_contact: bool = false
 var _contact_frozen: bool = false
 var _contact_anchor_canvas: Vector2 = Vector2.ZERO
+var _follow_end_canvas: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -56,7 +58,7 @@ func _process(delta: float) -> void:
 		_force_contact = false
 		_contact_frozen = false
 		_parry_blocks_old_contact = true
-	# 小さい頭部モーションを先に更新してから、同じframeの毛束形状へ渡す。
+	# 頭部を先に更新し、同じ時計で根元から毛先へしなりを渡す。
 	super._process(delta)
 	if not _asset_mode:
 		return
@@ -159,6 +161,27 @@ func _neutral_transform() -> Transform2D:
 	return Transform2D(0.0, Vector2.ONE * base_scale, 0.0, Vector2.ZERO)
 
 
+func _freeze_contact(target: Vector2) -> void:
+	_contact_anchor_canvas = target
+	_follow_end_canvas = target + Vector2(FOLLOW_THROUGH_PX.x * facing, FOLLOW_THROUGH_PX.y)
+	if arena_canvas_rect.has_area():
+		var safe: Rect2 = arena_canvas_rect.grow(-FOLLOW_EDGE_MARGIN)
+		_follow_end_canvas.x = clampf(_follow_end_canvas.x, safe.position.x, safe.end.x)
+		_follow_end_canvas.y = clampf(_follow_end_canvas.y, safe.position.y, safe.end.y)
+	_contact_frozen = true
+
+
+func _project_tip(base: Transform2D, reference_tip: Vector2, aim: Vector2, reach_weight: float, turn_weight: float) -> Transform2D:
+	var target_local: Vector2 = _ahoge_rig.to_local(aim)
+	if reference_tip.length() <= 0.01 or target_local.length() <= 0.01:
+		return base
+	var axis: Vector2 = reference_tip.normalized()
+	var ratio: float = lerpf(1.0, target_local.length() / reference_tip.length(), reach_weight)
+	var stretch: Transform2D = Transform2D(Vector2.RIGHT + axis * ((ratio - 1.0) * axis.x), Vector2.DOWN + axis * ((ratio - 1.0) * axis.y), Vector2.ZERO)
+	var turn: float = wrapf(target_local.angle() - reference_tip.angle(), -PI, PI) * turn_weight
+	return Transform2D(turn, Vector2.ZERO) * stretch * base
+
+
 func present_toward(target_canvas: Vector2) -> void:
 	last_contact_error = INF
 	last_presentation_weight = 0.0
@@ -176,29 +199,26 @@ func present_toward(target_canvas: Vector2) -> void:
 	if action_motion.blocked:
 		_motion_node.transform = _fit_to_arena(base, vertices)
 		return
-	if _presentation_state == CombatantStateScript.ActionState.STRIKE or confirmed:
+	var tail_seconds: float = action_motion.follow_seconds()
+	var tail_in_cooldown: bool = _presentation_state == CombatantStateScript.ActionState.COOLDOWN and _contact_frozen and tail_seconds >= 0.0
+	if _presentation_state == CombatantStateScript.ActionState.STRIKE or confirmed or tail_in_cooldown:
 		var contact_seconds: float = action_motion.duration * action_motion.contact_ratio
-		var q: float = 1.0 if confirmed else action_motion.elapsed / maxf(contact_seconds, 0.001)
-		if q >= 1.0 and not _contact_frozen:
-			_contact_anchor_canvas = target_canvas
-			_contact_frozen = true
-		var aim: Vector2 = target_canvas
-		if q > 1.0 and not confirmed:
-			var after: float = smoothstep(contact_seconds, action_motion.duration, action_motion.elapsed)
-			aim = _contact_anchor_canvas + Vector2(FOLLOW_THROUGH_PX.x * facing, FOLLOW_THROUGH_PX.y) * after
-		var target_local: Vector2 = _ahoge_rig.to_local(aim)
-		# 接触時の形を固定した基準とし、現在形のしなりをそのまま描く。
-		var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
-		var contact_tip: Vector2 = base * contact_vertices[-1]
-		if contact_tip.length() > 0.01 and target_local.length() > 0.01:
-			var axis: Vector2 = contact_tip.normalized()
+		var q: float = 1.0 if confirmed or tail_in_cooldown else action_motion.elapsed / maxf(contact_seconds, 0.001)
+		if confirmed or (q >= 1.0 and not _contact_frozen):
+			_freeze_contact(target_canvas)
+		if tail_in_cooldown and tail_seconds >= ActionMotionScript.FOLLOW_SECONDS and not confirmed:
+			# 振り抜き終点を基準としてから復帰する。STRIKE終了姿勢へ巻き戻さない。
+			var final_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.final_follow_angles())
+			var end_transform: Transform2D = _project_tip(base, base * final_vertices[-1], _follow_end_canvas, 1.0, 1.0)
+			base = end_transform.interpolate_with(base, smoothstep(0.0, 0.20, action_motion.recovery_seconds()))
+		elif tail_seconds >= 0.0 and _contact_frozen and not confirmed:
+			# 接触後は実毛先を下向き軌道へ合わせる。相手の移動は参照しない。
+			var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, action_motion.follow_progress())
+			base = _project_tip(base, base * source_tip, aim, 1.0, 1.0)
+		else:
+			var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
 			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
-			var reach_weight: float = pow(clampf(q, 0.0, 1.0), power)
-			var turn_weight: float = smoothstep(0.0, WHIP_TURN_END, q)
-			var ratio: float = lerpf(1.0, target_local.length() / contact_tip.length(), reach_weight)
-			var stretch: Transform2D = Transform2D(Vector2.RIGHT + axis * ((ratio - 1.0) * axis.x), Vector2.DOWN + axis * ((ratio - 1.0) * axis.y), Vector2.ZERO)
-			var turn: float = wrapf(target_local.angle() - contact_tip.angle(), -PI, PI) * turn_weight
-			base = Transform2D(turn, Vector2.ZERO) * stretch * base
+			base = _project_tip(base, base * contact_vertices[-1], target_canvas, pow(clampf(q, 0.0, 1.0), power), smoothstep(0.0, WHIP_TURN_END, q))
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
