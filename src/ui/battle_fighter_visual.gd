@@ -16,6 +16,7 @@ var _head_contact_px: Vector2 = Vector2.ZERO
 var _presentation_state: int = -1
 var _recovery_head_from: Vector2 = Vector2.ZERO
 var _entry_transform: Transform2D = Transform2D.IDENTITY
+var _base_motion_transform: Transform2D = Transform2D.IDENTITY
 var _mesh_node
 var _motion_node: Node2D
 var _force_contact: bool = false
@@ -167,6 +168,8 @@ func present_toward(target_canvas: Vector2) -> void:
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
 	var base: Transform2D = _neutral_transform()
+	# 既存の幅検証にも当該frameの補正前基準を提供する。
+	_base_motion_transform = base
 	var source_tip: Vector2 = vertices[-1]
 	if action_motion.blocked:
 		_motion_node.transform = _fit_to_arena(base, vertices)
