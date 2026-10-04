@@ -114,6 +114,15 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float, opponent_i
 				_expect(float(attacker.last_safety_scale) >= 0.999, "接触姿勢が画面保護によって縮んでいます: " + label)
 				record["contact_error_px"] = error
 				record["straighten"] = attacker.rendered_straighten()
+				record["section_width"] = _measure_width(attacker, label)
+				var before_points: PackedVector2Array = attacker.mesh_canvas_vertices()
+				attacker.present_toward(defender.contact_canvas_position())
+				var after_points: PackedVector2Array = attacker.mesh_canvas_vertices()
+				var repeated_error: float = 0.0
+				for index in range(before_points.size()):
+					repeated_error = maxf(repeated_error, before_points[index].distance_to(after_points[index]))
+				_expect(repeated_error < 0.01, "同一frameの再提示で補正が累積しています: " + label)
+				record["repeated_presentation_error_px"] = repeated_error
 				var image: Image = await _capture(viewport, "contact_" + label + ".png")
 				attacker.visible = false
 				var without: Image = await _image(viewport)
@@ -160,6 +169,38 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float, opponent_i
 	viewport.free()
 
 
+func _measure_width(actor, label: String) -> Dictionary:
+	var mesh_node = actor.find_child("AhogeDeformMesh", true, false)
+	var rig: Node2D = actor.find_child("AhogePrototypeRig", true, false) as Node2D
+	_expect(mesh_node != null and mesh_node.configured and rig != null, "幅検査用の実メッシュがありません: " + label)
+	if mesh_node == null or not mesh_node.configured or rig == null:
+		return {}
+	var points: PackedVector2Array = mesh_node.current_vertices
+	var world: PackedVector2Array = actor.mesh_canvas_vertices()
+	var base: Transform2D = actor.get("_base_motion_transform")
+	var reference: PackedVector2Array = (rig.global_transform * base) * points
+	var row_count: int = mesh_node.profile.section_left_px.size()
+	var columns: int = mesh_node.profile.WIDTH_POINTS
+	var minimum_width: float = INF
+	var minimum_ratio: float = INF
+	var sampled: int = 0
+	# 根元の丸い閉じ部と先細りする最終端を除き、中央25〜65%の断面を検査する。
+	for row in range(int(row_count * 0.25), int(row_count * 0.65)):
+		var left: int = 1 + row * columns
+		var right: int = left + columns - 1
+		var center: int = left + int(columns / 2)
+		var tangent: Vector2 = world[center + columns] - world[center - columns]
+		var base_tangent: Vector2 = reference[center + columns] - reference[center - columns]
+		var width: float = absf(tangent.normalized().cross(world[right] - world[left]))
+		var base_width: float = absf(base_tangent.normalized().cross(reference[right] - reference[left]))
+		_expect(base_width > 0.01 and is_finite(width), "断面幅が退化しています: " + label)
+		minimum_width = minf(minimum_width, width)
+		minimum_ratio = minf(minimum_ratio, width / maxf(base_width, 0.000001))
+		sampled += 1
+	_expect(sampled > 0 and minimum_ratio >= 0.70, "接触補正で中央部の投影幅が潰れています: " + label)
+	return {"sampled_sections": sampled, "minimum_normal_width_px": minimum_width, "minimum_width_ratio_to_base": minimum_ratio}
+
+
 func _check_bounds(director, label: String) -> void:
 	for actor in director.fighters:
 		var bounds: Rect2 = actor.arena_canvas_rect
@@ -167,6 +208,10 @@ func _check_bounds(director, label: String) -> void:
 		_expect(head.position.x >= bounds.position.x - 1.0 and head.end.x <= bounds.end.x + 1.0, "頭部が左右で見切れています: " + label)
 		minimum_guard = minf(minimum_guard, float(actor.last_safety_scale))
 		var points: PackedVector2Array = actor.mesh_canvas_vertices()
+		if not points.is_empty():
+			var base: Transform2D = actor.get("_base_motion_transform")
+			var normalized_area: float = absf(base.determinant()) / maxf(base.x.length() * base.y.length(), 0.000001)
+			_expect(normalized_area > 0.9999 and base.origin.length() < 0.0001, "接触補正前の基準行列に歪みが残っています: " + label)
 		for point in points:
 			if not bounds.grow(0.5).has_point(point):
 				_expect(false, "アホ毛がBattle領域外です: " + label)
