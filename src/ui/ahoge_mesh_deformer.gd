@@ -63,6 +63,21 @@ func set_parry_pose(straighten_value: float, sweep: float) -> void:
 	_write_vertices(points)
 
 
+func set_action_pose(points: PackedVector2Array, straight_value: float, sweep_value: float) -> bool:
+	if not configured or points.size() != profile.rest_vertices.size():
+		return false
+	if not is_finite(straight_value) or not is_finite(sweep_value):
+		return false
+	for point in points:
+		if not point.is_finite():
+			return false
+	straighten = clampf(straight_value, 0.0, 1.0)
+	parry_sweep = sweep_value
+	_custom_pose = true
+	_write_vertices(points)
+	return true
+
+
 func _write_vertices(points: PackedVector2Array) -> void:
 	current_vertices = points
 	# index、UV、mesh RIDは変更しない。XYZ領域のみ更新する。
@@ -71,7 +86,7 @@ func _write_vertices(points: PackedVector2Array) -> void:
 
 
 func _set_draw_bounds(points: PackedVector2Array) -> void:
-	# パリィの末端変位を既存Straighten用AABBの外へ出して消失させない。
+	# 全動作の末端変位を描画境界へ含める。
 	var bounds: Rect2 = profile.draw_bounds
 	for point in points:
 		bounds = bounds.expand(point)
