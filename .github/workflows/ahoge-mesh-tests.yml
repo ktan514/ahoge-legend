@@ -1,0 +1,37 @@
+name: Ahoge mesh verification
+
+on:
+  pull_request:
+    paths:
+      - 'assets/characters/**'
+      - 'src/ui/ahoge_*'
+      - 'src/ui/fighter_visual.gd'
+      - 'tests/ahoge_mesh*'
+      - 'tools/ahoge_mesh/**'
+      - '.github/workflows/ahoge-mesh-tests.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mesh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: 素材検証の依存を準備
+        run: python -m pip install 'Pillow==11.3.0'
+      - name: 現行素材の寸法と輪郭を記録
+        run: python tools/ahoge_mesh/inspect_source.py
+      - name: 描画検証資料を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ahoge-mesh-verification
+          path: artifacts/ahoge-mesh/
+          if-no-files-found: error
+          retention-days: 7
