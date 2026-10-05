@@ -9,11 +9,21 @@ const RECOVER_SECONDS: float = 0.24
 const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
-const SOFT_ROOT_END: float = 0.15
-const SOFT_FULL_AT: float = 0.80
-const SOFT_COUNTER_RATIO: float = 0.65
-const SOFT_IDLE_CURVE: float = 0.16
-const SOFT_RESPONSE: float = 8.0
+const SOFT_ROOT_END: float = 0.12
+const SOFT_FULL_AT: float = 0.70
+const SOFT_COUNTER_RATIO: float = 0.90
+const SOFT_IDLE_CURVE: float = 0.20
+const SOFT_FORWARD_SPEED_GAIN: float = 0.0032
+const SOFT_ANGULAR_SPEED_GAIN: float = 0.20
+const SOFT_MAX_DRIVE: float = 1.05
+const SOFT_MAX_OFFSET: float = 1.75
+const SOFT_MAX_FORWARD_SPEED: float = 480.0
+const SOFT_MAX_ANGULAR_SPEED: float = 8.0
+const SOFT_ROOT_HZ: float = 12.0
+const SOFT_TIP_HZ: float = 4.0
+const SOFT_ROOT_DAMPING: float = 0.95
+const SOFT_TIP_DAMPING: float = 0.48
+const SOFT_MAX_STEP: float = 1.0 / 120.0
 
 var configured: bool = false
 var state: int = -1
@@ -43,7 +53,11 @@ var _max_charge: float = 0.62
 var _continued_follow_seconds: float = -1.0
 var softness: float = 1.0
 var attachment_angle: float = 0.0
-var _soft_counter_angle: float = 0.0
+var _soft_offsets: PackedFloat32Array = PackedFloat32Array()
+var _soft_velocities: PackedFloat32Array = PackedFloat32Array()
+var _soft_previous_forward_px: float = 0.0
+var _soft_previous_angle: float = 0.0
+var _soft_motion_initialized: bool = false
 
 
 func configure(profile) -> bool:
@@ -77,6 +91,7 @@ func configure(profile) -> bool:
 	state = -1
 	blocked = false
 	_reset_pose()
+	_reset_soft_motion()
 	_from_angles = current_angles.duplicate()
 	return true
 
@@ -89,17 +104,16 @@ func advance(
 	charge: float,
 	available: bool,
 	attachment_angle_radians: float = 0.0,
-	softness_amount: float = 1.0
+	softness_amount: float = 1.0,
+	attachment_forward_px: float = 0.0
 ) -> void:
 	if not configured or delta <= 0.0 or not is_finite(delta):
 		return
-	if not is_finite(attachment_angle_radians) or not is_finite(softness_amount):
+	if not is_finite(attachment_angle_radians) or not is_finite(softness_amount) or not is_finite(attachment_forward_px):
 		return
 	attachment_angle = attachment_angle_radians
 	softness = clampf(softness_amount, 0.0, 1.0)
-	var counter_target: float = -attachment_angle * SOFT_COUNTER_RATIO
-	var response: float = 1.0 - exp(-SOFT_RESPONSE * delta)
-	_soft_counter_angle = lerp_angle(_soft_counter_angle, counter_target, clampf(response, 0.0, 1.0))
+	_advance_softness(delta, attachment_angle, attachment_forward_px, softness)
 	var changed: bool = next_state != state
 	if changed:
 		var carry: float = -1.0
@@ -121,9 +135,11 @@ func advance(
 	_charge = clampf(charge, 0.0, 1.0)
 	if not available or state == StateScript.ActionState.ROUND_LOCKED:
 		blocked = true
+		_reset_soft_motion()
 		_reset_pose()
 		return
 	if blocked:
+		_reset_soft_motion()
 		_reset_pose()
 		return
 	# 防御の最初の表示は現在形状を保持する。サーバーの防御開始は遅らせない。
@@ -286,28 +302,105 @@ func visual_vertices() -> PackedVector2Array:
 
 
 func visual_vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
-	return vertices_from_angles(_softened_angles(values, _soft_counter_angle, softness))
+	return vertices_from_angles(_softened_angles(values))
 
 
 func soft_idle_vertices(attachment_angle_radians: float, softness_amount: float = 1.0) -> PackedVector2Array:
 	if not configured or not is_finite(attachment_angle_radians) or not is_finite(softness_amount):
 		return PackedVector2Array()
-	var bounded: float = clampf(softness_amount, 0.0, 1.0)
-	var counter: float = -attachment_angle_radians * SOFT_COUNTER_RATIO
-	return vertices_from_angles(_softened_angles(rest_angles, counter, bounded))
+	return vertices_from_angles(_static_softened_angles(rest_angles, attachment_angle_radians, clampf(softness_amount, 0.0, 1.0)))
 
 
-func _softened_angles(values: PackedFloat32Array, counter_angle: float, amount: float) -> PackedFloat32Array:
+func reset_soft_follow(attachment_angle_radians: float = 0.0, attachment_forward_px: float = 0.0) -> void:
+	if not is_finite(attachment_angle_radians) or not is_finite(attachment_forward_px):
+		return
+	_reset_soft_motion()
+	_soft_previous_angle = attachment_angle_radians
+	_soft_previous_forward_px = attachment_forward_px
+	_soft_motion_initialized = true
+
+
+func _advance_softness(delta: float, angle: float, forward_px: float, amount: float) -> void:
+	_ensure_soft_state()
+	var bounded: float = clampf(amount, 0.0, 1.0)
+	if bounded <= 0.000001:
+		_reset_soft_motion()
+		_soft_previous_angle = angle
+		_soft_previous_forward_px = forward_px
+		_soft_motion_initialized = true
+		return
+	if not _soft_motion_initialized:
+		_soft_previous_angle = angle
+		_soft_previous_forward_px = forward_px
+		_soft_motion_initialized = true
+	var forward_speed: float = clampf((forward_px - _soft_previous_forward_px) / delta, -SOFT_MAX_FORWARD_SPEED, SOFT_MAX_FORWARD_SPEED)
+	var angular_speed: float = clampf(wrapf(angle - _soft_previous_angle, -PI, PI) / delta, -SOFT_MAX_ANGULAR_SPEED, SOFT_MAX_ANGULAR_SPEED)
+	_soft_previous_forward_px = forward_px
+	_soft_previous_angle = angle
+	var drive: float = clampf(
+		-forward_speed * SOFT_FORWARD_SPEED_GAIN - angular_speed * SOFT_ANGULAR_SPEED_GAIN,
+		-SOFT_MAX_DRIVE,
+		SOFT_MAX_DRIVE
+	) * bounded
+	var remaining: float = delta
+	while remaining > 0.0000001:
+		var step: float = minf(remaining, SOFT_MAX_STEP)
+		for i in range(_soft_offsets.size()):
+			var s: float = fractions[i]
+			var flex: float = smoothstep(SOFT_ROOT_END, SOFT_FULL_AT, s)
+			var compliance: float = clampf(flex * bounded, 0.0, 1.0)
+			var equilibrium: float = _static_soft_offset(i, angle, bounded)
+			var dynamic_target: float = drive * compliance * lerpf(0.35, 1.0, s)
+			var target: float = clampf(equilibrium + dynamic_target, -SOFT_MAX_OFFSET, SOFT_MAX_OFFSET)
+			var frequency_hz: float = lerpf(SOFT_ROOT_HZ, SOFT_TIP_HZ, compliance)
+			var damping: float = lerpf(SOFT_ROOT_DAMPING, SOFT_TIP_DAMPING, compliance)
+			var omega: float = TAU * frequency_hz
+			var acceleration: float = omega * omega * (target - _soft_offsets[i]) - 2.0 * damping * omega * _soft_velocities[i]
+			_soft_velocities[i] += acceleration * step
+			_soft_offsets[i] = clampf(_soft_offsets[i] + _soft_velocities[i] * step, -SOFT_MAX_OFFSET, SOFT_MAX_OFFSET)
+		remaining -= step
+
+
+func _static_softened_angles(values: PackedFloat32Array, angle: float, amount: float) -> PackedFloat32Array:
 	if values.size() != fractions.size():
 		return values.duplicate()
 	var result: PackedFloat32Array = values.duplicate()
-	var bounded: float = clampf(amount, 0.0, 1.0)
 	for i in range(result.size()):
-		var s: float = fractions[i]
-		var flex: float = smoothstep(SOFT_ROOT_END, SOFT_FULL_AT, s)
-		var tip_curve: float = SOFT_IDLE_CURVE * bounded * pow(smoothstep(0.45, 1.0, s), 1.35)
-		result[i] += counter_angle * flex * bounded + tip_curve
+		result[i] += _static_soft_offset(i, angle, amount)
 	return result
+
+
+func _static_soft_offset(index: int, angle: float, amount: float) -> float:
+	var s: float = fractions[index]
+	var flex: float = smoothstep(SOFT_ROOT_END, SOFT_FULL_AT, s)
+	var tip_curve: float = SOFT_IDLE_CURVE * amount * pow(smoothstep(0.45, 1.0, s), 1.35)
+	return -angle * SOFT_COUNTER_RATIO * flex * amount + tip_curve
+
+
+func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
+	if values.size() != fractions.size() or _soft_offsets.size() != fractions.size():
+		return values.duplicate()
+	var result: PackedFloat32Array = values.duplicate()
+	for i in range(result.size()):
+		result[i] += _soft_offsets[i]
+	return result
+
+
+func _ensure_soft_state() -> void:
+	if _soft_offsets.size() == fractions.size() and _soft_velocities.size() == fractions.size():
+		return
+	_soft_offsets = PackedFloat32Array()
+	_soft_velocities = PackedFloat32Array()
+	_soft_offsets.resize(fractions.size())
+	_soft_velocities.resize(fractions.size())
+
+
+func _reset_soft_motion() -> void:
+	_ensure_soft_state()
+	for i in range(_soft_offsets.size()):
+		_soft_offsets[i] = 0.0
+		_soft_velocities[i] = 0.0
+	_soft_motion_initialized = false
 
 
 func vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
