@@ -2,6 +2,7 @@
 from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "artifacts" / "motion-reproduction"
@@ -17,8 +18,12 @@ def main() -> None:
     tracked = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
     (OUT / "tested_commit.txt").write_text(sha + "\n", encoding="utf-8")
-    copyright_text = subprocess.check_output([str(engine), "--headless", "--copyright"], cwd=ROOT, stderr=subprocess.STDOUT)
-    (OUT / "GODOT_COPYRIGHT.txt").write_bytes(copyright_text)
+    version = (ROOT / ".godot-version").read_text().strip()
+    # エンジンを起動する未対応のCLI引数で待ち続けない。公式の同一タグから取得する。
+    for name in ("LICENSE.txt", "COPYRIGHT.txt", "AUTHORS.md"):
+        url = f"https://raw.githubusercontent.com/godotengine/godot/{version}-stable/{name}"
+        with urllib.request.urlopen(url, timeout=20) as response:
+            (OUT / ("GODOT_" + name)).write_bytes(response.read())
     with tarfile.open(OUT / "client-reproduction.tar.gz", "w:gz") as archive:
         for name in tracked:
             if not name or not (name in FILES or name.startswith(PREFIXES)):
@@ -32,7 +37,8 @@ def main() -> None:
             archive.add(source, arcname="client/" + name, recursive=False)
         archive.add(engine, arcname="client/bin/godot", recursive=False)
         archive.add(OUT / "tested_commit.txt", arcname="client/tested_commit.txt", recursive=False)
-        archive.add(OUT / "GODOT_COPYRIGHT.txt", arcname="client/GODOT_COPYRIGHT.txt", recursive=False)
+        for notice in sorted(OUT.glob("GODOT_*")):
+            archive.add(notice, arcname="client/" + notice.name, recursive=False)
     print("同一HEADのクライアント描画再現資料を保存しました: " + sha)
 
 
