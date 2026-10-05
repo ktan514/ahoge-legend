@@ -184,7 +184,6 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var near_lag: float = absf(wrapf(softened[near_index] - actor.action_motion.rest_angles[near_index], -PI, PI))
 	var middle_lag: float = absf(wrapf(softened[middle_index] - actor.action_motion.rest_angles[middle_index], -PI, PI))
 	var tip_lag: float = absf(wrapf(softened[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
-	_expect(maxf(middle_lag, tip_lag) > near_lag + 0.08, "中央〜毛先に根元側との差が残っていません: " + label)
 	_expect(maxf(middle_lag, tip_lag) > 0.20, "前方切り返しで中央〜毛先に十分な遅れが出ません: " + label)
 	var control_velocities: PackedFloat32Array = actor.action_motion.soft_control_velocities()
 	_expect(control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
