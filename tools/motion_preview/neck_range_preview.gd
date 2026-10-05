@@ -214,18 +214,22 @@ func set_softness(value: float) -> void:
 	stop_oscillation()
 	if ready_for_input and is_instance_valid(fighter):
 		fighter.set_ahoge_softness(value)
+		fighter.reset_ahoge_soft_follow()
 	_apply_ratio(travel_ratio)
 
 
-func _apply_ratio(value: float) -> void:
+func _apply_ratio(value: float, dynamic_delta: float = 0.0) -> void:
 	travel_ratio = clampf(value, -0.4, 0.4)
 	_slider.set_value_no_signal(travel_ratio)
 	_number.set_value_no_signal(travel_ratio)
 	if not ready_for_input or not is_instance_valid(fighter):
 		return
 	fighter.set_neck_gaze_max_degrees(float(_pitch.value))
-	fighter.set_ahoge_softness(float(_softness.value))
+	if not is_equal_approx(fighter.ahoge_softness, float(_softness.value)):
+		fighter.set_ahoge_softness(float(_softness.value))
 	fighter.set_neck_travel_ratio(travel_ratio)
+	if dynamic_delta > 0.0:
+		fighter.advance_neck_preview(dynamic_delta)
 	var d: float = fighter.head_display_diameter()
 	var elevation: float = fighter.neck_gaze_elevation_degrees()
 	_status.text = "位置 %+.3fD  |  移動量 %+.1fpx  |  仰角 %+.1f°  |  柔らかさ %.2f  |  D=%.1fpx" % [travel_ratio, travel_ratio * d, elevation, fighter.ahoge_softness, d]
@@ -239,6 +243,8 @@ func toggle_oscillation() -> void:
 		stop_oscillation()
 	else:
 		_phase = asin(clampf(travel_ratio / 0.4, -1.0, 1.0))
+		if is_instance_valid(fighter):
+			fighter.reset_ahoge_soft_follow()
 		oscillating = true
 		_auto_button.text = "往復停止"
 
@@ -252,7 +258,7 @@ func stop_oscillation() -> void:
 func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
 		_phase = fposmod(_phase + TAU * delta / ROUND_TRIP_SECONDS, TAU)
-		_apply_ratio(0.4 * sin(_phase))
+		_apply_ratio(0.4 * sin(_phase), delta)
 
 
 func save_capture() -> void:
