@@ -379,6 +379,7 @@ func _advance_softness(
 		return
 
 	var forward_speed: float = (forward_px - _soft_previous_forward_px) / maxf(delta, 0.000001)
+	var root_velocity: float = wrapf(angle - _soft_previous_angle, -PI, PI) / maxf(delta, 0.000001)
 	_soft_previous_forward_px = forward_px
 	_soft_previous_angle = angle
 	var drive: float = clampf(-forward_speed * SOFT_FORWARD_DRIVE, -SOFT_DRIVE_LIMIT, SOFT_DRIVE_LIMIT)
@@ -389,7 +390,7 @@ func _advance_softness(
 		var previous_velocity: PackedFloat32Array = _soft_velocities.duplicate()
 		var root_index: int = _soft_control_indices[0]
 		var new_root: float = angle + current_angles[root_index]
-		_soft_velocities[0] = wrapf(new_root - previous_world[0], -PI, PI) / step
+		_soft_velocities[0] = root_velocity
 		_soft_world_angles[0] = new_root
 		for control in range(1, _soft_control_indices.size()):
 			var index: int = _soft_control_indices[control]
