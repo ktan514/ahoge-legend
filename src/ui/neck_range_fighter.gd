@@ -2,8 +2,8 @@ extends "res://src/ui/battle_fighter_visual.gd"
 
 # 首の段階調整。通常の攻撃モーションは親へ委譲し、勝敗/入力は変更しない。
 const MAX_TRAVEL_DIAMETERS: float = 0.4
-const DEFAULT_GAZE_MAX_DEGREES: float = 15.0
-const MAX_GAZE_MAX_DEGREES: float = 45.0
+const DEFAULT_GAZE_MAX_DEGREES: float = 30.0
+const MAX_GAZE_MAX_DEGREES: float = 30.0
 
 var neck_preview_enabled: bool = false
 var neck_travel_ratio: float = 0.0
