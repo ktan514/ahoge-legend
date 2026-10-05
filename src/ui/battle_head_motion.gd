@@ -11,6 +11,7 @@ const PARRY_SWEEP := Vector3(12.0, -3.0, 6.0)
 const PARRY_RECOIL := Vector3(4.0, 1.0, 2.0)
 const RECOVER_SECONDS: float = 0.24
 const FOLLOW_HOLD_SECONDS: float = 0.12
+const STRIKE_DRIVE_END: float = 0.24
 
 
 static func sample(action: int, elapsed: float, duration: float, max_charge: float, entry: Vector3) -> Vector3:
@@ -26,8 +27,9 @@ static func sample(action: int, elapsed: float, duration: float, max_charge: flo
 		StateScript.ActionState.WINDUP:
 			return entry.lerp(WINDUP, smoothstep(0.0, 1.0, u))
 		StateScript.ActionState.STRIKE:
-			if u < 0.40:
-				return entry.lerp(STRIKE_DRIVE, smoothstep(0.0, 0.40, u))
+			# 中央部の解放より早く頭部を動かす。接触時間は変更しない。
+			if u < STRIKE_DRIVE_END:
+				return entry.lerp(STRIKE_DRIVE, smoothstep(0.0, STRIKE_DRIVE_END, u))
 			if u < 0.70:
 				return STRIKE_DRIVE
 			return STRIKE_DRIVE.lerp(STRIKE_FOLLOW, smoothstep(0.70, 1.0, u))
