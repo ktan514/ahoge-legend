@@ -1,5 +1,7 @@
 extends "res://src/ui/battle_fighter_visual.gd"
 
+const StateScript := preload("res://src/domain/combatant_state.gd")
+
 # 首の段階調整。通常の攻撃モーションは親へ委譲し、勝敗/入力は変更しない。
 const MAX_TRAVEL_DIAMETERS: float = 0.4
 const DEFAULT_GAZE_MAX_DEGREES: float = 30.0
@@ -43,7 +45,20 @@ func set_ahoge_softness(value: float) -> bool:
 	ahoge_softness = clampf(value, 0.0, 1.0)
 	if neck_preview_enabled:
 		_apply_neck_pose()
+		reset_ahoge_soft_follow()
 	return true
+
+
+func reset_ahoge_soft_follow() -> void:
+	if not action_motion.configured:
+		return
+	action_motion.reset_soft_follow(deg_to_rad(_head_rotation), _head_offset.x * facing)
+
+
+func advance_neck_preview(delta: float) -> void:
+	if not neck_preview_enabled or delta <= 0.0 or not is_finite(delta):
+		return
+	_apply_neck_pose(delta)
 
 
 func neck_gaze_elevation_degrees() -> float:
@@ -89,7 +104,7 @@ func confirm_contact() -> bool:
 	return false if neck_preview_enabled else super.confirm_contact()
 
 
-func _apply_neck_pose() -> void:
+func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 	if not is_inside_tree() or _head_sprite == null:
 		return
 	# 目そのものは描画しないため、首位置に応じた目線仰角を頭部回転で表現する。
@@ -110,7 +125,21 @@ func _apply_neck_pose() -> void:
 				action_motion.configure(_mesh_node.profile)
 			var idle_vertices: PackedVector2Array = _mesh_node.profile.rest_vertices
 			if action_motion.configured:
-				idle_vertices = action_motion.soft_idle_vertices(deg_to_rad(_head_rotation), ahoge_softness)
+				if dynamic_delta > 0.0:
+					action_motion.advance(
+						StateScript.ActionState.IDLE,
+						dynamic_delta,
+						1.0,
+						1.0,
+						0.0,
+						true,
+						deg_to_rad(_head_rotation),
+						ahoge_softness,
+						_head_offset.x * facing
+					)
+					idle_vertices = action_motion.visual_vertices()
+				else:
+					idle_vertices = action_motion.soft_idle_vertices(deg_to_rad(_head_rotation), ahoge_softness)
 			_mesh_node.set_action_pose(idle_vertices, 0.0, 0.0)
 	last_safety_scale = 1.0
 	last_presentation_weight = 0.0
