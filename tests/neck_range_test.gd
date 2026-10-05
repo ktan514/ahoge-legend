@@ -42,10 +42,10 @@ func _run() -> void:
 				await _case(scene, fps, resolution, side)
 	# UIから直接操作したときに数値・実際の表示・往復状態が一致する。
 	scene.set_ratio(0.0)
-	scene._slider.value = 0.25
-	_expect(is_equal_approx(scene.fighter.neck_travel_ratio, 0.25), "スライダーが頭部へ反映されません")
-	scene._number.value = -0.35
-	_expect(is_equal_approx(scene._slider.value, -0.35) and is_equal_approx(scene.fighter.neck_travel_ratio, -0.35), "数値入力とスライダーが一致しません")
+	scene._slider.value = 0.20
+	_expect(is_equal_approx(scene.fighter.neck_travel_ratio, 0.20), "スライダーが頭部へ反映されません")
+	scene._number.value = -0.30
+	_expect(is_equal_approx(scene._slider.value, -0.30) and is_equal_approx(scene.fighter.neck_travel_ratio, -0.30), "数値入力とスライダーが一致しません")
 	scene._pitch.value = 20.0
 	_expect(is_equal_approx(scene.fighter.neck_gaze_max_degrees, 20.0), "仰角幅の入力が頭部へ反映されません")
 	scene._pitch.value = 15.0
@@ -53,18 +53,18 @@ func _run() -> void:
 	_expect(scene.oscillating, "往復再生が開始しません")
 	scene.set_ratio(0.1)
 	_expect(not scene.oscillating, "手動指定で往復再生が停止しません")
-	for text in ["後端 -0.5D", "基準 0", "前端 +0.5D"]:
+	for text in ["後端 -0.4D", "基準 0", "前端 +0.4D"]:
 		var button: Button = _find_button(scene, text)
 		_expect(button != null, "端点ボタンがありません: " + text)
 		if button != null:
 			button.pressed.emit()
-			var expected: float = -0.5 if text.begins_with("後") else (0.5 if text.begins_with("前") else 0.0)
+			var expected: float = -0.4 if text.begins_with("後") else (0.4 if text.begins_with("前") else 0.0)
 			_expect(is_equal_approx(scene.travel_ratio, expected), "端点ボタンが正しく動きません: " + text)
 	if DisplayServer.get_name() != "headless":
 		scene._side.select(0)
 		scene._resolution.select(0)
 		await scene.rebuild()
-		scene.set_ratio(0.5)
+		scene.set_ratio(0.4)
 		await process_frame
 		await RenderingServer.frame_post_draw
 		_expect(root.get_texture().get_image().save_png(OUT + "tool_ui.png") == OK, "UI画像の保存失敗")
@@ -100,21 +100,21 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(absf(d - expected_d) < 0.001 and d > 100.0, "Dが頭部の表示直径ではありません: " + label)
 	var backward: Vector2
 	var forward: Vector2
-	for amount in [-0.5, -0.25, 0.0, 0.25, 0.5, -5.0, 5.0]:
+	for amount in [-0.5, -0.20, 0.0, 0.20, 0.5, -5.0, 5.0]:
 		scene.set_ratio(amount)
 		actor._process(1.0 / fps)
 		actor.present_toward(Vector2(-9999.0, -9999.0))
-		var normalized: float = clampf(amount, -0.5, 0.5)
+		var normalized: float = clampf(amount, -0.4, 0.4)
 		var expected: Vector2 = Vector2(actor.facing * d * normalized, 0.0)
 		var error: float = (head.global_position - neutral).distance_to(expected)
 		max_error = maxf(max_error, error)
-		_expect(error < 0.002, "前後0.5Dの位置が一致しません: " + label)
+		_expect(error < 0.002, "前後0.4Dの位置が一致しません: " + label)
 		var display_height: float = head.texture.get_size().y * absf(head.scale.y)
 		var crown_offset := Vector2(actor.facing * 10.0, -display_height * 0.5 + 34.0)
 		var expected_root_from_head: Vector2 = crown_offset.rotated(head.rotation)
 		_expect((rig.global_position - head.global_position).distance_to(expected_root_from_head) < 0.002, "根元が回転後の頭頂部に固定されていません: " + label)
 		_expect(head.scale.is_equal_approx(original_scale), "端点で頭を縮小しました: " + label)
-		var expected_elevation: float = -2.0 * normalized * actor.neck_gaze_max_degrees
+		var expected_elevation: float = -(normalized / actor.MAX_TRAVEL_DIAMETERS) * actor.neck_gaze_max_degrees
 		var expected_rotation: float = deg_to_rad(-expected_elevation * actor.facing)
 		_expect(absf(actor.neck_gaze_elevation_degrees() - expected_elevation) < 0.0001, "首位置と仰角が一致しません: " + label)
 		_expect(absf(head.rotation - expected_rotation) < 0.0001, "頭部回転が仰角と一致しません: " + label)
@@ -126,15 +126,15 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		for point in actor.mesh_canvas_vertices():
 			_expect(point.x >= 0.0 and point.x <= scene.viewport.size.x, "アホ毛の横端が見切れました: " + label)
 		_expect(not actor.confirm_contact(), "単独調整中に攻撃接触を受け付けました")
-		if amount == -0.5:
+		if amount == -0.4:
 			backward = head.global_position
-		if amount == 0.5:
+		if amount == 0.4:
 			forward = head.global_position
-		if absf(amount) <= 0.5 and (amount == -0.5 or amount == 0.0 or amount == 0.5) and fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
+		if absf(amount) <= 0.4 and (amount == -0.4 or amount == 0.0 or amount == 0.4) and fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await process_frame
 			await RenderingServer.frame_post_draw
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
-	_expect(absf(forward.distance_to(backward) - d) < 0.002, "端点間の全幅がDではありません: " + label)
+	_expect(absf(forward.distance_to(backward) - 0.8 * d) < 0.002, "端点間の全幅が0.8Dではありません: " + label)
 	var before: Vector2 = head.global_position
 	var before_pitch: float = actor.neck_gaze_max_degrees
 	_expect(not actor.set_neck_travel_ratio(NAN) and not actor.set_neck_travel_ratio(INF), "無効入力を受け付けました")
@@ -160,11 +160,11 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		scene._process(1.0 / fps)
 		minimum = minf(minimum, scene.fighter.neck_travel_ratio)
 		maximum = maxf(maximum, scene.fighter.neck_travel_ratio)
-	_expect(absf(minimum + 0.5) < 0.0001 and absf(maximum - 0.5) < 0.0001, "往復再生が可動域全体を使っていません: " + label)
+	_expect(absf(minimum + 0.4) < 0.0001 and absf(maximum - 0.4) < 0.0001, "往復再生が可動域全体を使っていません: " + label)
 	scene.stop_oscillation()
 	scene.set_ratio(0.0)
 	scene.set_process(true)
-	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.5 * d, "span_px": backward.distance_to(forward), "gaze_max_degrees": 15.0, "asset": mesh_node.texture.resource_path})
+	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": backward.distance_to(forward), "gaze_max_degrees": 15.0, "asset": mesh_node.texture.resource_path})
 
 
 func _find_button(node: Node, text: String) -> Button:
