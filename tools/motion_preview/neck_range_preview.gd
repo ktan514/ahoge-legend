@@ -7,7 +7,11 @@ const StateScript := preload("res://src/domain/combatant_state.gd")
 const CatalogScript := preload("res://src/domain/character_catalog.gd")
 const OverlayScript := preload("res://tools/motion_preview/neck_range_overlay.gd")
 const SCENE: String = "res://tools/motion_preview/NeckRangePreview.tscn"
-const ROUND_TRIP_SECONDS: float = 4.0
+const REAR_HOLD_SECONDS: float = 0.30
+const STRIKE_SWING_SECONDS: float = 0.15
+const FRONT_HOLD_SECONDS: float = 0.30
+const RESET_SECONDS: float = 0.30
+const ATTACK_PREVIEW_SECONDS: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS + RESET_SECONDS
 
 var fighter
 var viewport: SubViewport
@@ -67,14 +71,14 @@ func _build_ui() -> void:
 	stack.add_theme_constant_override("separation", 10)
 	margin.add_child(stack)
 	_text(stack, "STEP 4  ロングアホ毛の柔軟追従  |  後ろ0.4D ← 基準 → 前0.4D").add_theme_font_size_override("font_size", 24)
-	_text(stack, "D = 頭部の表示直径。根元は頭部へ固定したまま、往復再生では中間〜毛先の遅れ・反動を確認します。")
+	_text(stack, "D = 頭部の表示直径。攻撃速度テストでは後端保持→0.15秒の前方切り返し→前端保持で、根元→中央→毛先の時間差を確認します。")
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	stack.add_child(controls)
 	_button(controls, "後端 -0.4D", func(): set_ratio(-0.4))
 	_button(controls, "基準 0", func(): set_ratio(0.0))
 	_button(controls, "前端 +0.4D", func(): set_ratio(0.4))
-	_auto_button = _button(controls, "往復再生", toggle_oscillation)
+	_auto_button = _button(controls, "攻撃速度テスト", toggle_oscillation)
 	_text(controls, "向き")
 	_side = OptionButton.new()
 	_side.add_item("P1 / 右向き")
@@ -130,7 +134,7 @@ func _build_ui() -> void:
 	stack.add_child(actions)
 	_button(actions, "PNG保存", save_capture)
 	_button(actions, "モーション調整へ戻る", func(): get_tree().change_scene_to_file("res://tools/motion_preview/MotionPreview.tscn"))
-	_notice = _text(actions, "手動位置は静的姿勢、往復再生は実時間の慣性追従です。柔らかさ0.0と1.0を比較してください。")
+	_notice = _text(actions, "手動位置では柔らかさ差を判定しません。「攻撃速度テスト」で柔らかさ0.0と1.0の伝播差を比較してください。")
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_notice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var display := TextureRect.new()
@@ -242,23 +246,40 @@ func toggle_oscillation() -> void:
 	if oscillating:
 		stop_oscillation()
 	else:
-		_phase = asin(clampf(travel_ratio / 0.4, -1.0, 1.0))
+		_phase = 0.0
+		_apply_ratio(-0.4)
 		if is_instance_valid(fighter):
 			fighter.reset_ahoge_soft_follow()
 		oscillating = true
-		_auto_button.text = "往復停止"
+		_auto_button.text = "テスト停止"
 
 
 func stop_oscillation() -> void:
 	oscillating = false
 	if _auto_button != null:
-		_auto_button.text = "往復再生"
+		_auto_button.text = "攻撃速度テスト"
+
+
+static func attack_preview_ratio(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), ATTACK_PREVIEW_SECONDS)
+	if t < REAR_HOLD_SECONDS:
+		return -0.4
+	t -= REAR_HOLD_SECONDS
+	if t < STRIKE_SWING_SECONDS:
+		var u: float = smoothstep(0.0, STRIKE_SWING_SECONDS, t)
+		return lerpf(-0.4, 0.4, u)
+	t -= STRIKE_SWING_SECONDS
+	if t < FRONT_HOLD_SECONDS:
+		return 0.4
+	t -= FRONT_HOLD_SECONDS
+	var back: float = smoothstep(0.0, RESET_SECONDS, t)
+	return lerpf(0.4, -0.4, back)
 
 
 func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
-		_phase = fposmod(_phase + TAU * delta / ROUND_TRIP_SECONDS, TAU)
-		_apply_ratio(0.4 * sin(_phase), delta)
+		_phase = fposmod(_phase + delta, ATTACK_PREVIEW_SECONDS)
+		_apply_ratio(attack_preview_ratio(_phase), delta)
 
 
 func save_capture() -> void:
