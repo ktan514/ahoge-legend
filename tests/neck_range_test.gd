@@ -163,7 +163,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var static_rigid: PackedVector2Array = mesh_node.current_vertices.duplicate()
 	_expect(_difference(static_soft, static_rigid) < 0.003, "静止状態に柔らかさ由来の恒常差が残りました: " + label)
 
-	# 約0.15秒で後端→前端へ切り返し、根元→中央→毛先の位相差を確認する。
+	# 約0.15秒で後端→前端へ切り返し、連結chainの根元→中央→毛先伝播を確認する。
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
 	scene.set_ratio(-0.4)
@@ -184,21 +184,29 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var near_lag: float = absf(wrapf(softened[near_index] - actor.action_motion.rest_angles[near_index], -PI, PI))
 	var middle_lag: float = absf(wrapf(softened[middle_index] - actor.action_motion.rest_angles[middle_index], -PI, PI))
 	var tip_lag: float = absf(wrapf(softened[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
-	_expect(near_lag < middle_lag and middle_lag < tip_lag, "根元→中央→毛先の伝播遅延になっていません: " + label)
-	_expect(tip_lag > 0.20, "前方切り返しで毛先に十分な時間差が出ません: " + label)
+	_expect(near_lag < middle_lag and middle_lag < tip_lag, "根元→中央→毛先のchain変位になっていません: " + label)
+	_expect(tip_lag > 0.20, "前方切り返しで毛先に十分な遅れが出ません: " + label)
+	var control_velocities: PackedFloat32Array = actor.action_motion.soft_control_velocities()
+	_expect(control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
+	if control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT:
+		var root_speed: float = absf(control_velocities[0])
+		var middle_speed: float = absf(control_velocities[actor.action_motion.SOFT_CONTROL_COUNT / 2])
+		var tip_speed: float = absf(control_velocities[-1])
+		_expect(root_speed < middle_speed and middle_speed < tip_speed, "切り返し終端で毛先側へ速度が乗っていません: " + label)
+		_expect(tip_speed >= middle_speed * 1.15, "毛先速度が中央を十分に追い越していません: " + label)
 	_expect(dynamic_points[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "動的柔軟化で根元が頭部から外れました: " + label)
 
-	# 前端で最大遅延時間より長く保持すると現在姿勢へ追いつく。
-	var settle_seconds: float = 0.22
+	# 前端で保持するとchainの角速度が減衰して現在姿勢へ追いつく。
+	var settle_seconds: float = 0.35
 	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
 		actor.advance_neck_preview(1.0 / fps)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and settle_frame in [0, 3, 7, 11]:
 			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % settle_frame)
 	var settled: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
 	var settled_tip_lag: float = absf(wrapf(settled[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
-	_expect(settled_tip_lag < 0.02, "前端保持後も毛先の過去姿勢が残り続けます: " + label)
+	_expect(settled_tip_lag < 0.02, "前端保持後も毛先chainが基準形状へ収束しません: " + label)
 
-	# 柔らかさ0では同じ高速入力でも伝播遅延を描画へ加えない。
+	# 柔らかさ0では同じ高速入力でもchainの動的offsetを描画へ加えない。
 	actor.set_ahoge_softness(0.0)
 	scene._softness.set_value_no_signal(0.0)
 	scene.set_ratio(-0.4)
@@ -208,7 +216,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
 		actor.advance_neck_preview(sweep_seconds / float(sweep_frames))
 	var rigid_local: PackedVector2Array = actor.action_motion.vertices_from_angles(actor.action_motion.rest_angles)
-	_expect(_difference(mesh_node.current_vertices, rigid_local) < 0.003, "柔らかさ0で伝播遅延が描画されました: " + label)
+	_expect(_difference(mesh_node.current_vertices, rigid_local) < 0.003, "柔らかさ0でchain動作が描画されました: " + label)
 
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
