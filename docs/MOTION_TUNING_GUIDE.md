@@ -181,7 +181,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_CHAIN_HZ` | 13 Hz | control間で運動を伝える速さ |
 | `SOFT_ROOT_DAMPING` | 0.72 | 根元側の減衰 |
 | `SOFT_TIP_DAMPING` | 0.34 | 毛先側の減衰 |
-| `SOFT_SHAPE_RESTORE_RATIO` | 0.16 | 現在のActionMotion形状へ直接戻す弱い復元 |
+| `SOFT_SHAPE_RESTORE_RATIO` | 0.10 | 現在のActionMotion形状へ直接戻す弱い復元。30fpsでも波を毛先まで通す |
 | `SOFT_TIP_SPRING_GAIN` | 2.0 | 毛先側のspring力。遅れて到達した運動を弱めすぎない |
 | `SOFT_FORWARD_ACCEL_DRIVE` | 0.000008 | 頭部Canvas X加速度をcontrol 1へ与えるdrive |
 | `SOFT_DRIVE_LIMIT` | 0.65 rad | 加速度driveの上限 |
