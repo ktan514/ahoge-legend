@@ -52,7 +52,7 @@ func set_ahoge_softness(value: float) -> bool:
 func reset_ahoge_soft_follow() -> void:
 	if not action_motion.configured:
 		return
-	action_motion.reset_soft_follow(deg_to_rad(_head_rotation), _head_offset.x * facing)
+	action_motion.reset_soft_follow(deg_to_rad(_head_rotation), _head_offset.x)
 
 
 func advance_neck_preview(delta: float) -> void:
@@ -135,7 +135,7 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 						true,
 						deg_to_rad(_head_rotation),
 						ahoge_softness,
-						_head_offset.x * facing
+						_head_offset.x
 					)
 					idle_vertices = action_motion.visual_vertices()
 				else:
