@@ -182,6 +182,7 @@ world angleでchainを保持する。頭部Rigが回転しても、control 1以�
 - 根元側減衰比: 0.72。
 - 毛先側減衰比: 0.34。
 - ActionMotion基準形状への絶対復元: 結合力の0.16倍。
+- 毛先側spring gain: 2.0倍。根元1.0→毛先2.0へ二次分布し、遅れて到達した運動の速度を毛先側で弱めすぎない。
 - 前方速度drive: 0.0016rad / (px/s)。
 - drive上限: 0.85rad。
 - 動的offset上限: 1.25rad。
