@@ -46,9 +46,9 @@ func _run() -> void:
 	_expect(is_equal_approx(scene.fighter.neck_travel_ratio, 0.20), "スライダーが頭部へ反映されません")
 	scene._number.value = -0.30
 	_expect(is_equal_approx(scene._slider.value, -0.30) and is_equal_approx(scene.fighter.neck_travel_ratio, -0.30), "数値入力とスライダーが一致しません")
-	scene._pitch.value = 20.0
-	_expect(is_equal_approx(scene.fighter.neck_gaze_max_degrees, 20.0), "仰角幅の入力が頭部へ反映されません")
-	scene._pitch.value = 15.0
+	scene._pitch.value = 30.0
+	_expect(is_equal_approx(scene.fighter.neck_gaze_max_degrees, 30.0), "仰角幅の入力が頭部へ反映されません")
+	scene._pitch.value = 30.0
 	scene.toggle_oscillation()
 	_expect(scene.oscillating, "往復再生が開始しません")
 	scene.set_ratio(0.1)
@@ -86,7 +86,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var rig := actor.find_child("AhogePrototypeRig", true, false) as Node2D
 	var mesh_node = actor.find_child("AhogeDeformMesh", true, false)
 	var label: String = "%d_%d_%d" % [scene.viewport.size.x, side, fps]
-	actor.set_neck_gaze_max_degrees(15.0)
+	actor.set_neck_gaze_max_degrees(30.0)
 	scene.set_ratio(0.0)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
@@ -164,7 +164,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.stop_oscillation()
 	scene.set_ratio(0.0)
 	scene.set_process(true)
-	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 15.0, "asset": mesh_node.texture.resource_path})
+	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
 
 
 func _find_button(node: Node, text: String) -> Button:
