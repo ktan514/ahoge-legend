@@ -2,8 +2,12 @@ extends "res://src/ui/battle_fighter_visual.gd"
 
 # 首の段階調整。通常の攻撃モーションは親へ委譲し、勝敗/入力は変更しない。
 const MAX_TRAVEL_DIAMETERS: float = 0.5
+const DEFAULT_GAZE_MAX_DEGREES: float = 15.0
+const MAX_GAZE_MAX_DEGREES: float = 45.0
+
 var neck_preview_enabled: bool = false
 var neck_travel_ratio: float = 0.0
+var neck_gaze_max_degrees: float = DEFAULT_GAZE_MAX_DEGREES
 
 
 func head_display_diameter() -> float:
@@ -21,6 +25,20 @@ func set_neck_travel_ratio(value: float) -> bool:
 	neck_preview_enabled = true
 	_apply_neck_pose()
 	return true
+
+
+func set_neck_gaze_max_degrees(value: float) -> bool:
+	if not is_finite(value):
+		return false
+	neck_gaze_max_degrees = clampf(value, 0.0, MAX_GAZE_MAX_DEGREES)
+	if neck_preview_enabled:
+		_apply_neck_pose()
+	return true
+
+
+func neck_gaze_elevation_degrees() -> float:
+	# 仰角は上向きを正とする。後端(-0.5D)で+A、前端(+0.5D)で-A。
+	return -2.0 * neck_travel_ratio * neck_gaze_max_degrees
 
 
 func clear_neck_preview() -> void:
@@ -64,8 +82,11 @@ func confirm_contact() -> bool:
 func _apply_neck_pose() -> void:
 	if not is_inside_tree() or _head_sprite == null:
 		return
-	_requested_head_rotation = 0.0
-	_head_rotation = 0.0
+	# 目そのものは描画しないため、首位置に応じた目線仰角を頭部回転で表現する。
+	# Sprite2Dの画面回転は仰角と符号が逆。P2は左右反転するのでfacingも掛ける。
+	var elevation: float = neck_gaze_elevation_degrees()
+	_requested_head_rotation = -elevation * facing
+	_head_rotation = _requested_head_rotation
 	# resize直後にも、新しい表示倍率を反映してからDを求める。
 	_update_asset_pose()
 	_head_offset = Vector2(facing * head_display_diameter() * neck_travel_ratio, 0.0)
