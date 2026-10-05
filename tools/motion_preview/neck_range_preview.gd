@@ -66,8 +66,8 @@ func _build_ui() -> void:
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 10)
 	margin.add_child(stack)
-	_text(stack, "STEP 1-2  首の前後移動＋目線仰角  |  後ろ0.4D ← 基準 → 前0.4D").add_theme_font_size_override("font_size", 24)
-	_text(stack, "D = 頭部の表示直径。後ろほど上向き、前ほど下向き。上下移動とアホ毛内部形状は固定します。")
+	_text(stack, "STEP 4  ロングアホ毛の柔軟追従  |  後ろ0.4D ← 基準 → 前0.4D").add_theme_font_size_override("font_size", 24)
+	_text(stack, "D = 頭部の表示直径。根元は頭部へ固定したまま、往復再生では中間〜毛先の遅れ・反動を確認します。")
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	stack.add_child(controls)
@@ -130,7 +130,7 @@ func _build_ui() -> void:
 	stack.add_child(actions)
 	_button(actions, "PNG保存", save_capture)
 	_button(actions, "モーション調整へ戻る", func(): get_tree().change_scene_to_file("res://tools/motion_preview/MotionPreview.tscn"))
-	_notice = _text(actions, "スライダーを動かすと即反映。入力は向きに対する前後です。")
+	_notice = _text(actions, "手動位置は静的姿勢、往復再生は実時間の慣性追従です。柔らかさ0.0と1.0を比較してください。")
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_notice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var display := TextureRect.new()
