@@ -88,3 +88,17 @@ godot --path . res://tools/motion_preview/MotionPreview.tscn
 左右反転・1280/1600・30/60/120fpsでも同じ座標変換を使用する。
 
 実装では `FighterVisual.ahoge_head_anchor_canvas_position()` と `FighterVisual.ahoge_root_canvas_position()` を検査用にも公開し、同じframeで一致することを自動検証する。
+
+
+### 頭画像表面アンカーへの修正
+
+Human Verificationで、旧`crown_offset`をSprite Transformへ置き換えただけでは見た目が変化しないことを確認したため、固定アンカーの定義を修正する。
+
+- 頭側アンカーYは固定表示オフセットでは決めない。
+- 頭画像の透過を読み、頭幅の中央位置付近で上から最初にalpha>=0.5となる画像ピクセルを「生え際表面」とする。
+- Xは頭画像の使用領域中央を初期値とする。左右反転はSprite Transformに任せ、P1/P2で別座標を持たない。
+- 取得した画像ピクセル座標を固定し、各frameでは頭Spriteの最終TransformでCanvas座標へ変換する。
+- アホ毛メッシュ根元をそのCanvas座標へ一致させる。
+- 確認画面には頭側アンカーとアホ毛根元を別色のマーカーで表示し、重なったときに誤差0を目視できるようにする。
+
+これにより、従来の「画像上端から34px」という近似位置を廃止し、実際に見えている頭髪表面へ接続する。
