@@ -21,6 +21,7 @@ var _side: OptionButton
 var _resolution: OptionButton
 var _status: Label
 var _notice: Label
+var _pitch: SpinBox
 var _auto_button: Button
 var _overlay
 var _rebuilding: bool = false
@@ -64,8 +65,8 @@ func _build_ui() -> void:
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 10)
 	margin.add_child(stack)
-	_text(stack, "STEP 1  首の前後移動  |  後ろ0.5D ← 基準 → 前0.5D").add_theme_font_size_override("font_size", 24)
-	_text(stack, "D = 頭部の表示直径。上下・傾き・アホ毛の変形を止め、水平移動だけを確認します。")
+	_text(stack, "STEP 1-2  首の前後移動＋目線仰角  |  後ろ0.5D ← 基準 → 前0.5D").add_theme_font_size_override("font_size", 24)
+	_text(stack, "D = 頭部の表示直径。後ろほど上向き、前ほど下向き。上下移動とアホ毛内部形状は固定します。")
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	stack.add_child(controls)
@@ -103,6 +104,16 @@ func _build_ui() -> void:
 	_number.custom_minimum_size.x = 140
 	_number.value_changed.connect(set_ratio)
 	input_row.add_child(_number)
+	_text(input_row, "片側最大仰角")
+	_pitch = SpinBox.new()
+	_pitch.min_value = 0.0
+	_pitch.max_value = 45.0
+	_pitch.step = 1.0
+	_pitch.value = 15.0
+	_pitch.suffix = "°"
+	_pitch.custom_minimum_size.x = 110
+	_pitch.value_changed.connect(set_pitch)
+	input_row.add_child(_pitch)
 	_status = _text(stack, "頭部の準備中…")
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
@@ -178,15 +189,26 @@ func set_ratio(value: float) -> void:
 	_apply_ratio(value)
 
 
+func set_pitch(value: float) -> void:
+	if not is_finite(value):
+		return
+	stop_oscillation()
+	if ready_for_input and is_instance_valid(fighter):
+		fighter.set_neck_gaze_max_degrees(value)
+	_apply_ratio(travel_ratio)
+
+
 func _apply_ratio(value: float) -> void:
 	travel_ratio = clampf(value, -0.5, 0.5)
 	_slider.set_value_no_signal(travel_ratio)
 	_number.set_value_no_signal(travel_ratio)
 	if not ready_for_input or not is_instance_valid(fighter):
 		return
+	fighter.set_neck_gaze_max_degrees(float(_pitch.value))
 	fighter.set_neck_travel_ratio(travel_ratio)
 	var d: float = fighter.head_display_diameter()
-	_status.text = "位置 %+.3fD  |  移動量 %+.1fpx  |  頭部直径 D = %.1fpx  |  可動域 ±%.1fpx（内部描画座標）" % [travel_ratio, travel_ratio * d, d, 0.5 * d]
+	var elevation: float = fighter.neck_gaze_elevation_degrees()
+	_status.text = "位置 %+.3fD  |  移動量 %+.1fpx  |  仰角 %+.1f°  |  片側最大 %.1f°  |  D=%.1fpx" % [travel_ratio, travel_ratio * d, elevation, fighter.neck_gaze_max_degrees, d]
 	_overlay.queue_redraw()
 
 
