@@ -156,12 +156,46 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
 	_expect(absf(absf(forward.x - backward.x) - 0.8 * d) < 0.01 and absf(forward.y - backward.y) < 0.01, "端点間の横幅が0.8Dではありません: %s actual_x=%f expected=%f dy=%f" % [label, absf(forward.x - backward.x), 0.8 * d, absf(forward.y - backward.y)])
 	scene.set_ratio(0.4)
-	var soft_tip: Vector2 = mesh_node.current_vertices[-1]
+	var soft_tip_canvas: Vector2 = actor.mesh_canvas_vertices()[-1]
 	actor.set_ahoge_softness(0.0)
 	scene._softness.set_value_no_signal(0.0)
 	scene.set_ratio(0.4)
-	var rigid_tip: Vector2 = mesh_node.current_vertices[-1]
-	_expect(soft_tip.distance_to(rigid_tip) > 2.0, "柔らかさ0と1で毛先形状が変わりません: " + label)
+	var rigid_tip_canvas: Vector2 = actor.mesh_canvas_vertices()[-1]
+	_expect(soft_tip_canvas.distance_to(rigid_tip_canvas) > 24.0, "柔らかさ0と1の見た目差が小さすぎます: " + label)
+
+	# 後ろから前へ短時間で頭を振ったとき、根元は固定したまま中間〜毛先だけが遅れる。
+	actor.set_ahoge_softness(1.0)
+	scene._softness.set_value_no_signal(1.0)
+	scene.set_ratio(-0.4)
+	actor.reset_ahoge_soft_follow()
+	var sweep_frames: int = maxi(2, ceili(0.16 * fps))
+	for sweep_frame in range(sweep_frames):
+		var u: float = float(sweep_frame + 1) / float(sweep_frames)
+		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
+		actor.advance_neck_preview(1.0 / fps)
+	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
+	var static_local: PackedVector2Array = actor.action_motion.soft_idle_vertices(deg_to_rad(actor._head_rotation), 1.0)
+	var static_tip_canvas: Vector2 = mesh_node.global_transform * static_local[-1]
+	var dynamic_lag_px: float = dynamic_points[-1].distance_to(static_tip_canvas)
+	_expect(dynamic_lag_px > 15.0, "前方への切り返しで毛先の動的な遅れが出ません: " + label)
+	_expect(dynamic_points[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "動的柔軟化で根元が頭部から外れました: " + label)
+	for settle_frame in range(maxi(1, ceili(0.50 * fps))):
+		actor.advance_neck_preview(1.0 / fps)
+	var settled_static: PackedVector2Array = actor.action_motion.soft_idle_vertices(deg_to_rad(actor._head_rotation), 1.0)
+	var settled_error_px: float = actor.mesh_canvas_vertices()[-1].distance_to(mesh_node.global_transform * settled_static[-1])
+	_expect(settled_error_px < maxf(6.0, dynamic_lag_px * 0.35), "頭部停止後に毛先の反動が減衰しません: " + label)
+
+	# 柔らかさ0では同じ高速入力でも動的状態を残さない。
+	actor.set_ahoge_softness(0.0)
+	scene._softness.set_value_no_signal(0.0)
+	scene.set_ratio(-0.4)
+	actor.reset_ahoge_soft_follow()
+	for sweep_frame in range(sweep_frames):
+		var u: float = float(sweep_frame + 1) / float(sweep_frames)
+		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
+		actor.advance_neck_preview(1.0 / fps)
+	_expect(_difference(mesh_node.current_vertices, actor.action_motion.rest_angles.size() > 0 ? actor.action_motion.vertices_from_angles(actor.action_motion.rest_angles) : mesh_node.current_vertices) < 0.003, "柔らかさ0で動的補正が残りました: " + label)
+
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
 	scene.set_ratio(0.4)
