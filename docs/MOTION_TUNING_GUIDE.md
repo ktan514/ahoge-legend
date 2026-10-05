@@ -171,7 +171,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 旧4秒往復は廃止した。「攻撃速度テスト」は後端-0.4Dで保持した後、約0.15秒で前端+0.4Dへ切り返す。
 
-現在の柔軟追従は固定遅延ではなく、9 controlの連結chain。control 0は頭部へ固定し、control 1〜8が直前controlの運動を受け取る。毛先ほど減衰を弱め、spring gainを上げるため、同じ波形を時間だけずらすのではなく、毛先側へ速度が乗ることを狙う。
+現在の柔軟追従は固定遅延ではなく、9 controlの連結chain。control 0は頭部へ固定し、control 1〜8が直前controlの運動を受け取る。毛先ほど減衰を弱め、spring gainを上げる。頭部の並進は速度ではなくCanvas X加速度をcontrol 1へ入れ、加速時に後ろへ残り、減速時に毛先が追い越す波を作る。
 
 主な初期値:
 
@@ -183,8 +183,8 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_TIP_DAMPING` | 0.34 | 毛先側の減衰 |
 | `SOFT_SHAPE_RESTORE_RATIO` | 0.16 | 現在のActionMotion形状へ直接戻す弱い復元 |
 | `SOFT_TIP_SPRING_GAIN` | 2.0 | 毛先側のspring力。遅れて到達した運動を弱めすぎない |
-| `SOFT_FORWARD_DRIVE` | 0.0016 | 頭部前後速度をcontrol 1へ与えるdrive |
-| `SOFT_DRIVE_LIMIT` | 0.85 rad | driveの上限 |
+| `SOFT_FORWARD_ACCEL_DRIVE` | 0.000008 | 頭部Canvas X加速度をcontrol 1へ与えるdrive |
+| `SOFT_DRIVE_LIMIT` | 0.65 rad | 加速度driveの上限 |
 | `SOFT_MAX_OFFSET` | 1.25 rad | 動的追加角の上限 |
 
 「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、動的offsetを描画しない。1.0ではchain出力を100%使用する。静止時の形を別物にするパラメータではない。
