@@ -1,7 +1,7 @@
 extends "res://src/ui/battle_fighter_visual.gd"
 
 # 首の段階調整。通常の攻撃モーションは親へ委譲し、勝敗/入力は変更しない。
-const MAX_TRAVEL_DIAMETERS: float = 0.5
+const MAX_TRAVEL_DIAMETERS: float = 0.4
 const DEFAULT_GAZE_MAX_DEGREES: float = 15.0
 const MAX_GAZE_MAX_DEGREES: float = 45.0
 
@@ -37,8 +37,8 @@ func set_neck_gaze_max_degrees(value: float) -> bool:
 
 
 func neck_gaze_elevation_degrees() -> float:
-	# 仰角は上向きを正とする。後端(-0.5D)で+A、前端(+0.5D)で-A。
-	return -2.0 * neck_travel_ratio * neck_gaze_max_degrees
+	# 仰角は上向きを正とする。後端(-0.4D)で+A、前端(+0.4D)で-A。
+	return -(neck_travel_ratio / MAX_TRAVEL_DIAMETERS) * neck_gaze_max_degrees
 
 
 func clear_neck_preview() -> void:
