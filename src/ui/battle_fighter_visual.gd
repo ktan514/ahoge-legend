@@ -2,6 +2,7 @@ extends "res://src/ui/fighter_visual.gd"
 
 const ParryMotionScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
+const HeadMotionScript := preload("res://src/ui/battle_head_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
 const FOLLOW_EDGE_MARGIN: float = 12.0
 const WHIP_NORMAL_REACH_POWER: float = 1.8
@@ -19,6 +20,8 @@ var _head_used: Rect2 = Rect2()
 var _head_contact_px: Vector2 = Vector2.ZERO
 var _presentation_state: int = -1
 var _recovery_head_from: Vector2 = Vector2.ZERO
+var _head_entry_pose: Vector3 = Vector3.ZERO
+var _requested_head_rotation: float = 0.0
 var _entry_transform: Transform2D = Transform2D.IDENTITY
 var _base_motion_transform: Transform2D = Transform2D.IDENTITY
 var _mesh_node
@@ -44,6 +47,7 @@ func _process(delta: float) -> void:
 	var next_state: int = int(combat_state.action_state)
 	if next_state != _presentation_state:
 		_recovery_head_from = _head_offset
+		_head_entry_pose = Vector3(_head_offset.x * facing, _head_offset.y, _head_rotation * facing)
 		if _motion_node != null:
 			_entry_transform = _motion_node.transform
 		if next_state == CombatantStateScript.ActionState.PARRY:
@@ -100,35 +104,45 @@ func contact_canvas_position() -> Vector2:
 
 
 func _prototype_head_target(charge_ratio: float) -> Vector2:
-	var target: Vector2 = super._prototype_head_target(charge_ratio)
-	if _asset_mode and int(combat_state.action_state) == CombatantStateScript.ActionState.PARRY:
-		var duration: float = _phase_duration_for_state(CombatantStateScript.ActionState.PARRY, charge_ratio)
-		var join: float = smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, _visual_action_age)
-		var sweep: float = ParryMotionScript.sweep_at(_visual_action_age, duration)
-		var cue: Vector2 = Vector2(-facing * sweep, sweep * 0.5) * ParryMotionScript.HEAD_MOVE_PX
-		target = _recovery_head_from.lerp(cue, join)
-	var forward: float = target.x * facing
-	match int(combat_state.action_state):
-		CombatantStateScript.ActionState.CHARGING:
-			forward *= 28.0 / (78.0 * 1.15)
-		CombatantStateScript.ActionState.WINDUP:
-			forward *= 36.0 / (82.0 + 72.0 * charge_ratio)
-		CombatantStateScript.ActionState.STRIKE:
-			forward *= (28.0 / (86.0 + 74.0 * charge_ratio)) if forward >= 0.0 else (36.0 / (82.0 + 72.0 * charge_ratio))
-		CombatantStateScript.ActionState.COOLDOWN:
-			var recovered: Vector2 = _recovery_head_from.lerp(Vector2.ZERO, smoothstep(0.0, 0.18, _visual_action_age))
-			forward = recovered.x * facing
-	target.x = clampf(forward, -36.0, 28.0) * facing
+	var action: int = int(combat_state.action_state)
+	if not _asset_mode:
+		# SHORT仮描画の既存動作と画面内の移動範囲は変えない。
+		var fallback: Vector2 = super._prototype_head_target(charge_ratio)
+		var forward: float = fallback.x * facing
+		match action:
+			CombatantStateScript.ActionState.CHARGING:
+				forward *= 28.0 / (78.0 * 1.15)
+			CombatantStateScript.ActionState.WINDUP:
+				forward *= 36.0 / (82.0 + 72.0 * charge_ratio)
+			CombatantStateScript.ActionState.STRIKE:
+				forward *= (28.0 / (86.0 + 74.0 * charge_ratio)) if forward >= 0.0 else (36.0 / (82.0 + 72.0 * charge_ratio))
+			CombatantStateScript.ActionState.COOLDOWN:
+				forward = _recovery_head_from.lerp(Vector2.ZERO, smoothstep(0.0, 0.18, _visual_action_age)).x * facing
+		fallback.x = clampf(forward, -36.0, 28.0) * facing
+		return fallback
+	var pose: Vector3 = HeadMotionScript.sample(action, _visual_action_age, _phase_duration_for_state(action, charge_ratio), _max_charge_duration(), _head_entry_pose)
+	_requested_head_rotation = pose.z * facing
+	var target: Vector2 = Vector2(pose.x * facing, pose.y)
+	if action == CombatantStateScript.ActionState.IDLE:
+		var breathe: float = sin(_breath_phase * 2.0 + (0.0 if facing > 0.0 else 0.7)) * 4.0 + sin(_breath_phase * 0.8) * 1.6
+		target.y += breathe * smoothstep(0.0, HeadMotionScript.RECOVER_SECONDS, _visual_action_age)
 	_cache_head_image()
-	if _asset_mode and arena_canvas_rect.has_area() and _head_used.has_area():
+	if arena_canvas_rect.has_area() and _head_used.has_area():
 		var local_bounds: Rect2 = get_global_transform().affine_inverse() * arena_canvas_rect
-		var angle: float = -facing * (_prototype_charge_lean(charge_ratio) + _prototype_cooldown_lean(charge_ratio)) * 0.035
-		var extent: Rect2 = _head_local_extent(angle)
+		# 今回描く傾きで外接範囲を評価する。旧charge角で判定しない。
+		var extent: Rect2 = _head_local_extent(deg_to_rad(_requested_head_rotation))
 		var low: float = local_bounds.position.x + 10.0 - size.x * 0.5 - extent.position.x
 		var high: float = local_bounds.end.x - 10.0 - size.x * 0.5 - extent.end.x
 		if low <= high:
 			target.x = clampf(target.x, low, high)
 	return target
+
+
+func _update_asset_pose() -> void:
+	if _asset_mode:
+		# 親の旧charge専用角度ではなく、三動作の頭部角度を描画へ渡す。
+		_head_rotation = _requested_head_rotation
+	super._update_asset_pose()
 
 
 func _head_local_extent(angle: float) -> Rect2:
@@ -158,7 +172,8 @@ func confirm_contact() -> bool:
 
 func _neutral_transform() -> Transform2D:
 	var base_scale: float = maxf(0.21, get_viewport_rect().size.x / 5200.0)
-	return Transform2D(0.0, Vector2.ONE * base_scale, 0.0, Vector2.ZERO)
+	# rig自体が左右反転するので、回転は前方基準へ戻してから渡す。
+	return Transform2D(deg_to_rad(_head_rotation * facing), Vector2.ONE * base_scale, 0.0, Vector2.ZERO)
 
 
 func _freeze_contact(target: Vector2) -> void:
@@ -224,7 +239,6 @@ func present_toward(target_canvas: Vector2) -> void:
 			var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
 			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
 			# 接触前から下向きの速度を持たせ、接触後の減速曲線へつなぐ。
-			# q=1で位置が一致し、先行する弧の接線は振り抜きの初速度と一致する。
 			var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
 			var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
 			var reach_weight: float = pow(smoothstep(0.0, 0.90, q), power)

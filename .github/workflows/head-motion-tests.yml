@@ -1,0 +1,55 @@
+name: Head motion tests
+
+on:
+  pull_request:
+    paths:
+      - 'src/ui/battle_*'
+      - 'src/ui/fighter_visual.gd'
+      - 'src/ui/ahoge_*'
+      - 'assets/characters/**'
+      - 'tests/battle_head_motion_test.gd'
+      - '.github/workflows/head-motion-tests.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: head-motion-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Godotを準備
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .godot-version)"
+          curl -L --fail --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${version}-stable/Godot_v${version}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 0755 /tmp/godot-bin/Godot* /usr/local/bin/godot
+      - name: 素材を読み込む
+        run: ./scripts/godot-import.sh
+      - name: 頭部の移動と回転と根元の接続を検査
+        run: timeout 180s ./scripts/godot-strict.sh --headless --path . --script res://tests/battle_head_motion_test.gd
+      - name: 頭部の実描画を保存して検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          timeout 180s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/battle_head_motion_test.gd
+          git rev-parse HEAD > artifacts/head-motion/tested_commit.txt
+      - name: 検証資料を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: head-motion-verification
+          path: artifacts/head-motion/
+          if-no-files-found: error
+          retention-days: 7
