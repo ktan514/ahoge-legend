@@ -46,6 +46,9 @@ func _run() -> void:
 	_expect(is_equal_approx(scene.fighter.neck_travel_ratio, 0.25), "スライダーが頭部へ反映されません")
 	scene._number.value = -0.35
 	_expect(is_equal_approx(scene._slider.value, -0.35) and is_equal_approx(scene.fighter.neck_travel_ratio, -0.35), "数値入力とスライダーが一致しません")
+	scene._pitch.value = 20.0
+	_expect(is_equal_approx(scene.fighter.neck_gaze_max_degrees, 20.0), "仰角幅の入力が頭部へ反映されません")
+	scene._pitch.value = 15.0
 	scene.toggle_oscillation()
 	_expect(scene.oscillating, "往復再生が開始しません")
 	scene.set_ratio(0.1)
@@ -83,6 +86,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var rig := actor.find_child("AhogePrototypeRig", true, false) as Node2D
 	var mesh_node = actor.find_child("AhogeDeformMesh", true, false)
 	var label: String = "%d_%d_%d" % [scene.viewport.size.x, side, fps]
+	actor.set_neck_gaze_max_degrees(15.0)
 	scene.set_ratio(0.0)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
@@ -107,7 +111,11 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		_expect(error < 0.002, "前後0.5Dの位置が一致しません: " + label)
 		_expect((rig.global_position - neutral_root).distance_to(expected) < 0.002, "根元が頭と同じ量移動していません: " + label)
 		_expect(head.scale.is_equal_approx(original_scale), "端点で頭を縮小しました: " + label)
-		_expect(absf(head.rotation) < 0.00001 and absf(head.global_position.y - neutral.y) < 0.00001, "首の上下または傾きが動きました: " + label)
+		var expected_elevation: float = -2.0 * normalized * actor.neck_gaze_max_degrees
+		var expected_rotation: float = deg_to_rad(-expected_elevation * actor.facing)
+		_expect(absf(actor.neck_gaze_elevation_degrees() - expected_elevation) < 0.0001, "首位置と仰角が一致しません: " + label)
+		_expect(absf(head.rotation - expected_rotation) < 0.0001, "頭部回転が仰角と一致しません: " + label)
+		_expect(absf(head.global_position.y - neutral.y) < 0.00001, "仰角連動で頭部を上下移動しました: " + label)
 		_expect(geometry == mesh_node.current_vertices, "首だけの調整でアホ毛の形が変わりました: " + label)
 		_expect(absf(actor.head_display_diameter() - d) < 0.001, "移動でDが変わりました: " + label)
 		var bounds: Rect2 = actor.head_canvas_bounds()
@@ -125,10 +133,16 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
 	_expect(absf(forward.distance_to(backward) - d) < 0.002, "端点間の全幅がDではありません: " + label)
 	var before: Vector2 = head.global_position
+	var before_pitch: float = actor.neck_gaze_max_degrees
 	_expect(not actor.set_neck_travel_ratio(NAN) and not actor.set_neck_travel_ratio(INF), "無効入力を受け付けました")
 	_expect(head.global_position.is_equal_approx(before), "無効入力で位置を変えました")
+	_expect(not actor.set_neck_gaze_max_degrees(NAN) and not actor.set_neck_gaze_max_degrees(INF), "無効な仰角幅を受け付けました")
+	_expect(is_equal_approx(actor.neck_gaze_max_degrees, before_pitch), "無効な仰角幅で設定を変えました")
+	_expect(actor.set_neck_gaze_max_degrees(999.0) and is_equal_approx(actor.neck_gaze_max_degrees, actor.MAX_GAZE_MAX_DEGREES), "仰角幅の上限が機能しません")
+	actor.set_neck_gaze_max_degrees(15.0)
 	actor.clear_neck_preview()
 	_expect(not actor.neck_preview_enabled, "通常モードへ戻せません")
+	_expect(absf(head.rotation) < 0.0001, "通常モード復帰で首の仰角が残りました")
 	actor.combat_state.action_state = StateScript.ActionState.STRIKE
 	actor._process(1.0 / fps)
 	actor._process(1.0 / fps)
@@ -147,7 +161,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.stop_oscillation()
 	scene.set_ratio(0.0)
 	scene.set_process(true)
-	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.5 * d, "span_px": backward.distance_to(forward), "asset": mesh_node.texture.resource_path})
+	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.5 * d, "span_px": backward.distance_to(forward), "gaze_max_degrees": 15.0, "asset": mesh_node.texture.resource_path})
 
 
 func _find_button(node: Node, text: String) -> Button:
