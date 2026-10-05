@@ -65,14 +65,14 @@ func _build_ui() -> void:
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 10)
 	margin.add_child(stack)
-	_text(stack, "STEP 1-2  首の前後移動＋目線仰角  |  後ろ0.5D ← 基準 → 前0.5D").add_theme_font_size_override("font_size", 24)
+	_text(stack, "STEP 1-2  首の前後移動＋目線仰角  |  後ろ0.4D ← 基準 → 前0.4D").add_theme_font_size_override("font_size", 24)
 	_text(stack, "D = 頭部の表示直径。後ろほど上向き、前ほど下向き。上下移動とアホ毛内部形状は固定します。")
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	stack.add_child(controls)
-	_button(controls, "後端 -0.5D", func(): set_ratio(-0.5))
+	_button(controls, "後端 -0.4D", func(): set_ratio(-0.4))
 	_button(controls, "基準 0", func(): set_ratio(0.0))
-	_button(controls, "前端 +0.5D", func(): set_ratio(0.5))
+	_button(controls, "前端 +0.4D", func(): set_ratio(0.4))
 	_auto_button = _button(controls, "往復再生", toggle_oscillation)
 	_text(controls, "向き")
 	_side = OptionButton.new()
@@ -89,16 +89,16 @@ func _build_ui() -> void:
 	stack.add_child(input_row)
 	_text(input_row, "後ろ")
 	_slider = HSlider.new()
-	_slider.min_value = -0.5
-	_slider.max_value = 0.5
+	_slider.min_value = -0.4
+	_slider.max_value = 0.4
 	_slider.step = 0.005
 	_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_slider.value_changed.connect(set_ratio)
 	input_row.add_child(_slider)
 	_text(input_row, "前")
 	_number = SpinBox.new()
-	_number.min_value = -0.5
-	_number.max_value = 0.5
+	_number.min_value = -0.4
+	_number.max_value = 0.4
 	_number.step = 0.005
 	_number.suffix = "D"
 	_number.custom_minimum_size.x = 140
@@ -199,7 +199,7 @@ func set_pitch(value: float) -> void:
 
 
 func _apply_ratio(value: float) -> void:
-	travel_ratio = clampf(value, -0.5, 0.5)
+	travel_ratio = clampf(value, -0.4, 0.4)
 	_slider.set_value_no_signal(travel_ratio)
 	_number.set_value_no_signal(travel_ratio)
 	if not ready_for_input or not is_instance_valid(fighter):
@@ -218,7 +218,7 @@ func toggle_oscillation() -> void:
 	if oscillating:
 		stop_oscillation()
 	else:
-		_phase = asin(clampf(2.0 * travel_ratio, -1.0, 1.0))
+		_phase = asin(clampf(travel_ratio / 0.4, -1.0, 1.0))
 		oscillating = true
 		_auto_button.text = "往復停止"
 
@@ -232,7 +232,7 @@ func stop_oscillation() -> void:
 func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
 		_phase = fposmod(_phase + TAU * delta / ROUND_TRIP_SECONDS, TAU)
-		_apply_ratio(0.5 * sin(_phase))
+		_apply_ratio(0.4 * sin(_phase))
 
 
 func save_capture() -> void:
