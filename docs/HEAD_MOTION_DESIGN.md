@@ -72,3 +72,19 @@ godot --path . res://tools/motion_preview/MotionPreview.tscn
 ```
 
 画像承認を理由にモーション品質NGを解除しない。PR #105はHuman Verificationと独立最終レビューまで未マージとする。
+
+
+## アホ毛根元の頭部固定契約
+
+頭部とアホ毛の接続は、近似した移動量の加算ではなく、頭Sprite上の1つの固定アンカー座標を正本にする。
+
+1. 頭部の位置、左右反転、表示倍率、回転を先に確定する。
+2. 頭Spriteローカルの固定アンカー座標を、その最終TransformでCanvas座標へ変換する。
+3. アホ毛Rigのローカル原点（メッシュ根元）を、そのCanvas座標と一致させる。
+4. アホ毛の曲げ、伸長、パリィ、接触補正は根元より先のMotionRoot/Meshへ適用し、根元座標は動かさない。
+
+この契約はIDLE、CHARGING、WINDUP、STRIKE、COOLDOWN、PARRYの全frameで共通とする。
+頭部が±0.4D移動し、仰角が±30度へ変化しても、頭側アンカーとアホ毛根元の距離は描画座標で実質0を維持する。
+左右反転・1280/1600・30/60/120fpsでも同じ座標変換を使用する。
+
+実装では `FighterVisual.ahoge_head_anchor_canvas_position()` と `FighterVisual.ahoge_root_canvas_position()` を検査用にも公開し、同じframeで一致することを自動検証する。
