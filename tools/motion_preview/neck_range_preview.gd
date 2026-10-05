@@ -22,6 +22,7 @@ var _resolution: OptionButton
 var _status: Label
 var _notice: Label
 var _pitch: SpinBox
+var _softness: SpinBox
 var _auto_button: Button
 var _overlay
 var _rebuilding: bool = false
@@ -114,6 +115,15 @@ func _build_ui() -> void:
 	_pitch.custom_minimum_size.x = 110
 	_pitch.value_changed.connect(set_pitch)
 	input_row.add_child(_pitch)
+	_text(input_row, "アホ毛柔らかさ")
+	_softness = SpinBox.new()
+	_softness.min_value = 0.0
+	_softness.max_value = 1.0
+	_softness.step = 0.05
+	_softness.value = 1.0
+	_softness.custom_minimum_size.x = 110
+	_softness.value_changed.connect(set_softness)
+	input_row.add_child(_softness)
 	_status = _text(stack, "頭部の準備中…")
 	var actions := HBoxContainer.new()
 	actions.add_theme_constant_override("separation", 10)
@@ -198,6 +208,15 @@ func set_pitch(value: float) -> void:
 	_apply_ratio(travel_ratio)
 
 
+func set_softness(value: float) -> void:
+	if not is_finite(value):
+		return
+	stop_oscillation()
+	if ready_for_input and is_instance_valid(fighter):
+		fighter.set_ahoge_softness(value)
+	_apply_ratio(travel_ratio)
+
+
 func _apply_ratio(value: float) -> void:
 	travel_ratio = clampf(value, -0.4, 0.4)
 	_slider.set_value_no_signal(travel_ratio)
@@ -205,10 +224,11 @@ func _apply_ratio(value: float) -> void:
 	if not ready_for_input or not is_instance_valid(fighter):
 		return
 	fighter.set_neck_gaze_max_degrees(float(_pitch.value))
+	fighter.set_ahoge_softness(float(_softness.value))
 	fighter.set_neck_travel_ratio(travel_ratio)
 	var d: float = fighter.head_display_diameter()
 	var elevation: float = fighter.neck_gaze_elevation_degrees()
-	_status.text = "位置 %+.3fD  |  移動量 %+.1fpx  |  仰角 %+.1f°  |  片側最大 %.1f°  |  D=%.1fpx" % [travel_ratio, travel_ratio * d, elevation, fighter.neck_gaze_max_degrees, d]
+	_status.text = "位置 %+.3fD  |  移動量 %+.1fpx  |  仰角 %+.1f°  |  柔らかさ %.2f  |  D=%.1fpx" % [travel_ratio, travel_ratio * d, elevation, fighter.ahoge_softness, d]
 	_overlay.queue_redraw()
 
 
