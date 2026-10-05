@@ -82,7 +82,13 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 		[StateScript.ActionState.PARRY, config.parry_active_seconds + 1.0 / fps],
 		[StateScript.ActionState.IDLE, 0.50]
 	]
-	var result: Dictionary = {"label": label}
+	var head_image: Image = head.texture.get_image()
+	if head_image.is_compressed():
+		head_image.decompress()
+	var anchor_px: Vector2 = actor.ahoge_head_anchor_texture_position()
+	var anchor_i := Vector2i(clampi(roundi(anchor_px.x), 0, head_image.get_width() - 1), clampi(roundi(anchor_px.y), 0, head_image.get_height() - 1))
+	_expect(head_image.get_pixelv(anchor_i).a >= actor.ahoge_head_anchor_alpha_threshold, "頭側アンカーが頭画像表面にありません: " + label)
+	var result: Dictionary = {"label": label, "anchor_px": [anchor_px.x, anchor_px.y]}
 	for phase in phases:
 		state.action_state = int(phase[0])
 		var start_position: Vector2 = head.position
