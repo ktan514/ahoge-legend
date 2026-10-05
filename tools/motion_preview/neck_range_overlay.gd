@@ -35,6 +35,14 @@ func _draw() -> void:
 	draw_circle(ahoge_root, 3.5, Color("2f8bd8"))
 	if root_error > 0.25:
 		draw_line(head_anchor, ahoge_root, Color("7d3fd1"), 2.0, true)
+	var head_up: Vector2 = fighter.head_attachment_up_canvas_direction()
+	var ahoge_up: Vector2 = fighter.ahoge_attachment_up_canvas_direction()
+	var head_up_local: Vector2 = (to_local(fighter.ahoge_head_anchor_canvas_position() + head_up * 62.0) - head_anchor).normalized()
+	var ahoge_up_local: Vector2 = (to_local(fighter.ahoge_root_canvas_position() + ahoge_up * 62.0) - ahoge_root).normalized()
+	var dot_value: float = clampf(head_up.dot(ahoge_up), -1.0, 1.0)
+	var angle_error_degrees: float = rad_to_deg(acos(dot_value))
+	draw_line(head_anchor, head_anchor + head_up_local * 62.0, Color("e24b5b"), 3.0, true)
+	draw_line(ahoge_root, ahoge_root + ahoge_up_local * 48.0, Color("2f8bd8"), 2.0, true)
 
 	var font: Font = ThemeDB.fallback_font
 	draw_string(font, Vector2(origin - 21, baseline_y - 18), "基準", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("354355"))
@@ -43,4 +51,4 @@ func _draw() -> void:
 	draw_string(font, Vector2(left - 55, baseline_y - 18), left_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("354355"))
 	draw_string(font, Vector2(right - 55, baseline_y - 18), right_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("354355"))
 	draw_string(font, gaze_start + Vector2(8.0, -8.0), "仰角 %+.1f°" % elevation, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("8c2f4d"))
-	draw_string(font, head_anchor + Vector2(12.0, -8.0), "根元誤差 %.3fpx" % root_error, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("6b2f7d"))
+	draw_string(font, head_anchor + Vector2(12.0, -8.0), "根元誤差 %.3fpx / 角度差 %.3f°" % [root_error, angle_error_degrees], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("6b2f7d"))
