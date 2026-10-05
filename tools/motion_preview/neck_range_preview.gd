@@ -107,9 +107,9 @@ func _build_ui() -> void:
 	_text(input_row, "片側最大仰角")
 	_pitch = SpinBox.new()
 	_pitch.min_value = 0.0
-	_pitch.max_value = 45.0
+	_pitch.max_value = 30.0
 	_pitch.step = 1.0
-	_pitch.value = 15.0
+	_pitch.value = 30.0
 	_pitch.suffix = "°"
 	_pitch.custom_minimum_size.x = 110
 	_pitch.value_changed.connect(set_pitch)
