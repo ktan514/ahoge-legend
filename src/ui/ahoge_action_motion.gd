@@ -15,8 +15,8 @@ const SOFT_ROOT_DAMPING: float = 0.72
 const SOFT_TIP_DAMPING: float = 0.34
 const SOFT_SHAPE_RESTORE_RATIO: float = 0.16
 const SOFT_TIP_SPRING_GAIN: float = 2.0
-const SOFT_FORWARD_DRIVE: float = 0.0016
-const SOFT_DRIVE_LIMIT: float = 0.85
+const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000008
+const SOFT_DRIVE_LIMIT: float = 0.65
 const SOFT_MAX_OFFSET: float = 1.25
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
@@ -52,6 +52,7 @@ var _soft_control_indices: PackedInt32Array = PackedInt32Array()
 var _soft_world_angles: PackedFloat32Array = PackedFloat32Array()
 var _soft_velocities: PackedFloat32Array = PackedFloat32Array()
 var _soft_previous_forward_px: float = 0.0
+var _soft_previous_forward_velocity: float = 0.0
 var _soft_previous_angle: float = 0.0
 var _soft_motion_initialized: bool = false
 
@@ -315,6 +316,7 @@ func reset_soft_follow(attachment_angle_radians: float = 0.0, attachment_forward
 	attachment_angle = attachment_angle_radians
 	_soft_previous_angle = attachment_angle_radians
 	_soft_previous_forward_px = attachment_forward_px
+	_soft_previous_forward_velocity = 0.0
 	_sync_soft_chain(attachment_angle_radians)
 	_soft_motion_initialized = true
 
@@ -369,20 +371,26 @@ func _advance_softness(
 	if not _soft_motion_initialized or _soft_world_angles.size() != SOFT_CONTROL_COUNT:
 		_soft_previous_angle = angle
 		_soft_previous_forward_px = forward_px
+		_soft_previous_forward_velocity = 0.0
 		_sync_soft_chain(angle)
 		_soft_motion_initialized = true
 		return
+
+	var safe_delta: float = maxf(delta, 0.000001)
+	var forward_velocity: float = (forward_px - _soft_previous_forward_px) / safe_delta
+	var root_velocity: float = wrapf(angle - _soft_previous_angle, -PI, PI) / safe_delta
 	if bounded <= 0.000001:
 		_soft_previous_angle = angle
 		_soft_previous_forward_px = forward_px
+		_soft_previous_forward_velocity = forward_velocity
 		_sync_soft_chain(angle)
 		return
 
-	var forward_speed: float = (forward_px - _soft_previous_forward_px) / maxf(delta, 0.000001)
-	var root_velocity: float = wrapf(angle - _soft_previous_angle, -PI, PI) / maxf(delta, 0.000001)
+	var forward_acceleration: float = (forward_velocity - _soft_previous_forward_velocity) / safe_delta
 	_soft_previous_forward_px = forward_px
+	_soft_previous_forward_velocity = forward_velocity
 	_soft_previous_angle = angle
-	var drive: float = clampf(-forward_speed * SOFT_FORWARD_DRIVE, -SOFT_DRIVE_LIMIT, SOFT_DRIVE_LIMIT)
+	var drive: float = clampf(-forward_acceleration * SOFT_FORWARD_ACCEL_DRIVE, -SOFT_DRIVE_LIMIT, SOFT_DRIVE_LIMIT)
 	var remaining: float = delta
 	while remaining > 0.0000001:
 		var step: float = minf(remaining, SOFT_MAX_STEP)
@@ -457,6 +465,7 @@ func _reset_soft_motion() -> void:
 	_soft_world_angles = PackedFloat32Array()
 	_soft_velocities = PackedFloat32Array()
 	_soft_previous_forward_px = 0.0
+	_soft_previous_forward_velocity = 0.0
 	_soft_previous_angle = 0.0
 	_soft_motion_initialized = false
 
