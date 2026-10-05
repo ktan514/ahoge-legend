@@ -231,6 +231,14 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
 
+func _difference(a: PackedVector2Array, b: PackedVector2Array) -> float:
+	if a.size() != b.size():
+		return INF
+	var maximum: float = 0.0
+	for i in range(a.size()):
+		maximum = maxf(maximum, a[i].distance_to(b[i]))
+	return maximum
+
 
 func _find_button(node: Node, text: String) -> Button:
 	if node is Button and node.text == text:
