@@ -115,6 +115,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		var anchor_canvas: Vector2 = actor.ahoge_head_anchor_canvas_position()
 		var root_canvas: Vector2 = actor.ahoge_root_canvas_position()
 		_expect(anchor_canvas.distance_to(root_canvas) < 0.01, "アホ毛根元が頭部アンカーから外れました: " + label)
+		var head_up: Vector2 = actor.head_attachment_up_canvas_direction()
+		var ahoge_up: Vector2 = actor.ahoge_attachment_up_canvas_direction()
+		_expect(head_up.dot(ahoge_up) > 0.999999, "アホ毛取り付け角度が頭部仰角から外れました: " + label)
 		var mesh_vertices: PackedVector2Array = actor.mesh_canvas_vertices()
 		_expect(not mesh_vertices.is_empty(), "アホ毛メッシュがありません: " + label)
 		if not mesh_vertices.is_empty():
