@@ -300,3 +300,15 @@ full regressionを実行していない状態で「85秒authoritative E2E PASS�
 - Steam、Nakama、PostgreSQL、AWSのcredentialやsecretをリポジトリへcommitしない。
 - ローカル固有設定は秘密情報を含まないテンプレートと実値を分離する。
 - 本番インフラの具体的なAWSリソース構成は専用Issueと設計変更を経て決定する。
+
+
+## モーション手動調整ツール
+
+今回明示された開発用の簡易確認は、通常起動を変更せず次のSceneで実施する。サーバーやP2は不要。これは描画専用であり、オンラインの成否とHuman Verificationを代替しない。
+
+```bash
+godot --path . res://tools/motion_preview/MotionPreview.tscn
+godot --headless --path . --script res://tests/motion_preview_test.gd -- --preview-test
+```
+
+調整手順とコード対応表は `docs/MOTION_TUNING_GUIDE.md`、ツール仕様は `docs/MOTION_PREVIEW_DESIGN.md`。値を変更した際はモーション仕様の対応文書も更新する。

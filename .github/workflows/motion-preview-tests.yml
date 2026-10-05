@@ -1,0 +1,51 @@
+name: Motion preview tests
+
+on:
+  pull_request:
+    paths:
+      - 'tools/motion_preview/**'
+      - 'tests/motion_preview_test.gd'
+      - 'src/ui/**'
+      - 'src/config/combat_config.gd'
+      - 'scenes/screens/battle/**'
+      - '.github/workflows/motion-preview-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: motion-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Godotを準備
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .godot-version)"
+          curl -L --fail --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${version}-stable/Godot_v${version}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 0755 /tmp/godot-bin/Godot* /usr/local/bin/godot
+      - name: プロジェクトを読み込む
+        run: ./scripts/godot-import.sh
+      - name: プレビューの入力列とシークを検査
+        run: timeout 60s ./scripts/godot-strict.sh --headless --path . --script res://tests/motion_preview_test.gd -- --preview-test
+      - name: プレビューの実描画を検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 90s xvfb-run -a ./scripts/godot-strict.sh --path . --audio-driver Dummy --script res://tests/motion_preview_test.gd -- --preview-test
+      - name: プレビュー画像を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-preview
+          path: artifacts/motion-preview/
+          if-no-files-found: error
+          retention-days: 7
