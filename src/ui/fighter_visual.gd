@@ -361,9 +361,47 @@ func _update_asset_pose() -> void:
 	_head_sprite.scale = Vector2(head_scale * facing, head_scale)
 	_head_sprite.rotation = deg_to_rad(_head_rotation)
 
-	# 頭頂部の接続位置にも、頭部と同じ左右反転・回転を適用する。
-	var crown_offset := Vector2(facing * 10.0, -display_height * 0.5 + 34.0)
-	_ahoge_rig.position = head_center + crown_offset.rotated(deg_to_rad(_head_rotation))
+	# 頭部の最終Transformから固定アンカーをCanvas座標へ変換し、
+	# アホ毛Rigのローカル原点（根元）を毎frameそこへ一致させる。
+	_bind_ahoge_root_to_head_anchor()
+
+
+func _ahoge_head_anchor_local() -> Vector2:
+	if _head_sprite == null or _head_sprite.texture == null:
+		return Vector2.ZERO
+	var texture_size: Vector2 = _head_sprite.texture.get_size()
+	if texture_size.y <= 0.0 or absf(_head_sprite.scale.x) <= 0.000001 or absf(_head_sprite.scale.y) <= 0.000001:
+		return Vector2.ZERO
+	# 従来の接続見た目（頭中心から前方10px、上端から34px）を維持し、
+	# その位置をSpriteローカルへ戻して固定アンカーとして扱う。
+	var display_height: float = texture_size.y * absf(_head_sprite.scale.y)
+	var canvas_offset := Vector2(facing * 10.0, -display_height * 0.5 + 34.0)
+	return Vector2(
+		canvas_offset.x / _head_sprite.scale.x,
+		canvas_offset.y / _head_sprite.scale.y
+	)
+
+
+func ahoge_head_anchor_canvas_position() -> Vector2:
+	if not _asset_mode or _head_sprite == null or _head_sprite.texture == null:
+		return Vector2.ZERO
+	return _head_sprite.to_global(_ahoge_head_anchor_local())
+
+
+func ahoge_root_canvas_position() -> Vector2:
+	if _ahoge_rig == null:
+		return Vector2.ZERO
+	return _ahoge_rig.to_global(Vector2.ZERO)
+
+
+func _bind_ahoge_root_to_head_anchor() -> void:
+	if not _asset_mode or _ahoge_rig == null or _ahoge_rig.get_parent() == null:
+		return
+	var target_canvas: Vector2 = ahoge_head_anchor_canvas_position()
+	var parent_canvas := _ahoge_rig.get_parent() as CanvasItem
+	if parent_canvas == null:
+		return
+	_ahoge_rig.position = parent_canvas.get_global_transform().affine_inverse() * target_canvas
 
 
 func _draw() -> void:
