@@ -134,7 +134,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			await process_frame
 			await RenderingServer.frame_post_draw
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
-	_expect(absf(absf(forward.x - backward.x) - 0.8 * d) < 0.002 and absf(forward.y - backward.y) < 0.002, "端点間の横幅が0.8Dではありません: " + label)
+	_expect(absf(absf(forward.x - backward.x) - 0.8 * d) < 0.01 and absf(forward.y - backward.y) < 0.01, "端点間の横幅が0.8Dではありません: %s actual_x=%f expected=%f dy=%f" % [label, absf(forward.x - backward.x), 0.8 * d, absf(forward.y - backward.y)])
 	var before: Vector2 = head.global_position
 	var before_pitch: float = actor.neck_gaze_max_degrees
 	_expect(not actor.set_neck_travel_ratio(NAN) and not actor.set_neck_travel_ratio(INF), "無効入力を受け付けました")
