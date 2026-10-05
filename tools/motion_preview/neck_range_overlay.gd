@@ -9,8 +9,8 @@ func _draw() -> void:
 		return
 	var d: float = fighter.head_display_diameter()
 	var origin: float = fighter.global_position.x + fighter.size.x * 0.5
-	var left: float = origin - 0.5 * d
-	var right: float = origin + 0.5 * d
+	var left: float = origin - 0.4 * d
+	var right: float = origin + 0.4 * d
 	var actual: float = origin + fighter.facing * fighter.neck_travel_ratio * d
 	draw_line(Vector2(left, baseline_y), Vector2(right, baseline_y), Color("6b7688"), 2.0, true)
 	for x in [left, origin, right]:
@@ -29,8 +29,8 @@ func _draw() -> void:
 
 	var font: Font = ThemeDB.fallback_font
 	draw_string(font, Vector2(origin - 21, baseline_y - 18), "基準", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("354355"))
-	var left_text: String = "後ろ -0.5D" if fighter.facing > 0 else "前 +0.5D"
-	var right_text: String = "前 +0.5D" if fighter.facing > 0 else "後ろ -0.5D"
+	var left_text: String = "後ろ -0.4D" if fighter.facing > 0 else "前 +0.4D"
+	var right_text: String = "前 +0.4D" if fighter.facing > 0 else "後ろ -0.4D"
 	draw_string(font, Vector2(left - 55, baseline_y - 18), left_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("354355"))
 	draw_string(font, Vector2(right - 55, baseline_y - 18), right_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("354355"))
 	draw_string(font, gaze_start + Vector2(8.0, -8.0), "仰角 %+.1f°" % elevation, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("8c2f4d"))
