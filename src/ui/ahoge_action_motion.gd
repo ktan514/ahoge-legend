@@ -17,7 +17,7 @@ const SOFT_SHAPE_RESTORE_RATIO: float = 0.10
 const SOFT_TIP_SPRING_GAIN: float = 2.0
 const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000008
 const SOFT_DRIVE_LIMIT: float = 0.65
-const SOFT_MAX_OFFSET: float = 1.25
+const SOFT_MAX_OFFSET: float = 0.55
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
