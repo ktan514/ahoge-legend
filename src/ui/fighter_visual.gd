@@ -395,7 +395,7 @@ func _cache_ahoge_head_anchor() -> void:
 	var found := Vector2i(-1, -1)
 	var max_radius: int = mini(16, used.size.x - 1)
 	for radius in range(max_radius + 1):
-		var candidates: Array[int] = [x] if radius == 0 else [x - radius, x + radius]
+		var candidates: Array = [x] if radius == 0 else [x - radius, x + radius]
 		for candidate_x in candidates:
 			if candidate_x < used.position.x or candidate_x >= used.end.x:
 				continue
