@@ -443,13 +443,33 @@ func ahoge_root_canvas_position() -> Vector2:
 
 
 func _bind_ahoge_root_to_head_anchor() -> void:
-	if not _asset_mode or _ahoge_rig == null or _ahoge_rig.get_parent() == null:
+	if not _asset_mode or _ahoge_rig == null or _ahoge_rig.get_parent() == null or _head_sprite == null:
 		return
 	var target_canvas: Vector2 = ahoge_head_anchor_canvas_position()
 	var parent_canvas := _ahoge_rig.get_parent() as CanvasItem
 	if parent_canvas == null:
 		return
 	_ahoge_rig.position = parent_canvas.get_global_transform().affine_inverse() * target_canvas
+	# 根元位置だけでなく、取り付け基準角度も頭部へ追従させる。
+	# 子のAhogeMotionRootがここからの相対的なしなり・攻撃変形を担当する。
+	_ahoge_rig.rotation = _head_sprite.rotation
+
+
+func head_attachment_up_canvas_direction() -> Vector2:
+	if not _asset_mode or _head_sprite == null:
+		return Vector2.UP
+	var local_anchor: Vector2 = _ahoge_head_anchor_local()
+	var origin: Vector2 = _head_sprite.to_global(local_anchor)
+	var up: Vector2 = _head_sprite.to_global(local_anchor + Vector2.UP)
+	return (up - origin).normalized()
+
+
+func ahoge_attachment_up_canvas_direction() -> Vector2:
+	if _ahoge_rig == null:
+		return Vector2.UP
+	var origin: Vector2 = _ahoge_rig.to_global(Vector2.ZERO)
+	var up: Vector2 = _ahoge_rig.to_global(Vector2.UP)
+	return (up - origin).normalized()
 
 
 func _draw() -> void:
