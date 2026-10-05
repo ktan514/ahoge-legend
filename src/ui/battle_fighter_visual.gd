@@ -4,8 +4,8 @@ const ParryMotionScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
 const FOLLOW_EDGE_MARGIN: float = 12.0
-const WHIP_NORMAL_REACH_POWER: float = 4.0
-const WHIP_CHARGED_REACH_POWER: float = 6.0
+const WHIP_NORMAL_REACH_POWER: float = 1.8
+const WHIP_CHARGED_REACH_POWER: float = 2.8
 const WHIP_TURN_END: float = 0.95
 
 var arena_canvas_rect: Rect2 = Rect2()
@@ -163,12 +163,17 @@ func _neutral_transform() -> Transform2D:
 
 func _freeze_contact(target: Vector2) -> void:
 	_contact_anchor_canvas = target
-	_follow_end_canvas = target + Vector2(FOLLOW_THROUGH_PX.x * facing, FOLLOW_THROUGH_PX.y)
+	_follow_end_canvas = _follow_end_for(target)
+	_contact_frozen = true
+
+
+func _follow_end_for(target: Vector2) -> Vector2:
+	var result: Vector2 = target + Vector2(FOLLOW_THROUGH_PX.x * facing, FOLLOW_THROUGH_PX.y)
 	if arena_canvas_rect.has_area():
 		var safe: Rect2 = arena_canvas_rect.grow(-FOLLOW_EDGE_MARGIN)
-		_follow_end_canvas.x = clampf(_follow_end_canvas.x, safe.position.x, safe.end.x)
-		_follow_end_canvas.y = clampf(_follow_end_canvas.y, safe.position.y, safe.end.y)
-	_contact_frozen = true
+		result.x = clampf(result.x, safe.position.x, safe.end.x)
+		result.y = clampf(result.y, safe.position.y, safe.end.y)
+	return result
 
 
 func _project_tip(base: Transform2D, reference_tip: Vector2, aim: Vector2, reach_weight: float, turn_weight: float) -> Transform2D:
@@ -218,7 +223,12 @@ func present_toward(target_canvas: Vector2) -> void:
 		else:
 			var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
 			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
-			base = _project_tip(base, base * contact_vertices[-1], target_canvas, pow(clampf(q, 0.0, 1.0), power), smoothstep(0.0, WHIP_TURN_END, q))
+			# 接触前から下向きの速度を持たせ、接触後の減速曲線へつなぐ。
+			# q=1で位置が一致し、先行する弧の接線は振り抜きの初速度と一致する。
+			var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
+			var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
+			var reach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
+			base = _project_tip(base, base * contact_vertices[-1], approach, reach_weight, smoothstep(0.0, WHIP_TURN_END, q))
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:

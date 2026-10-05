@@ -61,6 +61,8 @@ jobs:
         run: ./scripts/godot-import.sh
       - name: 接触補正の歪みを次フレームへ残さない
         run: timeout 60s ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_transform_test.gd
+      - name: 曲がり伝播と遅延Hitの巻き戻りを検査
+        run: timeout 60s ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_rope_test.gd
       - name: 実描画と固定メッシュを保存
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'

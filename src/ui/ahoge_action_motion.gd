@@ -2,11 +2,13 @@ extends RefCounted
 
 const StateScript := preload("res://src/domain/combatant_state.gd")
 const ParryScript := preload("res://src/ui/ahoge_parry_motion.gd")
-const BACK_BEND: float = -1.15
-const TIP_DROP: float = 1.8
+const HANG_UP_ANGLE: float = -1.30
+const HANG_TURN: float = 3.0
+const TRAVEL_BEND: float = 0.60
 const RECOVER_SECONDS: float = 0.24
-const FOLLOW_BEND: float = 0.12
-const FOLLOW_SECONDS: float = 0.10
+const FOLLOW_WAVE_BEND: float = 1.10
+const FOLLOW_END_BEND: float = 0.78
+const FOLLOW_SECONDS: float = 0.16
 
 var configured: bool = false
 var state: int = -1
@@ -59,7 +61,9 @@ func configure(profile) -> bool:
 		_lengths.append(edge.length())
 		fractions.append(s)
 		rest_angles.append(angle)
-		hang_angles.append(angle + BACK_BEND * smoothstep(0.07, 0.30, s) + TIP_DROP * smoothstep(0.40, 0.97, s))
+		# C字へ一律の角度を足すと末端が輪になる。開いた後方アーチを正本にする。
+		var hang_angle: float = HANG_UP_ANGLE - HANG_TURN * smoothstep(0.30, 0.90, s)
+		hang_angles.append(lerpf(angle, hang_angle, smoothstep(0.08, 0.22, s)))
 		straight_angles.append(lerpf(angle, float(profile.straight_direction), smoothstep(0.10, 0.32, s)))
 	configured = true
 	state = -1
@@ -113,8 +117,7 @@ func _compute_pose() -> void:
 			var progress: float = clampf(elapsed / _max_charge, 0.0, 1.0)
 			var entry: float = smoothstep(0.0, 0.08, elapsed)
 			for i in range(current_angles.size()):
-				var local_hang: float = smoothstep(0.04 * fractions[i], 0.50 + 0.50 * fractions[i], progress)
-				var desired: float = lerpf(rest_angles[i], hang_angles[i], local_hang)
+				var desired: float = hanging_angle(i, progress)
 				current_angles[i] = lerpf(_from_angles[i], desired, entry)
 			hang = smoothstep(0.04, 1.0, progress)
 			sweep = _from_sweep * (1.0 - entry)
@@ -122,7 +125,7 @@ func _compute_pose() -> void:
 			var windup: float = smoothstep(0.0, duration, elapsed)
 			var target_hang: float = maxf(_from_hang, 0.22 + 0.78 * _charge)
 			for i in range(current_angles.size()):
-				current_angles[i] = lerpf(_from_angles[i], lerpf(rest_angles[i], hang_angles[i], target_hang), windup)
+				current_angles[i] = lerpf(_from_angles[i], hanging_angle(i, target_hang), windup)
 			hang = lerpf(_from_hang, target_hang, windup)
 			sweep = _from_sweep * (1.0 - windup)
 		StateScript.ActionState.STRIKE:
@@ -131,15 +134,15 @@ func _compute_pose() -> void:
 			for i in range(current_angles.size()):
 				var s: float = fractions[i]
 				current_angles[i] = lerpf(_from_angles[i], straight_angles[i], release_at(q, s))
-				current_angles[i] += FOLLOW_BEND * after * smoothstep(0.40, 1.0, s)
+				# 曲げの山を先端へ送り出し、接触後は別の曲げを根元側から返す。
+				current_angles[i] += traveling_bend(q, s) + follow_bend(after, s)
 			straighten = release_at(q, 1.0)
 			hang = _from_hang * (1.0 - straighten)
 		StateScript.ActionState.COOLDOWN:
 			if _continued_follow_seconds >= 0.0:
-				var final_angles: PackedFloat32Array = final_follow_angles()
 				var recovering: float = recovery_seconds()
 				for i in range(current_angles.size()):
-					var trailing: float = lerpf(straight_angles[i], final_angles[i], follow_progress())
+					var trailing: float = straight_angles[i] + follow_bend(follow_progress(), fractions[i])
 					current_angles[i] = lerpf(trailing, rest_angles[i], smoothstep(0.0, 0.18 + 0.06 * fractions[i], recovering))
 				straighten = 1.0 - smoothstep(0.0, RECOVER_SECONDS, recovering)
 			else:
@@ -158,6 +161,15 @@ func _compute_pose() -> void:
 		vertices = ParryScript.deform(_profile, vertices, sweep)
 
 
+func hanging_angle(index: int, progress: float) -> float:
+	var s: float = fractions[index]
+	var p: float = clampf(progress, 0.0, 1.0)
+	var local_hang: float = smoothstep(0.04 * s, 0.50 + 0.50 * s, p)
+	# 前のC字を後ろへ渡す間も曲げを残す。一直線に伸びて画面上端へ出ない。
+	var transfer: float = 2.0 * sin(PI * p) * exp(-pow((s - 0.35) / 0.28, 2.0)) * smoothstep(0.08, 0.22, s)
+	return lerpf(rest_angles[index], hang_angles[index], local_hang) + transfer
+
+
 func _recover_from_entry() -> void:
 	for i in range(current_angles.size()):
 		var back: float = smoothstep(0.0, 0.18 + 0.06 * fractions[i], elapsed)
@@ -172,6 +184,22 @@ static func release_at(q: float, s: float) -> float:
 	return smoothstep(0.02 + 0.35 * s, 0.42 + 0.58 * s, q)
 
 
+static func traveling_bend(q: float, s: float) -> float:
+	if q <= 0.0 or q >= 1.0:
+		return 0.0
+	var center: float = 0.18 + 0.95 * q
+	return TRAVEL_BEND * pow(sin(PI * q), 2.0) * exp(-pow((s - center) / 0.24, 2.0)) * smoothstep(0.10, 0.26, s)
+
+
+static func follow_bend(progress: float, s: float) -> float:
+	var p: float = clampf(progress, 0.0, 1.0)
+	var center: float = 0.20 + 0.68 * p
+	var band: float = smoothstep(center - 0.30, center - 0.05, s) - smoothstep(center + 0.05, center + 0.30, s)
+	var amplitude: float = lerpf(FOLLOW_WAVE_BEND, FOLLOW_END_BEND, smoothstep(0.65, 1.0, p))
+	var downward_tip: float = 0.80 * smoothstep(0.70, 1.0, s) * smoothstep(0.35, 1.0, p)
+	return -amplitude * band * smoothstep(0.0, 0.25, p) * smoothstep(0.10, 0.26, s) + downward_tip
+
+
 func follow_seconds() -> float:
 	if blocked:
 		return -1.0
@@ -183,7 +211,9 @@ func follow_seconds() -> float:
 
 
 func follow_progress() -> float:
-	return smoothstep(0.0, FOLLOW_SECONDS, maxf(follow_seconds(), 0.0))
+	# 接触地点で静止せずに通過する。終端だけ減速させる。
+	var u: float = clampf(follow_seconds() / FOLLOW_SECONDS, 0.0, 1.0)
+	return u * (2.0 - u)
 
 
 func recovery_seconds() -> float:
@@ -195,12 +225,15 @@ func recovery_seconds() -> float:
 func final_follow_angles() -> PackedFloat32Array:
 	var result: PackedFloat32Array = straight_angles.duplicate()
 	for i in range(result.size()):
-		result[i] += FOLLOW_BEND * smoothstep(0.40, 1.0, fractions[i])
+		result[i] += follow_bend(1.0, fractions[i])
 	return result
 
 
 func force_contact() -> bool:
 	if not configured or blocked or state not in [StateScript.ActionState.STRIKE, StateScript.ActionState.COOLDOWN]:
+		return false
+	# 遅れて届いた確定通知は、既に通過した時計や姿勢を戻さない。
+	if follow_seconds() >= -0.000001:
 		return false
 	current_angles = straight_angles.duplicate()
 	straighten = 1.0

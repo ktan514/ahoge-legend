@@ -2,11 +2,11 @@ extends RefCounted
 
 # ムチ状の毛束末端だけを返す。根元側の固定範囲は広げない。
 const FIXED_FRACTION: float = 0.62
-const FULL_FRACTION: float = 0.94
+const FULL_FRACTION: float = 0.80
 const ENTRY_SECONDS: float = 0.055
 const EXIT_SECONDS: float = 0.08
 const PREPARE_ANGLE: float = 0.24
-const SWEEP_ANGLE: float = -0.95
+const SWEEP_ANGLE: float = -0.72
 const RECOIL_ANGLE: float = 0.12
 const HEAD_MOVE_PX: float = 3.0
 
