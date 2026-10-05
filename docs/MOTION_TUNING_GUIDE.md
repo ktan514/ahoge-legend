@@ -185,7 +185,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_ROOT_DAMPING` | 0.95 | 根元側の減衰 |
 | `SOFT_TIP_DAMPING` | 0.48 | 毛先側の減衰。小さいほど反動が残る |
 
-ロング攻撃ではIDLE / CHARGING / WINDUP / STRIKE / COOLDOWNへ柔軟追従を適用する。PARRYは局所払いの形を保つため現段階では0.0。
+ロング攻撃では、IDLEは待機・首確認用の柔軟表示、STRIKE / COOLDOWNは前方切り返し後の動的柔軟追従として使う。CHARGING / WINDUPは既存の後方アーチを二重に曲げないため柔軟補正0.0とし、最大溜めで静止させる。PARRYも局所払いの形を保つため現段階では0.0。CHARGING / WINDUP中も頭部位置・角度は直前入力として更新されるため、STRIKE開始時の速度差は検出できる。
 
 柔らかさを強くしたい場合、最初は `SOFT_TIP_HZ` を4.0→3.5のように少し下げるか、`SOFT_FORWARD_SPEED_GAIN` を0.0032→0.0036のように少し上げ、同時に複数値を大きく変更しない。毛先が暴れる場合は `SOFT_TIP_DAMPING` を上げる。
 
