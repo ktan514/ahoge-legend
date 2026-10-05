@@ -89,7 +89,7 @@ func _process(delta: float) -> void:
 		bool(combat_state.ahoge_available),
 		deg_to_rad(_head_rotation),
 		motion_softness,
-		_head_offset.x * facing
+		_head_offset.x
 	)
 
 
