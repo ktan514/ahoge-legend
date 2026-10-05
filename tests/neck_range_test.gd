@@ -100,7 +100,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(absf(d - expected_d) < 0.001 and d > 100.0, "Dが頭部の表示直径ではありません: " + label)
 	var backward: Vector2
 	var forward: Vector2
-	for amount in [-0.5, -0.20, 0.0, 0.20, 0.5, -5.0, 5.0]:
+	for amount in [-0.4, -0.2, 0.0, 0.2, 0.4, -5.0, 5.0]:
 		scene.set_ratio(amount)
 		actor._process(1.0 / fps)
 		actor.present_toward(Vector2(-9999.0, -9999.0))
