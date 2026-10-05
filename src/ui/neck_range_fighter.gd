@@ -8,6 +8,7 @@ const MAX_GAZE_MAX_DEGREES: float = 30.0
 var neck_preview_enabled: bool = false
 var neck_travel_ratio: float = 0.0
 var neck_gaze_max_degrees: float = DEFAULT_GAZE_MAX_DEGREES
+var ahoge_softness: float = 1.0
 
 
 func head_display_diameter() -> float:
@@ -31,6 +32,15 @@ func set_neck_gaze_max_degrees(value: float) -> bool:
 	if not is_finite(value):
 		return false
 	neck_gaze_max_degrees = clampf(value, 0.0, MAX_GAZE_MAX_DEGREES)
+	if neck_preview_enabled:
+		_apply_neck_pose()
+	return true
+
+
+func set_ahoge_softness(value: float) -> bool:
+	if not is_finite(value):
+		return false
+	ahoge_softness = clampf(value, 0.0, 1.0)
 	if neck_preview_enabled:
 		_apply_neck_pose()
 	return true
@@ -96,7 +106,12 @@ func _apply_neck_pose() -> void:
 	if _asset_mode and _motion_node != null:
 		_motion_node.transform = _neutral_transform()
 		if _mesh_node != null and _mesh_node.configured:
-			_mesh_node.set_action_pose(_mesh_node.profile.rest_vertices, 0.0, 0.0)
+			if not action_motion.configured:
+				action_motion.configure(_mesh_node.profile)
+			var idle_vertices: PackedVector2Array = _mesh_node.profile.rest_vertices
+			if action_motion.configured:
+				idle_vertices = action_motion.soft_idle_vertices(deg_to_rad(_head_rotation), ahoge_softness)
+			_mesh_node.set_action_pose(idle_vertices, 0.0, 0.0)
 	last_safety_scale = 1.0
 	last_presentation_weight = 0.0
 	last_contact_error = INF
