@@ -109,7 +109,10 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		var error: float = (head.global_position - neutral).distance_to(expected)
 		max_error = maxf(max_error, error)
 		_expect(error < 0.002, "前後0.5Dの位置が一致しません: " + label)
-		_expect((rig.global_position - neutral_root).distance_to(expected) < 0.002, "根元が頭と同じ量移動していません: " + label)
+		var display_height: float = head.texture.get_size().y * absf(head.scale.y)
+		var crown_offset := Vector2(actor.facing * 10.0, -display_height * 0.5 + 34.0)
+		var expected_root_from_head: Vector2 = crown_offset.rotated(head.rotation)
+		_expect((rig.global_position - head.global_position).distance_to(expected_root_from_head) < 0.002, "根元が回転後の頭頂部に固定されていません: " + label)
 		_expect(head.scale.is_equal_approx(original_scale), "端点で頭を縮小しました: " + label)
 		var expected_elevation: float = -2.0 * normalized * actor.neck_gaze_max_degrees
 		var expected_rotation: float = deg_to_rad(-expected_elevation * actor.facing)
