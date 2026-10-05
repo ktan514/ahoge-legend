@@ -113,6 +113,9 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 			var error: float = expected_anchor.distance_to(root_canvas)
 			max_anchor_error = maxf(max_anchor_error, error)
 			_expect(error < 0.01, "頭部アンカーからアホ毛Rig根元が外れました: " + label)
+			var head_up: Vector2 = actor.head_attachment_up_canvas_direction()
+			var ahoge_up: Vector2 = actor.ahoge_attachment_up_canvas_direction()
+			_expect(head_up.dot(ahoge_up) > 0.999999, "アホ毛取り付け角度が頭部回転へ追従していません: " + label)
 			var mesh_vertices: PackedVector2Array = actor.mesh_canvas_vertices()
 			_expect(not mesh_vertices.is_empty(), "アホ毛メッシュがありません: " + label)
 			if not mesh_vertices.is_empty():
