@@ -1,6 +1,6 @@
 extends Control
 
-const FighterVisualScript := preload("res://src/ui/battle_fighter_visual.gd")
+const FighterVisualScript := preload("res://src/ui/neck_range_fighter.gd")
 const ContactDirectorScript := preload("res://src/ui/battle_contact_director.gd")
 const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
 const MangaBackdropScript := preload("res://src/ui/theme/manga_backdrop.gd")

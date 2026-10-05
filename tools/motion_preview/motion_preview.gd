@@ -135,6 +135,7 @@ func _build_ui() -> void:
 	transport.add_child(_mesh)
 
 	var actions := _row(stack)
+	_button(actions, "首の前後だけ調整", func(): get_tree().change_scene_to_file("res://tools/motion_preview/NeckRangePreview.tscn"))
 	_button(actions, "コード再読込", reload_code)
 	_button(actions, "PNG保存", save_capture)
 	_button(actions, "調整ガイドを開く", func(): OS.shell_open(ProjectSettings.globalize_path("res://docs/MOTION_TUNING_GUIDE.md")))
