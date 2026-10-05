@@ -9,14 +9,15 @@ const RECOVER_SECONDS: float = 0.24
 const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
-const SOFT_ROOT_END: float = 0.10
-const SOFT_FULL_AT: float = 0.92
-const SOFT_MAX_LAG_SECONDS: float = 0.14
-const SOFT_LAG_POWER: float = 1.35
-const SOFT_POSITION_TO_ANGLE: float = 0.0045
-const SOFT_ANGLE_LAG_RATIO: float = 1.00
-const SOFT_MAX_OFFSET: float = 1.10
-const SOFT_HISTORY_MARGIN: float = 0.04
+const SOFT_CONTROL_COUNT: int = 9
+const SOFT_CHAIN_HZ: float = 13.0
+const SOFT_ROOT_DAMPING: float = 0.72
+const SOFT_TIP_DAMPING: float = 0.34
+const SOFT_SHAPE_RESTORE_RATIO: float = 0.16
+const SOFT_FORWARD_DRIVE: float = 0.0016
+const SOFT_DRIVE_LIMIT: float = 0.85
+const SOFT_MAX_OFFSET: float = 1.25
+const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
 var state: int = -1
@@ -46,9 +47,11 @@ var _max_charge: float = 0.62
 var _continued_follow_seconds: float = -1.0
 var softness: float = 1.0
 var attachment_angle: float = 0.0
-var _soft_current_forward_px: float = 0.0
-var _soft_time: float = 0.0
-var _soft_history: Array[Vector3] = []
+var _soft_control_indices: PackedInt32Array = PackedInt32Array()
+var _soft_world_angles: PackedFloat32Array = PackedFloat32Array()
+var _soft_velocities: PackedFloat32Array = PackedFloat32Array()
+var _soft_previous_forward_px: float = 0.0
+var _soft_previous_angle: float = 0.0
 var _soft_motion_initialized: bool = false
 
 
@@ -82,6 +85,7 @@ func configure(profile) -> bool:
 	configured = true
 	state = -1
 	blocked = false
+	_build_soft_controls()
 	_reset_pose()
 	_reset_soft_motion()
 	_from_angles = current_angles.duplicate()
@@ -105,7 +109,6 @@ func advance(
 		return
 	attachment_angle = attachment_angle_radians
 	softness = clampf(softness_amount, 0.0, 1.0)
-	_advance_softness(delta, attachment_angle, attachment_forward_px, softness, next_state, available)
 	var changed: bool = next_state != state
 	if changed:
 		var carry: float = -1.0
@@ -138,6 +141,7 @@ func advance(
 	if not (changed and state == StateScript.ActionState.PARRY):
 		elapsed += delta
 	_compute_pose()
+	_advance_softness(delta, attachment_angle, attachment_forward_px, softness, state, available)
 
 
 func _compute_pose() -> void:
@@ -300,18 +304,52 @@ func visual_vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Arr
 func soft_idle_vertices(attachment_angle_radians: float, softness_amount: float = 1.0) -> PackedVector2Array:
 	if not configured or not is_finite(attachment_angle_radians) or not is_finite(softness_amount):
 		return PackedVector2Array()
-	# 静止時はrest形状へ収束する。柔らかさは運動中の時間差として表現する。
+	# 静止中はActionMotionの基準形状へ収束する。
 	return vertices_from_angles(rest_angles)
 
 
 func reset_soft_follow(attachment_angle_radians: float = 0.0, attachment_forward_px: float = 0.0) -> void:
-	if not is_finite(attachment_angle_radians) or not is_finite(attachment_forward_px):
+	if not configured or not is_finite(attachment_angle_radians) or not is_finite(attachment_forward_px):
 		return
-	_reset_soft_motion()
 	attachment_angle = attachment_angle_radians
-	_soft_current_forward_px = attachment_forward_px
-	_soft_history.append(Vector3(0.0, attachment_angle_radians, attachment_forward_px))
+	_soft_previous_angle = attachment_angle_radians
+	_soft_previous_forward_px = attachment_forward_px
+	_sync_soft_chain(attachment_angle_radians)
 	_soft_motion_initialized = true
+
+
+func _build_soft_controls() -> void:
+	_soft_control_indices = PackedInt32Array()
+	if fractions.is_empty():
+		return
+	for control in range(SOFT_CONTROL_COUNT):
+		var target: float = float(control) / float(SOFT_CONTROL_COUNT - 1)
+		var best_index: int = 0
+		var best_distance: float = INF
+		for i in range(fractions.size()):
+			var distance: float = absf(fractions[i] - target)
+			if distance < best_distance:
+				best_distance = distance
+				best_index = i
+		if not _soft_control_indices.is_empty():
+			best_index = maxi(best_index, _soft_control_indices[-1] + 1)
+		best_index = mini(best_index, fractions.size() - 1)
+		_soft_control_indices.append(best_index)
+	_soft_control_indices[0] = 0
+	_soft_control_indices[-1] = fractions.size() - 1
+
+
+func _sync_soft_chain(angle: float) -> void:
+	if _soft_control_indices.size() != SOFT_CONTROL_COUNT:
+		_build_soft_controls()
+	_soft_world_angles = PackedFloat32Array()
+	_soft_velocities = PackedFloat32Array()
+	_soft_world_angles.resize(_soft_control_indices.size())
+	_soft_velocities.resize(_soft_control_indices.size())
+	for control in range(_soft_control_indices.size()):
+		var index: int = _soft_control_indices[control]
+		_soft_world_angles[control] = angle + current_angles[index]
+		_soft_velocities[control] = 0.0
 
 
 func _advance_softness(
@@ -324,73 +362,99 @@ func _advance_softness(
 ) -> void:
 	var bounded: float = clampf(amount, 0.0, 1.0)
 	softness = bounded
-	attachment_angle = angle
-	_soft_current_forward_px = forward_px
-	if not available or action_state in [
-		StateScript.ActionState.ROUND_LOCKED,
-		StateScript.ActionState.PARRY,
-		StateScript.ActionState.DODGE,
-		StateScript.ActionState.STAGGER
-	]:
-		reset_soft_follow(angle, forward_px)
+	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
+		_reset_soft_motion()
 		return
-	if not _soft_motion_initialized:
-		reset_soft_follow(angle, forward_px)
+	if not _soft_motion_initialized or _soft_world_angles.size() != SOFT_CONTROL_COUNT:
+		_soft_previous_angle = angle
+		_soft_previous_forward_px = forward_px
+		_sync_soft_chain(angle)
+		_soft_motion_initialized = true
 		return
-	_soft_time += delta
-	_soft_history.append(Vector3(_soft_time, angle, forward_px))
-	var oldest: float = _soft_time - SOFT_MAX_LAG_SECONDS - SOFT_HISTORY_MARGIN
-	while _soft_history.size() > 2 and _soft_history[1].x < oldest:
-		_soft_history.remove_at(0)
+	if bounded <= 0.000001:
+		_soft_previous_angle = angle
+		_soft_previous_forward_px = forward_px
+		_sync_soft_chain(angle)
+		return
+
+	var forward_speed: float = (forward_px - _soft_previous_forward_px) / maxf(delta, 0.000001)
+	_soft_previous_forward_px = forward_px
+	_soft_previous_angle = angle
+	var drive: float = clampf(-forward_speed * SOFT_FORWARD_DRIVE, -SOFT_DRIVE_LIMIT, SOFT_DRIVE_LIMIT)
+	var remaining: float = delta
+	while remaining > 0.0000001:
+		var step: float = minf(remaining, SOFT_MAX_STEP)
+		var previous_world: PackedFloat32Array = _soft_world_angles.duplicate()
+		var previous_velocity: PackedFloat32Array = _soft_velocities.duplicate()
+		var root_index: int = _soft_control_indices[0]
+		var new_root: float = angle + current_angles[root_index]
+		_soft_velocities[0] = wrapf(new_root - previous_world[0], -PI, PI) / step
+		_soft_world_angles[0] = new_root
+		for control in range(1, _soft_control_indices.size()):
+			var index: int = _soft_control_indices[control]
+			var previous_index: int = _soft_control_indices[control - 1]
+			var desired_curve: float = wrapf(current_angles[index] - current_angles[previous_index], -PI, PI)
+			var coupled_target: float = previous_world[control - 1] + desired_curve
+			if control == 1:
+				coupled_target += drive
+			var absolute_target: float = angle + current_angles[index]
+			var target: float = lerp_angle(coupled_target, absolute_target, SOFT_SHAPE_RESTORE_RATIO)
+			var error: float = wrapf(target - previous_world[control], -PI, PI)
+			var fraction: float = float(control) / float(_soft_control_indices.size() - 1)
+			var damping: float = lerpf(SOFT_ROOT_DAMPING, SOFT_TIP_DAMPING, fraction)
+			var omega: float = TAU * SOFT_CHAIN_HZ
+			var acceleration: float = omega * omega * error - 2.0 * damping * omega * previous_velocity[control]
+			var velocity: float = previous_velocity[control] + acceleration * step
+			var world_angle: float = previous_world[control] + velocity * step
+			_soft_velocities[control] = velocity
+			_soft_world_angles[control] = world_angle
+		remaining -= step
 
 
-func _sample_soft_history(target_time: float) -> Vector2:
-	if _soft_history.is_empty():
-		return Vector2(attachment_angle, _soft_current_forward_px)
-	if target_time <= _soft_history[0].x:
-		return Vector2(_soft_history[0].y, _soft_history[0].z)
-	var last: Vector3 = _soft_history[-1]
-	if target_time >= last.x:
-		return Vector2(last.y, last.z)
-	for i in range(1, _soft_history.size()):
-		var b: Vector3 = _soft_history[i]
-		if target_time <= b.x:
-			var a: Vector3 = _soft_history[i - 1]
-			var span: float = maxf(b.x - a.x, 0.000001)
-			var weight: float = clampf((target_time - a.x) / span, 0.0, 1.0)
-			return Vector2(
-				lerp_angle(a.y, b.y, weight),
-				lerpf(a.z, b.z, weight)
-			)
-	return Vector2(last.y, last.z)
+func _control_offset(control: int) -> float:
+	if control < 0 or control >= _soft_control_indices.size() or control >= _soft_world_angles.size():
+		return 0.0
+	var index: int = _soft_control_indices[control]
+	var baseline: float = attachment_angle + current_angles[index]
+	return clampf(wrapf(_soft_world_angles[control] - baseline, -PI, PI), -SOFT_MAX_OFFSET, SOFT_MAX_OFFSET)
 
 
 func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
-	if values.size() != fractions.size() or softness <= 0.000001 or _soft_history.is_empty():
+	if values.size() != fractions.size() or softness <= 0.000001 or _soft_control_indices.size() < 2:
 		return values.duplicate()
 	var result: PackedFloat32Array = values.duplicate()
+	var control: int = 0
 	for i in range(result.size()):
 		var s: float = fractions[i]
-		var flex: float = smoothstep(SOFT_ROOT_END, SOFT_FULL_AT, s)
-		if flex <= 0.000001:
-			continue
-		var delay: float = SOFT_MAX_LAG_SECONDS * pow(flex, SOFT_LAG_POWER) * softness
-		var delayed: Vector2 = _sample_soft_history(_soft_time - delay)
-		var rotation_lag: float = wrapf(delayed.x - attachment_angle, -PI, PI) * SOFT_ANGLE_LAG_RATIO
-		var position_lag: float = (delayed.y - _soft_current_forward_px) * SOFT_POSITION_TO_ANGLE
-		var offset: float = clampf(
-			(rotation_lag + position_lag) * flex * softness,
-			-SOFT_MAX_OFFSET,
-			SOFT_MAX_OFFSET
-		)
-		result[i] += offset
+		while control < _soft_control_indices.size() - 2 and s > fractions[_soft_control_indices[control + 1]]:
+			control += 1
+		var left_index: int = _soft_control_indices[control]
+		var right_index: int = _soft_control_indices[control + 1]
+		var left_s: float = fractions[left_index]
+		var right_s: float = fractions[right_index]
+		var weight: float = 0.0 if right_s <= left_s else clampf((s - left_s) / (right_s - left_s), 0.0, 1.0)
+		var offset: float = lerpf(_control_offset(control), _control_offset(control + 1), weight)
+		result[i] += offset * softness
 	return result
 
 
+func soft_control_world_angles() -> PackedFloat32Array:
+	return _soft_world_angles.duplicate()
+
+
+func soft_control_velocities() -> PackedFloat32Array:
+	return _soft_velocities.duplicate()
+
+
+func soft_control_indices() -> PackedInt32Array:
+	return _soft_control_indices.duplicate()
+
+
 func _reset_soft_motion() -> void:
-	_soft_time = 0.0
-	_soft_history.clear()
-	_soft_current_forward_px = 0.0
+	_soft_world_angles = PackedFloat32Array()
+	_soft_velocities = PackedFloat32Array()
+	_soft_previous_forward_px = 0.0
+	_soft_previous_angle = 0.0
 	_soft_motion_initialized = false
 
 
