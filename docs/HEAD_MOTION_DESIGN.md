@@ -170,7 +170,8 @@ world angleでchainを保持する。頭部Rigが回転しても、control 1以�
 
 頭部の回転だけでなく、前後移動もムチの駆動源とする。
 
-- 頭部前方速度から、進行方向と逆向きの短いdrive angleをcontrol 1へ与える。
+- 頭部のCanvas X速度から、進行方向と逆向きの短いdrive angleをcontrol 1へ与える。P1/P2でCanvas X速度の符号が自然に反転するため、world angleの鏡映と一致させる。
+- 「前方を常に正」に正規化した速度をworld angleへ直接加算しない。左右反転時にdrive角だけ鏡映されなくなるため不採用。
 - driveはcontrol 1だけへ直接入り、control 2以降へは結合を通して伝わる。
 - 頭部が停止するとdriveは0へ戻るが、各controlの角速度は残るため、中央・毛先はその後も動く。
 - driveを全controlへ同時加算しない。
