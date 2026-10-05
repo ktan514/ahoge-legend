@@ -73,10 +73,10 @@ func _process(delta: float) -> void:
 		action_motion.configure(_mesh_node.profile)
 	var charge: float = _visual_charge_ratio()
 	action_motion.contact_ratio = float(combat_state.config.attack_contact_ratio) if combat_state.config != null else 0.70
+	# 溜め/予備動作は専用の後方アーチを正とし、二重変形しない。
+	# 柔軟層は直前姿勢を記録し続けるため、STRIKE開始frameの切り返し速度は保持される。
 	var motion_softness: float = 1.0 if next_state in [
 		CombatantStateScript.ActionState.IDLE,
-		CombatantStateScript.ActionState.CHARGING,
-		CombatantStateScript.ActionState.WINDUP,
 		CombatantStateScript.ActionState.STRIKE,
 		CombatantStateScript.ActionState.COOLDOWN
 	] else 0.0
