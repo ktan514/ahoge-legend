@@ -73,7 +73,13 @@ func _process(delta: float) -> void:
 		action_motion.configure(_mesh_node.profile)
 	var charge: float = _visual_charge_ratio()
 	action_motion.contact_ratio = float(combat_state.config.attack_contact_ratio) if combat_state.config != null else 0.70
-	var passive_softness: float = 1.0 if next_state == CombatantStateScript.ActionState.IDLE else 0.0
+	var motion_softness: float = 1.0 if next_state in [
+		CombatantStateScript.ActionState.IDLE,
+		CombatantStateScript.ActionState.CHARGING,
+		CombatantStateScript.ActionState.WINDUP,
+		CombatantStateScript.ActionState.STRIKE,
+		CombatantStateScript.ActionState.COOLDOWN
+	] else 0.0
 	action_motion.advance(
 		next_state,
 		delta,
@@ -82,7 +88,8 @@ func _process(delta: float) -> void:
 		charge,
 		bool(combat_state.ahoge_available),
 		deg_to_rad(_head_rotation),
-		passive_softness
+		motion_softness,
+		_head_offset.x * facing
 	)
 
 
