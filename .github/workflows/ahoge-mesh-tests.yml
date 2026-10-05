@@ -48,6 +48,15 @@ jobs:
           mv .ci-bin/Godot* .ci-bin/godot
           chmod +x .ci-bin/godot
           echo "$PWD/.ci-bin" >> "$GITHUB_PATH"
+      - name: 同一HEADの描画再現環境を保存
+        run: python tools/ahoge_mesh/package_reproduction.py
+      - name: 描画再現環境を公開
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-reproduction
+          path: artifacts/motion-reproduction/
+          if-no-files-found: error
+          retention-days: 3
       - name: Godot素材を読み込む
         run: ./scripts/godot-import.sh
       - name: 接触補正の歪みを次フレームへ残さない
