@@ -185,7 +185,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_TIP_SPRING_GAIN` | 2.0 | 毛先側のspring力。遅れて到達した運動を弱めすぎない |
 | `SOFT_FORWARD_ACCEL_DRIVE` | 0.000008 | 頭部Canvas X加速度をcontrol 1へ与えるdrive |
 | `SOFT_DRIVE_LIMIT` | 0.65 rad | 加速度driveの上限 |
-| `SOFT_MAX_OFFSET` | 1.25 rad | 動的追加角の上限 |
+| `SOFT_MAX_OFFSET` | 0.55 rad | 動的追加角の上限。高速切り返しで輪状に巻き込まないため制限 |
 
 「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、動的offsetを描画しない。1.0ではchain出力を100%使用する。静止時の形を別物にするパラメータではない。
 
