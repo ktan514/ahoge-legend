@@ -134,7 +134,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			await process_frame
 			await RenderingServer.frame_post_draw
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
-	_expect(absf(forward.distance_to(backward) - 0.8 * d) < 0.002, "端点間の全幅が0.8Dではありません: " + label)
+	_expect(absf(absf(forward.x - backward.x) - 0.8 * d) < 0.002 and absf(forward.y - backward.y) < 0.002, "端点間の横幅が0.8Dではありません: " + label)
 	var before: Vector2 = head.global_position
 	var before_pitch: float = actor.neck_gaze_max_degrees
 	_expect(not actor.set_neck_travel_ratio(NAN) and not actor.set_neck_travel_ratio(INF), "無効入力を受け付けました")
@@ -164,7 +164,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.stop_oscillation()
 	scene.set_ratio(0.0)
 	scene.set_process(true)
-	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": backward.distance_to(forward), "gaze_max_degrees": 15.0, "asset": mesh_node.texture.resource_path})
+	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 15.0, "asset": mesh_node.texture.resource_path})
 
 
 func _find_button(node: Node, text: String) -> Button:
