@@ -97,7 +97,7 @@ func advance(
 		return
 	attachment_angle = attachment_angle_radians
 	softness = clampf(softness_amount, 0.0, 1.0)
-	var counter_target: float = -attachment_angle * SOFT_COUNTER_RATIO * softness
+	var counter_target: float = -attachment_angle * SOFT_COUNTER_RATIO
 	var response: float = 1.0 - exp(-SOFT_RESPONSE * delta)
 	_soft_counter_angle = lerp_angle(_soft_counter_angle, counter_target, clampf(response, 0.0, 1.0))
 	var changed: bool = next_state != state
@@ -293,7 +293,7 @@ func soft_idle_vertices(attachment_angle_radians: float, softness_amount: float 
 	if not configured or not is_finite(attachment_angle_radians) or not is_finite(softness_amount):
 		return PackedVector2Array()
 	var bounded: float = clampf(softness_amount, 0.0, 1.0)
-	var counter: float = -attachment_angle_radians * SOFT_COUNTER_RATIO * bounded
+	var counter: float = -attachment_angle_radians * SOFT_COUNTER_RATIO
 	return vertices_from_angles(_softened_angles(rest_angles, counter, bounded))
 
 
@@ -306,7 +306,7 @@ func _softened_angles(values: PackedFloat32Array, counter_angle: float, amount: 
 		var s: float = fractions[i]
 		var flex: float = smoothstep(SOFT_ROOT_END, SOFT_FULL_AT, s)
 		var tip_curve: float = SOFT_IDLE_CURVE * bounded * pow(smoothstep(0.45, 1.0, s), 1.35)
-		result[i] += counter_angle * flex + tip_curve
+		result[i] += counter_angle * flex * bounded + tip_curve
 	return result
 
 
