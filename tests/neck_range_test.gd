@@ -49,6 +49,9 @@ func _run() -> void:
 	scene._pitch.value = 30.0
 	_expect(is_equal_approx(scene.fighter.neck_gaze_max_degrees, 30.0), "仰角幅の入力が頭部へ反映されません")
 	scene._pitch.value = 30.0
+	scene._softness.value = 0.35
+	_expect(is_equal_approx(scene.fighter.ahoge_softness, 0.35), "柔らかさ入力がアホ毛へ反映されません")
+	scene._softness.value = 1.0
 	scene.toggle_oscillation()
 	_expect(scene.oscillating, "往復再生が開始しません")
 	scene.set_ratio(0.1)
@@ -87,12 +90,15 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var mesh_node = actor.find_child("AhogeDeformMesh", true, false)
 	var label: String = "%d_%d_%d" % [scene.viewport.size.x, side, fps]
 	actor.set_neck_gaze_max_degrees(30.0)
+	actor.set_ahoge_softness(1.0)
+	scene._softness.set_value_no_signal(1.0)
 	scene.set_ratio(0.0)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
 	var original_scale: Vector2 = head.scale
-	var geometry: PackedVector2Array = mesh_node.current_vertices.duplicate()
+	var neutral_geometry: PackedVector2Array = mesh_node.current_vertices.duplicate()
+	var neutral_tip_local: Vector2 = neutral_geometry[-1]
 	var image: Image = head.texture.get_image()
 	if image.is_compressed():
 		image.decompress()
@@ -128,7 +134,12 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		_expect(absf(actor.neck_gaze_elevation_degrees() - expected_elevation) < 0.0001, "首位置と仰角が一致しません: " + label)
 		_expect(absf(head.rotation - expected_rotation) < 0.0001, "頭部回転が仰角と一致しません: " + label)
 		_expect(absf(head.global_position.y - neutral.y) < 0.00001, "仰角連動で頭部を上下移動しました: " + label)
-		_expect(geometry == mesh_node.current_vertices, "首だけの調整でアホ毛の形が変わりました: " + label)
+		_expect(mesh_node.current_vertices.size() == neutral_geometry.size(), "柔軟化でメッシュ頂点数が変わりました: " + label)
+		_expect(mesh_node.current_vertices[0].distance_to(Vector2.ZERO) < 0.001, "柔軟化で根元頂点が移動しました: " + label)
+		for point in mesh_node.current_vertices:
+			_expect(point.is_finite(), "柔軟化で非有限頂点が発生しました: " + label)
+		if absf(normalized) >= 0.39:
+			_expect(mesh_node.current_vertices[-1].distance_to(neutral_tip_local) > 2.0, "±30度でも毛先が棒状のままです: " + label)
 		_expect(absf(actor.head_display_diameter() - d) < 0.001, "移動でDが変わりました: " + label)
 		var bounds: Rect2 = actor.head_canvas_bounds()
 		_expect(bounds.position.x >= 0.0 and bounds.end.x <= scene.viewport.size.x, "頭部の横端が見切れました: " + label)
@@ -144,6 +155,16 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			await RenderingServer.frame_post_draw
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
 	_expect(absf(absf(forward.x - backward.x) - 0.8 * d) < 0.01 and absf(forward.y - backward.y) < 0.01, "端点間の横幅が0.8Dではありません: %s actual_x=%f expected=%f dy=%f" % [label, absf(forward.x - backward.x), 0.8 * d, absf(forward.y - backward.y)])
+	scene.set_ratio(0.4)
+	var soft_tip: Vector2 = mesh_node.current_vertices[-1]
+	actor.set_ahoge_softness(0.0)
+	scene._softness.set_value_no_signal(0.0)
+	scene.set_ratio(0.4)
+	var rigid_tip: Vector2 = mesh_node.current_vertices[-1]
+	_expect(soft_tip.distance_to(rigid_tip) > 2.0, "柔らかさ0と1で毛先形状が変わりません: " + label)
+	actor.set_ahoge_softness(1.0)
+	scene._softness.set_value_no_signal(1.0)
+	scene.set_ratio(0.4)
 	var before: Vector2 = head.global_position
 	var before_pitch: float = actor.neck_gaze_max_degrees
 	_expect(not actor.set_neck_travel_ratio(NAN) and not actor.set_neck_travel_ratio(INF), "無効入力を受け付けました")
