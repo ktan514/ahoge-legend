@@ -174,6 +174,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
 		actor.advance_neck_preview(sweep_seconds / float(sweep_frames))
+		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
+			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
 	var softened: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
 	var near_index: int = _nearest_fraction(actor.action_motion.fractions, 0.25)
@@ -190,6 +192,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var settle_seconds: float = 0.22
 	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
 		actor.advance_neck_preview(1.0 / fps)
+		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and settle_frame in [0, 3, 7, 11]:
+			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % settle_frame)
 	var settled: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
 	var settled_tip_lag: float = absf(wrapf(settled[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
 	_expect(settled_tip_lag < 0.02, "前端保持後も毛先の過去姿勢が残り続けます: " + label)
@@ -240,6 +244,15 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_ratio(0.0)
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
+
+func _save_dynamic_frame(viewport: SubViewport, name: String) -> void:
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var image: Image = viewport.get_texture().get_image()
+	_expect(image != null and not image.is_empty(), "動的柔軟追従の描画が空です: " + name)
+	if image != null and not image.is_empty():
+		_expect(image.save_png(OUT + name) == OK, "動的柔軟追従の画像保存失敗: " + name)
+
 
 func _nearest_fraction(values: PackedFloat32Array, target: float) -> int:
 	var best_index: int = 0
