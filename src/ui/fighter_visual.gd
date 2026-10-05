@@ -5,6 +5,8 @@ const CharacterDefinitionScript := preload("res://src/domain/character_definitio
 const AhogePrototypeRigScript := preload("res://src/ui/ahoge_prototype_rig.gd")
 
 @export var head_clip_horizontal_bleed: float = 180.0
+@export_range(0.0, 1.0, 0.001) var ahoge_head_anchor_x_ratio: float = 0.5
+@export_range(0.0, 1.0, 0.01) var ahoge_head_anchor_alpha_threshold: float = 0.5
 
 var character
 var combat_state
@@ -26,6 +28,9 @@ var _head_sprite: Sprite2D
 var _ahoge_rig
 var _asset_mode: bool = false
 var _last_action_state: int = -1
+var _ahoge_head_anchor_texture: Texture2D
+var _ahoge_head_anchor_px: Vector2 = Vector2.ZERO
+var _ahoge_head_anchor_valid: bool = false
 
 
 func configure(character_value, combat_state_value, facing_value: float) -> void:
@@ -125,6 +130,7 @@ func _refresh_asset_mode() -> void:
 		return
 
 	_head_sprite.texture = head_texture
+	_cache_ahoge_head_anchor()
 	_ahoge_rig.configure(ahoge_texture, facing)
 	_asset_root.visible = true
 	_asset_mode = true
@@ -366,20 +372,62 @@ func _update_asset_pose() -> void:
 	_bind_ahoge_root_to_head_anchor()
 
 
+func _cache_ahoge_head_anchor() -> void:
+	_ahoge_head_anchor_valid = false
+	_ahoge_head_anchor_texture = null
+	_ahoge_head_anchor_px = Vector2.ZERO
+	if _head_sprite == null or _head_sprite.texture == null:
+		return
+	var image: Image = _head_sprite.texture.get_image()
+	if image == null or image.is_empty():
+		return
+	if image.is_compressed() and image.decompress() != OK:
+		return
+	var used: Rect2i = image.get_used_rect()
+	if used.size.x <= 0 or used.size.y <= 0:
+		return
+	var ratio: float = clampf(ahoge_head_anchor_x_ratio, 0.0, 1.0)
+	var x: int = clampi(
+		int(round(float(used.position.x) + float(maxi(used.size.x - 1, 0)) * ratio)),
+		used.position.x,
+		used.end.x - 1
+	)
+	var found := Vector2i(-1, -1)
+	var max_radius: int = mini(16, used.size.x - 1)
+	for radius in range(max_radius + 1):
+		var candidates: Array[int] = [x] if radius == 0 else [x - radius, x + radius]
+		for candidate_x in candidates:
+			if candidate_x < used.position.x or candidate_x >= used.end.x:
+				continue
+			for y in range(used.position.y, used.end.y):
+				if image.get_pixel(candidate_x, y).a >= ahoge_head_anchor_alpha_threshold:
+					found = Vector2i(candidate_x, y)
+					break
+			if found.x >= 0:
+				break
+		if found.x >= 0:
+			break
+	if found.x < 0:
+		return
+	_ahoge_head_anchor_texture = _head_sprite.texture
+	_ahoge_head_anchor_px = Vector2(found)
+	_ahoge_head_anchor_valid = true
+
+
+func ahoge_head_anchor_texture_position() -> Vector2:
+	if _head_sprite != null and (_ahoge_head_anchor_texture != _head_sprite.texture or not _ahoge_head_anchor_valid):
+		_cache_ahoge_head_anchor()
+	return _ahoge_head_anchor_px
+
+
 func _ahoge_head_anchor_local() -> Vector2:
 	if _head_sprite == null or _head_sprite.texture == null:
 		return Vector2.ZERO
-	var texture_size: Vector2 = _head_sprite.texture.get_size()
-	if texture_size.y <= 0.0 or absf(_head_sprite.scale.x) <= 0.000001 or absf(_head_sprite.scale.y) <= 0.000001:
+	if _ahoge_head_anchor_texture != _head_sprite.texture or not _ahoge_head_anchor_valid:
+		_cache_ahoge_head_anchor()
+	if not _ahoge_head_anchor_valid:
 		return Vector2.ZERO
-	# 従来の接続見た目（頭中心から前方10px、上端から34px）を維持し、
-	# その位置をSpriteローカルへ戻して固定アンカーとして扱う。
-	var display_height: float = texture_size.y * absf(_head_sprite.scale.y)
-	var canvas_offset := Vector2(facing * 10.0, -display_height * 0.5 + 34.0)
-	return Vector2(
-		canvas_offset.x / _head_sprite.scale.x,
-		canvas_offset.y / _head_sprite.scale.y
-	)
+	return _ahoge_head_anchor_px - _head_sprite.texture.get_size() * 0.5
 
 
 func ahoge_head_anchor_canvas_position() -> Vector2:
