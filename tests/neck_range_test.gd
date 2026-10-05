@@ -98,6 +98,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		image.decompress()
 	var expected_d: float = image.get_used_rect().size.x * absf(original_scale.x)
 	_expect(absf(d - expected_d) < 0.001 and d > 100.0, "Dが頭部の表示直径ではありません: " + label)
+	var anchor_px: Vector2 = actor.ahoge_head_anchor_texture_position()
+	var anchor_i := Vector2i(clampi(roundi(anchor_px.x), 0, image.get_width() - 1), clampi(roundi(anchor_px.y), 0, image.get_height() - 1))
+	_expect(image.get_pixelv(anchor_i).a >= actor.ahoge_head_anchor_alpha_threshold, "頭側アンカーが画像表面の不透明ピクセルではありません: " + label)
 	var backward: Vector2
 	var forward: Vector2
 	for amount in [-0.4, -0.2, 0.0, 0.2, 0.4, -5.0, 5.0]:
