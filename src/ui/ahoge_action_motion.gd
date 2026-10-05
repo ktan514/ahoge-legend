@@ -9,6 +9,11 @@ const RECOVER_SECONDS: float = 0.24
 const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
+const SOFT_ROOT_END: float = 0.15
+const SOFT_FULL_AT: float = 0.80
+const SOFT_COUNTER_RATIO: float = 0.65
+const SOFT_IDLE_CURVE: float = 0.16
+const SOFT_RESPONSE: float = 8.0
 
 var configured: bool = false
 var state: int = -1
@@ -36,6 +41,9 @@ var _charge: float = 0.0
 var _max_charge: float = 0.62
 # STRIKE終了時までに進んだ振り抜き時間。負値なら継続しない。
 var _continued_follow_seconds: float = -1.0
+var softness: float = 1.0
+var attachment_angle: float = 0.0
+var _soft_counter_angle: float = 0.0
 
 
 func configure(profile) -> bool:
@@ -73,9 +81,25 @@ func configure(profile) -> bool:
 	return true
 
 
-func advance(next_state: int, delta: float, phase_duration: float, max_charge: float, charge: float, available: bool) -> void:
+func advance(
+	next_state: int,
+	delta: float,
+	phase_duration: float,
+	max_charge: float,
+	charge: float,
+	available: bool,
+	attachment_angle_radians: float = 0.0,
+	softness_amount: float = 1.0
+) -> void:
 	if not configured or delta <= 0.0 or not is_finite(delta):
 		return
+	if not is_finite(attachment_angle_radians) or not is_finite(softness_amount):
+		return
+	attachment_angle = attachment_angle_radians
+	softness = clampf(softness_amount, 0.0, 1.0)
+	var counter_target: float = -attachment_angle * SOFT_COUNTER_RATIO * softness
+	var response: float = 1.0 - exp(-SOFT_RESPONSE * delta)
+	_soft_counter_angle = lerp_angle(_soft_counter_angle, counter_target, clampf(response, 0.0, 1.0))
 	var changed: bool = next_state != state
 	if changed:
 		var carry: float = -1.0
@@ -250,6 +274,40 @@ func force_contact() -> bool:
 		_continued_follow_seconds = 0.0
 		elapsed = 0.0
 	return true
+
+
+func visual_vertices() -> PackedVector2Array:
+	if not configured:
+		return PackedVector2Array()
+	var result: PackedVector2Array = visual_vertices_from_angles(current_angles)
+	if absf(sweep) > 0.000001:
+		result = ParryScript.deform(_profile, result, sweep)
+	return result
+
+
+func visual_vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
+	return vertices_from_angles(_softened_angles(values, _soft_counter_angle, softness))
+
+
+func soft_idle_vertices(attachment_angle_radians: float, softness_amount: float = 1.0) -> PackedVector2Array:
+	if not configured or not is_finite(attachment_angle_radians) or not is_finite(softness_amount):
+		return PackedVector2Array()
+	var bounded: float = clampf(softness_amount, 0.0, 1.0)
+	var counter: float = -attachment_angle_radians * SOFT_COUNTER_RATIO * bounded
+	return vertices_from_angles(_softened_angles(rest_angles, counter, bounded))
+
+
+func _softened_angles(values: PackedFloat32Array, counter_angle: float, amount: float) -> PackedFloat32Array:
+	if values.size() != fractions.size():
+		return values.duplicate()
+	var result: PackedFloat32Array = values.duplicate()
+	var bounded: float = clampf(amount, 0.0, 1.0)
+	for i in range(result.size()):
+		var s: float = fractions[i]
+		var flex: float = smoothstep(SOFT_ROOT_END, SOFT_FULL_AT, s)
+		var tip_curve: float = SOFT_IDLE_CURVE * bounded * pow(smoothstep(0.45, 1.0, s), 1.35)
+		result[i] += counter_angle * flex + tip_curve
+	return result
 
 
 func vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
