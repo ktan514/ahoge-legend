@@ -194,7 +194,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
 		actor.advance_neck_preview(1.0 / fps)
-	_expect(_difference(mesh_node.current_vertices, actor.action_motion.rest_angles.size() > 0 ? actor.action_motion.vertices_from_angles(actor.action_motion.rest_angles) : mesh_node.current_vertices) < 0.003, "柔らかさ0で動的補正が残りました: " + label)
+	var rigid_local: PackedVector2Array = actor.action_motion.vertices_from_angles(actor.action_motion.rest_angles)
+	_expect(_difference(mesh_node.current_vertices, rigid_local) < 0.003, "柔らかさ0で動的補正が残りました: " + label)
 
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
