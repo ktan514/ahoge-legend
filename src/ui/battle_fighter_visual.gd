@@ -73,7 +73,16 @@ func _process(delta: float) -> void:
 		action_motion.configure(_mesh_node.profile)
 	var charge: float = _visual_charge_ratio()
 	action_motion.contact_ratio = float(combat_state.config.attack_contact_ratio) if combat_state.config != null else 0.70
-	action_motion.advance(next_state, delta, _phase_duration_for_state(next_state, charge), _max_charge_duration(), charge, bool(combat_state.ahoge_available))
+	action_motion.advance(
+		next_state,
+		delta,
+		_phase_duration_for_state(next_state, charge),
+		_max_charge_duration(),
+		charge,
+		bool(combat_state.ahoge_available),
+		deg_to_rad(_head_rotation),
+		1.0
+	)
 
 
 func _cache_head_image() -> void:
@@ -211,7 +220,7 @@ func present_toward(target_canvas: Vector2) -> void:
 		return
 	var confirmed: bool = _force_contact and action_motion.force_contact()
 	_force_contact = false
-	_mesh_node.set_action_pose(action_motion.vertices, action_motion.straighten, action_motion.sweep)
+	_mesh_node.set_action_pose(action_motion.visual_vertices(), action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
 	var base: Transform2D = _neutral_transform()
@@ -229,7 +238,7 @@ func present_toward(target_canvas: Vector2) -> void:
 			_freeze_contact(target_canvas)
 		if tail_in_cooldown and tail_seconds >= ActionMotionScript.FOLLOW_SECONDS and not confirmed:
 			# 振り抜き終点を基準としてから復帰する。STRIKE終了姿勢へ巻き戻さない。
-			var final_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.final_follow_angles())
+			var final_vertices: PackedVector2Array = action_motion.visual_vertices_from_angles(action_motion.final_follow_angles())
 			var end_transform: Transform2D = _project_tip(base, base * final_vertices[-1], _follow_end_canvas, 1.0, 1.0)
 			base = end_transform.interpolate_with(base, smoothstep(0.0, 0.20, action_motion.recovery_seconds()))
 		elif tail_seconds >= 0.0 and _contact_frozen and not confirmed:
@@ -237,7 +246,7 @@ func present_toward(target_canvas: Vector2) -> void:
 			var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, action_motion.follow_progress())
 			base = _project_tip(base, base * source_tip, aim, 1.0, 1.0)
 		else:
-			var contact_vertices: PackedVector2Array = action_motion.vertices_from_angles(action_motion.straight_angles)
+			var contact_vertices: PackedVector2Array = action_motion.visual_vertices_from_angles(action_motion.straight_angles)
 			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
 			# 接触前から下向きの速度を持たせ、接触後の減速曲線へつなぐ。
 			var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
