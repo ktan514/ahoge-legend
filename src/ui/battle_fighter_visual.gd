@@ -172,8 +172,9 @@ func confirm_contact() -> bool:
 
 func _neutral_transform() -> Transform2D:
 	var base_scale: float = maxf(0.21, get_viewport_rect().size.x / 5200.0)
-	# rig自体が左右反転するので、回転は前方基準へ戻してから渡す。
-	return Transform2D(deg_to_rad(_head_rotation * facing), Vector2.ONE * base_scale, 0.0, Vector2.ZERO)
+	# 頭部の位置と傾きはroot anchorへ反映済み。全毛束を一体で回さない。
+	# しなりはActionMotionへ任せ、接触補正後の歪みもここへ持ち越さない。
+	return Transform2D(0.0, Vector2.ONE * base_scale, 0.0, Vector2.ZERO)
 
 
 func _freeze_contact(target: Vector2) -> void:
