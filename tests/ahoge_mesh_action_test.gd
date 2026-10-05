@@ -102,6 +102,8 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 	var end_tip: Vector2 = Vector2.ZERO
 	var min_charge_guard: float = 1.0
 	var max_parry_tip: float = 0.0
+	var strike_softness_seen: bool = false
+	var parry_softness_disabled: bool = false
 	var held_vertices: PackedVector2Array = PackedVector2Array()
 	var hold_difference: float = 0.0
 	var contact_seen: bool = false
@@ -144,6 +146,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 					else:
 						hold_difference = maxf(hold_difference, _difference(held_vertices, mesh_node.current_vertices))
 			if state.action_state == StateScript.ActionState.STRIKE:
+				strike_softness_seen = strike_softness_seen or actor.action_motion.softness >= 0.999
 				trace.append({"time": elapsed, "root": [root.x, root.y], "near": [points[107].x, points[107].y], "middle": [points[237].x, points[237].y], "tip": [tip.x, tip.y]})
 				if not contact_seen and elapsed >= contact_seconds - 0.000001:
 					contact_seen = true
@@ -158,6 +161,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 					actor.present_toward(Vector2(-3000.0, -3000.0))
 					_expect(_difference(before, actor.mesh_canvas_vertices()) < 0.002, "振り抜きで相手位置を追尾しています: " + label)
 			if state.action_state == StateScript.ActionState.PARRY and actor.action_motion.elapsed >= ParryScript.ENTRY_SECONDS:
+				parry_softness_disabled = parry_softness_disabled or actor.action_motion.softness <= 0.001
 				var local: PackedVector2Array = mesh_node.current_vertices
 				var travel: float = local[-1].distance_to(_profile.rest_vertices[-1]) * resolution.x / 5200.0
 				max_parry_tip = maxf(max_parry_tip, travel)
@@ -174,6 +178,8 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 				await _capture(viewport, "cycle_%d_%03d.png" % [int(charge), frame])
 			frame += 1
 	_expect(contact_seen, "接触を未検査: " + label)
+	_expect(strike_softness_seen, "STRIKEへ動的柔軟追従が接続されていません: " + label)
+	_expect(parry_softness_disabled, "PARRYへ未承認の柔軟追従が混入しました: " + label)
 	_expect(contact_tip.distance_to(end_tip) > 10.0, "接触後に毛先が貼り付いています: " + label)
 	_expect(min_charge_guard >= 0.999, "チャージを全体縮小して見切れを隠しています: " + label)
 	_expect(hold_difference < 0.003, "長押し保持中の形状が収束していません: " + label)
