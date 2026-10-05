@@ -40,7 +40,7 @@ func _run() -> void:
 			await scene.rebuild()
 			for fps in [30, 60, 120]:
 				await _case(scene, fps, resolution, side)
-	# UIから直接操作したときに数値・実際の表示・往復状態が一致する。
+	# UIから直接操作したときに数値・実際の表示・攻撃速度テスト状態が一致する。
 	scene.set_ratio(0.0)
 	scene._slider.value = 0.20
 	_expect(is_equal_approx(scene.fighter.neck_travel_ratio, 0.20), "スライダーが頭部へ反映されません")
@@ -53,9 +53,9 @@ func _run() -> void:
 	_expect(is_equal_approx(scene.fighter.ahoge_softness, 0.35), "柔らかさ入力がアホ毛へ反映されません")
 	scene._softness.value = 1.0
 	scene.toggle_oscillation()
-	_expect(scene.oscillating, "往復再生が開始しません")
+	_expect(scene.oscillating, "攻撃速度テストが開始しません")
 	scene.set_ratio(0.1)
-	_expect(not scene.oscillating, "手動指定で往復再生が停止しません")
+	_expect(not scene.oscillating, "手動指定で攻撃速度テストが停止しません")
 	for text in ["後端 -0.4D", "基準 0", "前端 +0.4D"]:
 		var button: Button = _find_button(scene, text)
 		_expect(button != null, "端点ボタンがありません: " + text)
@@ -138,8 +138,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		_expect(mesh_node.current_vertices[0].distance_to(Vector2.ZERO) < 0.001, "柔軟化で根元頂点が移動しました: " + label)
 		for point in mesh_node.current_vertices:
 			_expect(point.is_finite(), "柔軟化で非有限頂点が発生しました: " + label)
-		if absf(normalized) >= 0.39:
-			_expect(mesh_node.current_vertices[-1].distance_to(neutral_tip_local) > 2.0, "±30度でも毛先が棒状のままです: " + label)
+		_expect(_difference(mesh_node.current_vertices, neutral_geometry) < 0.003, "静止端点で柔らかさが恒常変形を残しました: " + label)
 		_expect(absf(actor.head_display_diameter() - d) < 0.001, "移動でDが変わりました: " + label)
 		var bounds: Rect2 = actor.head_canvas_bounds()
 		_expect(bounds.position.x >= 0.0 and bounds.end.x <= scene.viewport.size.x, "頭部の横端が見切れました: " + label)
@@ -155,37 +154,47 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			await RenderingServer.frame_post_draw
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
 	_expect(absf(absf(forward.x - backward.x) - 0.8 * d) < 0.01 and absf(forward.y - backward.y) < 0.01, "端点間の横幅が0.8Dではありません: %s actual_x=%f expected=%f dy=%f" % [label, absf(forward.x - backward.x), 0.8 * d, absf(forward.y - backward.y)])
+	# 静止端点では0.0/1.0ともrestへ収束し、柔らかさを恒常的な曲げ量で表現しない。
 	scene.set_ratio(0.4)
-	var soft_tip_canvas: Vector2 = actor.mesh_canvas_vertices()[-1]
+	var static_soft: PackedVector2Array = mesh_node.current_vertices.duplicate()
 	actor.set_ahoge_softness(0.0)
 	scene._softness.set_value_no_signal(0.0)
 	scene.set_ratio(0.4)
-	var rigid_tip_canvas: Vector2 = actor.mesh_canvas_vertices()[-1]
-	_expect(soft_tip_canvas.distance_to(rigid_tip_canvas) > 24.0, "柔らかさ0と1の見た目差が小さすぎます: " + label)
+	var static_rigid: PackedVector2Array = mesh_node.current_vertices.duplicate()
+	_expect(_difference(static_soft, static_rigid) < 0.003, "静止状態に柔らかさ由来の恒常差が残りました: " + label)
 
-	# 後ろから前へ短時間で頭を振ったとき、根元は固定したまま中間〜毛先だけが遅れる。
+	# 約0.15秒で後端→前端へ切り返し、根元→中央→毛先の位相差を確認する。
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
 	scene.set_ratio(-0.4)
 	actor.reset_ahoge_soft_follow()
-	var sweep_frames: int = maxi(2, ceili(0.16 * fps))
+	var sweep_seconds: float = 0.15
+	var sweep_frames: int = maxi(2, ceili(sweep_seconds * fps))
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
-		actor.advance_neck_preview(1.0 / fps)
+		actor.advance_neck_preview(sweep_seconds / float(sweep_frames))
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
-	var static_local: PackedVector2Array = actor.action_motion.soft_idle_vertices(deg_to_rad(actor._head_rotation), 1.0)
-	var static_tip_canvas: Vector2 = mesh_node.global_transform * static_local[-1]
-	var dynamic_lag_px: float = dynamic_points[-1].distance_to(static_tip_canvas)
-	_expect(dynamic_lag_px > 15.0, "前方への切り返しで毛先の動的な遅れが出ません: " + label)
+	var softened: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
+	var near_index: int = _nearest_fraction(actor.action_motion.fractions, 0.25)
+	var middle_index: int = _nearest_fraction(actor.action_motion.fractions, 0.55)
+	var tip_index: int = _nearest_fraction(actor.action_motion.fractions, 0.95)
+	var near_lag: float = absf(wrapf(softened[near_index] - actor.action_motion.rest_angles[near_index], -PI, PI))
+	var middle_lag: float = absf(wrapf(softened[middle_index] - actor.action_motion.rest_angles[middle_index], -PI, PI))
+	var tip_lag: float = absf(wrapf(softened[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
+	_expect(near_lag < middle_lag and middle_lag < tip_lag, "根元→中央→毛先の伝播遅延になっていません: " + label)
+	_expect(tip_lag > 0.20, "前方切り返しで毛先に十分な時間差が出ません: " + label)
 	_expect(dynamic_points[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "動的柔軟化で根元が頭部から外れました: " + label)
-	for settle_frame in range(maxi(1, ceili(0.50 * fps))):
-		actor.advance_neck_preview(1.0 / fps)
-	var settled_static: PackedVector2Array = actor.action_motion.soft_idle_vertices(deg_to_rad(actor._head_rotation), 1.0)
-	var settled_error_px: float = actor.mesh_canvas_vertices()[-1].distance_to(mesh_node.global_transform * settled_static[-1])
-	_expect(settled_error_px < maxf(6.0, dynamic_lag_px * 0.35), "頭部停止後に毛先の反動が減衰しません: " + label)
 
-	# 柔らかさ0では同じ高速入力でも動的状態を残さない。
+	# 前端で最大遅延時間より長く保持すると現在姿勢へ追いつく。
+	var settle_seconds: float = 0.22
+	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
+		actor.advance_neck_preview(1.0 / fps)
+	var settled: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
+	var settled_tip_lag: float = absf(wrapf(settled[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
+	_expect(settled_tip_lag < 0.02, "前端保持後も毛先の過去姿勢が残り続けます: " + label)
+
+	# 柔らかさ0では同じ高速入力でも伝播遅延を描画へ加えない。
 	actor.set_ahoge_softness(0.0)
 	scene._softness.set_value_no_signal(0.0)
 	scene.set_ratio(-0.4)
@@ -193,9 +202,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
-		actor.advance_neck_preview(1.0 / fps)
+		actor.advance_neck_preview(sweep_seconds / float(sweep_frames))
 	var rigid_local: PackedVector2Array = actor.action_motion.vertices_from_angles(actor.action_motion.rest_angles)
-	_expect(_difference(mesh_node.current_vertices, rigid_local) < 0.003, "柔らかさ0で動的補正が残りました: " + label)
+	_expect(_difference(mesh_node.current_vertices, rigid_local) < 0.003, "柔らかさ0で伝播遅延が描画されました: " + label)
 
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
@@ -221,15 +230,27 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.toggle_oscillation()
 	var minimum: float = INF
 	var maximum: float = -INF
-	for frame in range(4 * fps):
+	var preview_frames: int = ceili(scene.ATTACK_PREVIEW_SECONDS * 2.0 * fps)
+	for frame in range(preview_frames):
 		scene._process(1.0 / fps)
 		minimum = minf(minimum, scene.fighter.neck_travel_ratio)
 		maximum = maxf(maximum, scene.fighter.neck_travel_ratio)
-	_expect(absf(minimum + 0.4) < 0.0001 and absf(maximum - 0.4) < 0.0001, "往復再生が可動域全体を使っていません: " + label)
+	_expect(absf(minimum + 0.4) < 0.0001 and absf(maximum - 0.4) < 0.0001, "攻撃速度テストが可動域全体を使っていません: " + label)
 	scene.stop_oscillation()
 	scene.set_ratio(0.0)
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
+
+func _nearest_fraction(values: PackedFloat32Array, target: float) -> int:
+	var best_index: int = 0
+	var best_distance: float = INF
+	for i in range(values.size()):
+		var distance: float = absf(values[i] - target)
+		if distance < best_distance:
+			best_distance = distance
+			best_index = i
+	return best_index
+
 
 func _difference(a: PackedVector2Array, b: PackedVector2Array) -> float:
 	if a.size() != b.size():
