@@ -126,11 +126,11 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		for point in actor.mesh_canvas_vertices():
 			_expect(point.x >= 0.0 and point.x <= scene.viewport.size.x, "アホ毛の横端が見切れました: " + label)
 		_expect(not actor.confirm_contact(), "単独調整中に攻撃接触を受け付けました")
-		if amount == -0.4:
+		if is_equal_approx(amount, -0.4):
 			backward = head.global_position
-		if amount == 0.4:
+		if is_equal_approx(amount, 0.4):
 			forward = head.global_position
-		if absf(amount) <= 0.4 and (amount == -0.4 or amount == 0.0 or amount == 0.4) and fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
+		if absf(amount) <= 0.400001 and (is_equal_approx(amount, -0.4) or is_zero_approx(amount) or is_equal_approx(amount, 0.4)) and fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await process_frame
 			await RenderingServer.frame_post_draw
 			_expect(scene.viewport.get_texture().get_image().save_png(OUT + "position_%+.1f.png" % amount) == OK, "端点画像の保存失敗")
