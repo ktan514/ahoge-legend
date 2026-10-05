@@ -102,13 +102,17 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 			movement = maxf(movement, head.position.distance_to(start_position))
 			rotation_change = maxf(rotation_change, absf(float(actor._head_rotation) - start_rotation))
 			_expect(head.transform.is_finite(), "頭部transformが非有限: " + label)
-			var display_height: float = minf(410.0, maxf(330.0, float(actor.size.y) * 0.86))
-			var head_scale: float = display_height / head.texture.get_height()
-			var anchor_local := Vector2(10.0, -display_height * 0.5 + 34.0) / head_scale
-			var expected_anchor: Vector2 = head.to_global(anchor_local)
-			var error: float = expected_anchor.distance_to(rig.global_position)
+			var expected_anchor: Vector2 = actor.ahoge_head_anchor_canvas_position()
+			var root_canvas: Vector2 = actor.ahoge_root_canvas_position()
+			var error: float = expected_anchor.distance_to(root_canvas)
 			max_anchor_error = maxf(max_anchor_error, error)
-			_expect(error < 0.1, "頭部の回転からアホ毛根元が外れました: " + label)
+			_expect(error < 0.01, "頭部アンカーからアホ毛Rig根元が外れました: " + label)
+			var mesh_vertices: PackedVector2Array = actor.mesh_canvas_vertices()
+			_expect(not mesh_vertices.is_empty(), "アホ毛メッシュがありません: " + label)
+			if not mesh_vertices.is_empty():
+				var mesh_error: float = mesh_vertices[0].distance_to(expected_anchor)
+				max_anchor_error = maxf(max_anchor_error, mesh_error)
+				_expect(mesh_error < 0.01, "頭部アンカーから実メッシュ根元が外れました: " + label)
 			var bounds: Rect2 = actor.head_canvas_bounds()
 			var arena: Rect2 = actor.arena_canvas_rect
 			_expect(bounds.position.x >= arena.position.x - 0.5 and bounds.end.x <= arena.end.x + 0.5, "頭部が左右で見切れました: " + label)
