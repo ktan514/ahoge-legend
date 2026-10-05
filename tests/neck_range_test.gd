@@ -109,10 +109,13 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		var error: float = (head.global_position - neutral).distance_to(expected)
 		max_error = maxf(max_error, error)
 		_expect(error < 0.002, "前後0.4Dの位置が一致しません: " + label)
-		var display_height: float = head.texture.get_size().y * absf(head.scale.y)
-		var crown_offset := Vector2(actor.facing * 10.0, -display_height * 0.5 + 34.0)
-		var expected_root_from_head: Vector2 = crown_offset.rotated(head.rotation)
-		_expect((rig.global_position - head.global_position).distance_to(expected_root_from_head) < 0.002, "根元が回転後の頭頂部に固定されていません: " + label)
+		var anchor_canvas: Vector2 = actor.ahoge_head_anchor_canvas_position()
+		var root_canvas: Vector2 = actor.ahoge_root_canvas_position()
+		_expect(anchor_canvas.distance_to(root_canvas) < 0.01, "アホ毛根元が頭部アンカーから外れました: " + label)
+		var mesh_vertices: PackedVector2Array = actor.mesh_canvas_vertices()
+		_expect(not mesh_vertices.is_empty(), "アホ毛メッシュがありません: " + label)
+		if not mesh_vertices.is_empty():
+			_expect(mesh_vertices[0].distance_to(anchor_canvas) < 0.01, "実メッシュ根元が頭部アンカーから外れました: " + label)
 		_expect(head.scale.is_equal_approx(original_scale), "端点で頭を縮小しました: " + label)
 		var expected_elevation: float = -(normalized / actor.MAX_TRAVEL_DIAMETERS) * actor.neck_gaze_max_degrees
 		var expected_rotation: float = deg_to_rad(-expected_elevation * actor.facing)
