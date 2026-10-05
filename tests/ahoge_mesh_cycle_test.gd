@@ -88,7 +88,7 @@ func _cycle(viewport: SubViewport, fps: int, direction: float, charge: float) ->
 			fighter.call("_process", delta)
 			rig.call("_process", delta)
 			elapsed += delta
-			_check_root(head, mesh_node)
+			_check_root(fighter, mesh_node)
 			var amount: float = float(rig.debug_straighten())
 			_expect(is_finite(amount) and amount >= 0.0 and amount <= 1.0, "変形パラメータが範囲外です")
 			if state.action_state in [StateScript.ActionState.CHARGING, StateScript.ActionState.WINDUP]:
@@ -115,7 +115,7 @@ func _cycle(viewport: SubViewport, fps: int, direction: float, charge: float) ->
 	for i in range(20):
 		fighter.call("_process", 1.0 / 60.0)
 		rig.call("_process", 1.0 / 60.0)
-		_check_root(head, mesh_node)
+		_check_root(fighter, mesh_node)
 	_expect(float(rig.debug_straighten()) <= 0.001, "パリィ中断後に攻撃形状が残っています")
 	state.action_state = StateScript.ActionState.STRIKE
 	state.ahoge_available = false
@@ -133,13 +133,11 @@ func _cycle(viewport: SubViewport, fps: int, direction: float, charge: float) ->
 	fighter.free()
 
 
-func _check_root(head: Sprite2D, mesh_node) -> void:
-	var height: float = head.texture.get_height()
-	var scale_y: float = absf(head.scale.y)
-	var anchor: Vector2 = Vector2(10.0 / scale_y, -height * 0.5 + 34.0 / scale_y)
-	var error: float = head.to_global(anchor).distance_to(mesh_node.to_global(Vector2.ZERO))
+func _check_root(fighter, mesh_node) -> void:
+	var anchor: Vector2 = fighter.ahoge_head_anchor_canvas_position()
+	var error: float = anchor.distance_to(mesh_node.to_global(Vector2.ZERO))
 	max_root_error = maxf(max_root_error, error)
-	_expect(error <= 1.0, "頭部回転後の根元がずれています")
+	_expect(error <= 0.01, "頭画像表面アンカーからアホ毛根元がずれています")
 
 
 func _capture(viewport: SubViewport, name: String) -> void:
