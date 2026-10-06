@@ -598,9 +598,12 @@ func _advance_softness(
 				coupled_target += drive * soft_next_drive_ratio
 			elif control == 2:
 				coupled_target += drive * soft_third_drive_ratio
-			var local_target: float = lerp_angle(current_angles[index], directional_local_angle, directional_weight)
-			var absolute_target: float = angle + local_target
-			var target: float = lerp_angle(coupled_target, absolute_target, soft_shape_restore_ratio)
+			var absolute_target: float = angle + current_angles[index]
+			# 方向付き伸長中はrootだけが絶対方向targetを直接受ける。
+			# control 1〜8は直前controlからの結合だけで方向を受け取り、
+			# chainを飛び越えて中央・毛先が同時反転しないようにする。
+			var absolute_restore: float = soft_shape_restore_ratio * (1.0 - directional_weight)
+			var target: float = lerp_angle(coupled_target, absolute_target, absolute_restore)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var damping: float = lerpf(soft_root_damping, soft_tip_damping, fraction)
