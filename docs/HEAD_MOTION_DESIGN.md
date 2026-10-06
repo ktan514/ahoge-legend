@@ -115,7 +115,10 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
 - 接触の「方向」と「距離」は分離する。通常STRIKEで接触直前にwhole-transformを動的再計算し続けず、中央と毛先を同時加速させない。
 - q=0.90以降はActive Strike内で弧長70%より先の中心線へ**distal aim correction**を加える。補正は中心線各点を根元周りへ回転するだけとし、70%地点0→毛先1の滑らかな空間weightで、q=1ではtipの根元基準方向をtarget方向へ一致させる。
 - distal aim correction後はprofile基準断面幅から427頂点を再構築する。中心線へ平行移動残差を足さず、通常1.22倍／最大チャージ1.45倍のActive stretchと弧長上限を維持する。
-- 距離補正は、同じtarget・chargeでq=1のActive Strike形状を予測し、その最終tip長から必要なreach倍率を先に求める。MotionRootの軸方向reachはq=0.30→0.65でsmoothstepし、q=0.65以降は最終倍率へ固定する。
+- 距離補正は、同じtarget・chargeでq=1のActive Strike形状を予測し、その最終tip長から必要なreach倍率を先に求める。MotionRootの軸方向reachは単一smoothstepではなく2段階で適用する。
+- 前段reachはq=0.20→0.42で最終補正量の36%まで進める。これはrootの頭部初速後にmiddleを1frame以上遅れて加速させるための最小量とする。
+- 後段reachはq=0.45→0.68で残り64%を適用し、tipの最大速度をmiddleより後へ残す。q=0.68以降は最終倍率へ固定する。
+- 35%では1280/P2/通常攻撃でrootとmiddleの速度ピークが同frameに残り、36%で30/60/120fpsを含む全24描画ケースと120fps全8速度条件を維持したため、前段36%を採用値とする。
 - reach軸はtarget方向を使い、terminal snap開始q=0.90より十分前に倍率変化を終える。接触直前にsource tip長から倍率を再計算し続けないことで、中央速度ピークを毛先終盤ピークへ巻き込まない。
 - q=1ではActive Strikeのtip方向一致 + 固定済みreach倍率により接触点へ一致させる。120fps通常/最大チャージで根元→中央→毛先の速度ピークを少なくとも1frameずつ分離する。
 - 確定Hit通知からの再提示は速度ピーク検査対象の攻撃進行ではなく、過去Hitをその場で正確に再表示する経路なので、ここだけはreach/turnの完全投影を許可する。接触後のFollowThroughも既存の固定接触点→終点投影を維持する。
