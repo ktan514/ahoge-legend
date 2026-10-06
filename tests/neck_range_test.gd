@@ -93,6 +93,15 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	actor.set_ahoge_softness(1.0)
 	scene._softness.set_value_no_signal(1.0)
 	scene.set_ratio(0.0)
+	_expect(actor.action_motion.configured, "NeckRangeのActionMotionを構成できません: " + label)
+	var tuning: Dictionary = actor.action_motion.soft_tuning_snapshot()
+	_expect(tuning["control_targets"] == actor.NECK_SOFT_TUNING["control_targets"], "NeckRange専用control配置が未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["root_hinge_hz"]), 4.5), "NeckRange専用root hingeが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["root_blend_end"]), 0.30), "NeckRange専用root blendが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["root_start_weight"]), 0.35), "NeckRange専用root weightが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["chain_hz"]), 6.5), "NeckRange専用chain Hzが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["tip_damping"]), 0.60), "NeckRange専用tip dampingが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["tip_spring_gain"]), 0.85), "NeckRange専用tip springが未適用です: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
