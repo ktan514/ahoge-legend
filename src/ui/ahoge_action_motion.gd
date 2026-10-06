@@ -4,7 +4,7 @@ const StateScript := preload("res://src/domain/combatant_state.gd")
 const ParryScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const HANG_UP_ANGLE: float = -1.30
 const HANG_TURN: float = 3.0
-const TRAVEL_BEND: float = 0.60
+const TRAVEL_BEND: float = 0.30
 const RECOVER_SECONDS: float = 0.24
 const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
@@ -226,14 +226,21 @@ func _recover_from_entry() -> void:
 
 
 static func release_at(q: float, s: float) -> float:
-	return smoothstep(0.02 + 0.35 * s, 0.42 + 0.58 * s, q)
+	# 6コマ図に合わせ、根元を早く、中央を中盤、毛先を接触直前にほどく。
+	var bounded_s: float = clampf(s, 0.0, 1.0)
+	var start: float = lerpf(0.02, 0.24, pow(bounded_s, 1.25))
+	var end: float = lerpf(0.28, 0.96, pow(bounded_s, 1.45))
+	return smoothstep(start, end, q)
 
 
 static func traveling_bend(q: float, s: float) -> float:
 	if q <= 0.0 or q >= 1.0:
 		return 0.0
-	var center: float = 0.18 + 0.95 * q
-	return TRAVEL_BEND * pow(sin(PI * q), 2.0) * exp(-pow((s - center) / 0.24, 2.0)) * smoothstep(0.10, 0.26, s)
+	# C字を保存する曲げではなく、まだstraightへ解放されていない区間だけに
+	# 一時的な波を残す。接触へ近づくと自然に0へ消える。
+	var center: float = 0.24 + 0.62 * q
+	var unreleased: float = 1.0 - release_at(q, s)
+	return TRAVEL_BEND * pow(sin(PI * q), 2.0) * exp(-pow((s - center) / 0.18, 2.0)) * unreleased * smoothstep(0.06, 0.18, s)
 
 
 static func follow_bend(progress: float, s: float) -> float:
