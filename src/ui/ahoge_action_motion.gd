@@ -29,6 +29,9 @@ const SOFT_RELATIVE_DAMPING_ROOT: float = 0.0
 const SOFT_RELATIVE_DAMPING_TIP: float = 0.0
 const SOFT_TIP_SPRING_GAIN: float = 1.75
 const SOFT_DYNAMIC_CURVE_RETENTION: float = 1.0
+const SOFT_DIRECTIONAL_CURVE_RETENTION: float = 1.0
+const SOFT_DIRECTIONAL_ROOT_MAX_OFFSET: float = SOFT_ROOT_MAX_OFFSET
+const SOFT_DIRECTIONAL_MAX_OFFSET: float = SOFT_MAX_OFFSET
 const SOFT_CURVE_RELEASE_SPEED: float = 1500.0
 const SOFT_CURVE_RELEASE_ANGULAR_SPEED: float = 6.0
 const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000010
@@ -71,6 +74,8 @@ var _soft_previous_forward_px: float = 0.0
 var _soft_previous_forward_velocity: float = 0.0
 var _soft_previous_angle: float = 0.0
 var _soft_motion_initialized: bool = false
+var _soft_directional_amount: float = 0.0
+var _soft_directional_direction: float = 0.0
 
 var soft_control_targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
 var soft_root_hinge_hz: float = SOFT_ROOT_HINGE_HZ
@@ -90,6 +95,9 @@ var soft_relative_damping_root: float = SOFT_RELATIVE_DAMPING_ROOT
 var soft_relative_damping_tip: float = SOFT_RELATIVE_DAMPING_TIP
 var soft_tip_spring_gain: float = SOFT_TIP_SPRING_GAIN
 var soft_dynamic_curve_retention: float = SOFT_DYNAMIC_CURVE_RETENTION
+var soft_directional_curve_retention: float = SOFT_DIRECTIONAL_CURVE_RETENTION
+var soft_directional_root_max_offset: float = SOFT_DIRECTIONAL_ROOT_MAX_OFFSET
+var soft_directional_max_offset: float = SOFT_DIRECTIONAL_MAX_OFFSET
 var soft_curve_release_speed: float = SOFT_CURVE_RELEASE_SPEED
 var soft_curve_release_angular_speed: float = SOFT_CURVE_RELEASE_ANGULAR_SPEED
 var soft_forward_accel_drive: float = SOFT_FORWARD_ACCEL_DRIVE
@@ -119,7 +127,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"root_start_weight", "max_offset_step", "root_drive_ratio", "next_drive_ratio",
 		"third_drive_ratio", "chain_hz", "root_damping", "tip_damping",
 		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
-		"tip_spring_gain", "dynamic_curve_retention", "curve_release_speed",
+		"tip_spring_gain", "dynamic_curve_retention", "directional_curve_retention",
+		"directional_root_max_offset", "directional_max_offset", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset"
 	]
 	for key in numeric_keys:
@@ -146,6 +155,9 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_relative_damping_tip = maxf(0.0, float(tuning.get("relative_damping_tip", soft_relative_damping_tip)))
 	soft_tip_spring_gain = maxf(0.0, float(tuning.get("tip_spring_gain", soft_tip_spring_gain)))
 	soft_dynamic_curve_retention = clampf(float(tuning.get("dynamic_curve_retention", soft_dynamic_curve_retention)), 0.0, 1.0)
+	soft_directional_curve_retention = clampf(float(tuning.get("directional_curve_retention", soft_directional_curve_retention)), 0.0, 1.0)
+	soft_directional_root_max_offset = maxf(0.0, float(tuning.get("directional_root_max_offset", soft_directional_root_max_offset)))
+	soft_directional_max_offset = maxf(0.0, float(tuning.get("directional_max_offset", soft_directional_max_offset)))
 	soft_curve_release_speed = maxf(1.0, float(tuning.get("curve_release_speed", soft_curve_release_speed)))
 	soft_curve_release_angular_speed = maxf(0.01, float(tuning.get("curve_release_angular_speed", soft_curve_release_angular_speed)))
 	soft_forward_accel_drive = maxf(0.0, float(tuning.get("forward_accel_drive", soft_forward_accel_drive)))
@@ -176,6 +188,9 @@ func soft_tuning_snapshot() -> Dictionary:
 		"relative_damping_tip": soft_relative_damping_tip,
 		"tip_spring_gain": soft_tip_spring_gain,
 		"dynamic_curve_retention": soft_dynamic_curve_retention,
+		"directional_curve_retention": soft_directional_curve_retention,
+		"directional_root_max_offset": soft_directional_root_max_offset,
+		"directional_max_offset": soft_directional_max_offset,
 		"curve_release_speed": soft_curve_release_speed,
 		"curve_release_angular_speed": soft_curve_release_angular_speed,
 		"forward_accel_drive": soft_forward_accel_drive,
@@ -230,11 +245,13 @@ func advance(
 	available: bool,
 	attachment_angle_radians: float = 0.0,
 	softness_amount: float = 1.0,
-	attachment_forward_px: float = 0.0
+	attachment_forward_px: float = 0.0,
+	directional_amount: float = 0.0,
+	directional_direction: float = 0.0
 ) -> void:
 	if not configured or delta <= 0.0 or not is_finite(delta):
 		return
-	if not is_finite(attachment_angle_radians) or not is_finite(softness_amount) or not is_finite(attachment_forward_px):
+	if not is_finite(attachment_angle_radians) or not is_finite(softness_amount) or not is_finite(attachment_forward_px) or not is_finite(directional_amount) or not is_finite(directional_direction):
 		return
 	attachment_angle = attachment_angle_radians
 	softness = clampf(softness_amount, 0.0, 1.0)
@@ -270,7 +287,16 @@ func advance(
 	if not (changed and state == StateScript.ActionState.PARRY):
 		elapsed += delta
 	_compute_pose()
-	_advance_softness(delta, attachment_angle, attachment_forward_px, softness, state, available)
+	_advance_softness(
+		delta,
+		attachment_angle,
+		attachment_forward_px,
+		softness,
+		state,
+		available,
+		clampf(directional_amount, 0.0, 1.0),
+		clampf(directional_direction, -1.0, 1.0)
+	)
 
 
 func _compute_pose() -> void:
@@ -488,10 +514,14 @@ func _advance_softness(
 	forward_px: float,
 	amount: float,
 	action_state: int,
-	available: bool
+	available: bool,
+	directional_amount: float,
+	directional_direction: float
 ) -> void:
 	var bounded: float = clampf(amount, 0.0, 1.0)
 	softness = bounded
+	_soft_directional_amount = clampf(directional_amount, 0.0, 1.0) * bounded
+	_soft_directional_direction = clampf(directional_direction, -1.0, 1.0)
 	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
 		_reset_soft_motion()
 		return
@@ -527,23 +557,34 @@ func _advance_softness(
 		soft_dynamic_curve_retention,
 		smoothstep(0.05, 1.0, motion_activity)
 	)
+	var directional_weight: float = _soft_directional_amount
+	var direction_u: float = (_soft_directional_direction + 1.0) * 0.5
+	var directional_local_angle: float = lerpf(-PI, 0.0, direction_u)
+	var curve_retention: float = dynamic_curve_retention * lerpf(
+		1.0,
+		soft_directional_curve_retention,
+		directional_weight
+	)
 	var remaining: float = delta
 	while remaining > 0.0000001:
 		var step: float = minf(remaining, SOFT_MAX_STEP)
 		var previous_world: PackedFloat32Array = _soft_world_angles.duplicate()
 		var previous_velocity: PackedFloat32Array = _soft_velocities.duplicate()
 		var root_index: int = _soft_control_indices[0]
-		var root_baseline: float = angle + current_angles[root_index]
-		var root_target: float = root_baseline + drive * soft_root_drive_ratio
+		var root_local_baseline: float = current_angles[root_index]
+		var root_local_target: float = lerp_angle(root_local_baseline, directional_local_angle, directional_weight)
+		var root_baseline: float = angle + root_local_baseline
+		var root_target: float = angle + root_local_target + drive * soft_root_drive_ratio
 		var root_error: float = wrapf(root_target - previous_world[0], -PI, PI)
 		var root_omega: float = TAU * soft_root_hinge_hz
 		var root_acceleration: float = root_omega * root_omega * root_error - 2.0 * soft_root_hinge_damping * root_omega * previous_velocity[0]
 		var root_velocity: float = previous_velocity[0] + root_acceleration * step
 		var root_world: float = previous_world[0] + root_velocity * step
-		var root_offset: float = clampf(wrapf(root_world - root_baseline, -PI, PI), -soft_root_max_offset, soft_root_max_offset)
+		var root_limit: float = lerpf(soft_root_max_offset, soft_directional_root_max_offset, directional_weight)
+		var root_offset: float = clampf(wrapf(root_world - root_baseline, -PI, PI), -root_limit, root_limit)
 		_soft_world_angles[0] = root_baseline + root_offset
 		_soft_velocities[0] = root_velocity
-		if absf(root_offset) >= soft_root_max_offset - 0.0001:
+		if absf(root_offset) >= root_limit - 0.0001:
 			_soft_velocities[0] *= 0.35
 		for control in range(1, _soft_control_indices.size()):
 			var index: int = _soft_control_indices[control]
@@ -551,13 +592,14 @@ func _advance_softness(
 			var desired_curve: float = wrapf(current_angles[index] - current_angles[previous_index], -PI, PI)
 			# 高速移動中は待機C字の局所曲率を弱め、毛束を根元〜中央からほどく。
 			# 停止時はdynamic_curve_retention=1へ戻るため、待機C字へ自然復元する。
-			desired_curve *= dynamic_curve_retention
+			desired_curve *= curve_retention
 			var coupled_target: float = previous_world[control - 1] + desired_curve
 			if control == 1:
 				coupled_target += drive * soft_next_drive_ratio
 			elif control == 2:
 				coupled_target += drive * soft_third_drive_ratio
-			var absolute_target: float = angle + current_angles[index]
+			var local_target: float = lerp_angle(current_angles[index], directional_local_angle, directional_weight)
+			var absolute_target: float = angle + local_target
 			var target: float = lerp_angle(coupled_target, absolute_target, soft_shape_restore_ratio)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
@@ -583,7 +625,9 @@ func _control_offset(control: int) -> float:
 		return 0.0
 	var index: int = _soft_control_indices[control]
 	var baseline: float = attachment_angle + current_angles[index]
-	var limit: float = soft_root_max_offset if control == 0 else soft_max_offset
+	var normal_limit: float = soft_root_max_offset if control == 0 else soft_max_offset
+	var directional_limit: float = soft_directional_root_max_offset if control == 0 else soft_directional_max_offset
+	var limit: float = lerpf(normal_limit, directional_limit, _soft_directional_amount)
 	return clampf(wrapf(_soft_world_angles[control] - baseline, -PI, PI), -limit, limit)
 
 
@@ -649,6 +693,8 @@ func _reset_soft_motion() -> void:
 	_soft_previous_forward_velocity = 0.0
 	_soft_previous_angle = 0.0
 	_soft_motion_initialized = false
+	_soft_directional_amount = 0.0
+	_soft_directional_direction = 0.0
 
 
 func vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
