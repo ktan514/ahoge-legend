@@ -387,7 +387,7 @@ func _cache_ahoge_head_anchor() -> void:
 	if used.size.x <= 0 or used.size.y <= 0:
 		return
 	var ratio: float = clampf(
-		float(character.ahoge_head_anchor_x_ratio) if character != null and "ahoge_head_anchor_x_ratio" in character else ahoge_head_anchor_x_ratio,
+		float(character.ahoge_head_anchor_x_ratio) if character != null else ahoge_head_anchor_x_ratio,
 		0.0,
 		1.0
 	)
