@@ -172,26 +172,27 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 旧4秒往復は廃止した。「攻撃速度テスト」は後端-0.4Dで保持した後、約0.15秒で前端+0.4Dへ切り返す。
 
-現在の柔軟追従は9 controlの連結chain。根元頂点の位置だけを頭部へ固定し、control 0の角度は7Hzの根元ヒンジとして遅れて追従する。controlは0/4/10/18/30/45/62/80/100%へ配置して根元側を密にし、頭部Canvas X加速度も根元ヒンジから入力する。これにより毛先だけでなく根元直後から曲げを発生させる。
+現在の調整対象はNeckRangePreview。頭部運動は変更しない。9 controlを0/2/5/10/18/30/45/65/100%へ配置し、根元側へさらに密にする。根元頂点の位置は固定したまま、根元接線は4.5Hzで遅れて追従し、加速度driveも根元〜30%へ分配する。毛先側のspring増幅は弱め、根元〜中央の曲率を優先する。
 
 主な初期値:
 
 | 定数 | 現在値 | 主な効果 |
 | --- | ---: | --- |
-| `SOFT_CONTROL_COUNT` | 9 | 毛束を代表する動的control数。根元側へ密配置 |
-| `SOFT_ROOT_HINGE_HZ` | 7.0 Hz | 根元直後の角度が頭へ追従する速さ |
-| `SOFT_ROOT_HINGE_DAMPING` | 0.44 | 根元ヒンジの減衰 |
-| `SOFT_ROOT_MAX_OFFSET` | 0.22 rad | 根元直後で許す動的角度差 |
-| `SOFT_ROOT_BLEND_END` | 0.12 | 根元ヒンジの曲げを分散する弧長範囲 |
-| `SOFT_MAX_OFFSET_STEP` | 0.055 rad | 隣接区間の動的offset差上限。根元の折れ・面反転を防ぐ |
-| `SOFT_CHAIN_HZ` | 8.5 Hz | control間で運動を伝える速さ |
-| `SOFT_ROOT_DAMPING` | 0.50 | 根元側controlの減衰 |
-| `SOFT_TIP_DAMPING` | 0.18 | 毛先側の減衰。低いほど振り遅れ・反動が残る |
-| `SOFT_SHAPE_RESTORE_RATIO` | 0.05 | ActionMotion基準形状へ直接戻す弱い復元 |
-| `SOFT_TIP_SPRING_GAIN` | 1.75 | 毛先へ伝播を運ぶspring力 |
-| `SOFT_FORWARD_ACCEL_DRIVE` | 0.000010 | 頭部Canvas X加速度をcontrol 1へ与えるdrive |
-| `SOFT_DRIVE_LIMIT` | 0.70 rad | 加速度driveの上限 |
-| `SOFT_MAX_OFFSET` | 0.70 rad | 動的追加角の上限 |
+| `SOFT_CONTROL_COUNT` | 9 | controlは0/2/5/10/18/30/45/65/100%へ配置 |
+| `SOFT_ROOT_HINGE_HZ` | 4.5 Hz | 根元接線の追従。低くして根元から遅らせる |
+| `SOFT_ROOT_HINGE_DAMPING` | 0.34 | 根元ヒンジの減衰 |
+| `SOFT_ROOT_MAX_OFFSET` | 0.36 rad | 根元直後で許す動的角度差 |
+| `SOFT_ROOT_BLEND_END` | 0.30 | 根元の曲げを根元〜中央手前へ分散する範囲 |
+| `SOFT_ROOT_START_WEIGHT` | 0.35 | 最初の区間へ与えるroot offset比率。剛体回転を避ける |
+| `SOFT_MAX_OFFSET_STEP` | 0.045 rad | 隣接区間のoffset差上限 |
+| `SOFT_CHAIN_HZ` | 6.5 Hz | 全体の追従速度 |
+| `SOFT_ROOT_DAMPING` | 0.34 | 根元側controlの減衰 |
+| `SOFT_TIP_DAMPING` | 0.30 | 毛先側の減衰。先端だけの振動を抑える |
+| `SOFT_SHAPE_RESTORE_RATIO` | 0.025 | 基準形状への直接復元 |
+| `SOFT_TIP_SPRING_GAIN` | 1.15 | 毛先spring増幅。先端偏重を抑える |
+| `SOFT_FORWARD_ACCEL_DRIVE` | 0.000012 | 頭部Canvas X加速度drive |
+| `SOFT_DRIVE_LIMIT` | 0.65 rad | drive上限 |
+| `SOFT_MAX_OFFSET` | 0.65 rad | 動的追加角の上限 |
 
 「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、動的offsetを描画しない。1.0ではchain出力を100%使用する。静止時の形を別物にするパラメータではない。
 
@@ -206,7 +207,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 6. 頭部停止後も中央・毛先が少し動き、その後基準形状へ収束。
 7. 実STRIKEでは接触2px、固定メッシュ、振り抜き契約を維持する。
 
-調整順は、まず `SOFT_CHAIN_HZ` で伝播時間、次に `SOFT_TIP_SPRING_GAIN` で毛先の加速、最後に `SOFT_TIP_DAMPING` で反動量を合わせる。複数を同時に大きく変更しない。
+現在は先端速度ではなく根元〜中央の柔らかさを優先する。確認順は「根元位置固定 → 根元直後が遅れる → 0〜30%に曲率が出る → 中央も追従遅れする → 毛先だけが大振幅にならない」。このゲートが合格するまでMotionPreviewのSTRIKE形状は調整しない。
 
 ## 9. 最小の反復手順
 
