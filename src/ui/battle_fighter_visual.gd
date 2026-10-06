@@ -80,6 +80,8 @@ func _process(delta: float) -> void:
 			_parry_entry_vertices = PackedVector2Array()
 			_parry_entry_centers = PackedVector2Array()
 			if _mesh_node != null and _mesh_node.configured:
+				# PARRY開始の最初の1frameは、どの遷移元でも直前の実表示をそのまま保持する。
+				_parry_entry_vertices = _mesh_node.current_vertices.duplicate()
 				var width_points: int = int(_mesh_node.profile.WIDTH_POINTS)
 				var current_centers: PackedVector2Array = ParryMotionScript.centers_of(
 					_mesh_node.current_vertices,
@@ -96,7 +98,6 @@ func _process(delta: float) -> void:
 					and rest_length > 0.001
 					and current_length > rest_length * 1.005
 				):
-					_parry_entry_vertices = _mesh_node.current_vertices.duplicate()
 					_parry_entry_centers = current_centers
 		else:
 			_parry_entry_vertices = PackedVector2Array()
@@ -381,12 +382,15 @@ func present_toward(target_canvas: Vector2) -> void:
 	_force_contact = false
 	var pose_vertices: PackedVector2Array = action_motion.visual_vertices()
 	var active_q: float = 0.0
-	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_centers.is_empty():
+	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_vertices.is_empty():
 		var parry_join: float = smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed)
-		if parry_join <= 0.001 and not _parry_entry_vertices.is_empty():
+		if parry_join <= 0.001:
 			pose_vertices = _parry_entry_vertices.duplicate()
-		else:
+		elif not _parry_entry_centers.is_empty():
 			pose_vertices = _blend_parry_entry_shape(_parry_entry_centers, pose_vertices, parry_join)
+		else:
+			# 通常PARRY/WINDUP等は1frame保持後に従来PARRYへ戻す。
+			_parry_entry_vertices = PackedVector2Array()
 		if parry_join >= 0.999:
 			_parry_entry_vertices = PackedVector2Array()
 			_parry_entry_centers = PackedVector2Array()
