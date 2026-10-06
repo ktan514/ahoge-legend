@@ -100,10 +100,18 @@ func set_neck_ahoge_directional_extension(amount: float, direction: float) -> bo
 	return true
 
 
+func _neck_soft_attachment_angle() -> float:
+	return deg_to_rad(_head_rotation * facing)
+
+
+func _neck_soft_forward_px() -> float:
+	return _head_offset.x * facing
+
+
 func reset_ahoge_soft_follow() -> void:
 	if not _ensure_neck_soft_tuning():
 		return
-	action_motion.reset_soft_follow(deg_to_rad(_head_rotation), _head_offset.x)
+	action_motion.reset_soft_follow(_neck_soft_attachment_angle(), _neck_soft_forward_px())
 
 
 func advance_neck_preview(delta: float) -> void:
@@ -188,9 +196,9 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 						1.0,
 						0.0,
 						true,
-						deg_to_rad(_head_rotation),
+						_neck_soft_attachment_angle(),
 						ahoge_softness,
-						_head_offset.x,
+						_neck_soft_forward_px(),
 						ahoge_directional_amount,
 						ahoge_directional_direction
 					)
