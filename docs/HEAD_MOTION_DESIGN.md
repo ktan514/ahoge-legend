@@ -220,8 +220,8 @@ Human Verificationでは、速度driveを使うと前へ移動している間ず
 NeckRangePreviewだけに柔軟追従を閉じ込めず、通常BattleとMotionPreviewへ同じ柔らかさ設定を渡す。
 
 - IDLE: 100%。
-- CHARGING: 65%。後方アーチ自体はActionMotionを正としつつ、頭部後退へ遅れてついてくる二次動作を許可する。
-- WINDUP: 85%。前方切り返し直前の角速度をchainへ蓄積する。
+- CHARGING: 0%。最大溜めの後方アーチと長押し静止を正とし、chainは現在姿勢へ同期する。
+- WINDUP: 45%。最大溜めを壊さず、前方切り返し直前からchainを立ち上げる。
 - STRIKE: 100%。頭部加速・減速から最大の伝播を出す。
 - COOLDOWN: 100%。振り抜き後の反動を保持して減衰する。
 - PARRY: 現段階では0%。既存の局所先端払いを維持する。
