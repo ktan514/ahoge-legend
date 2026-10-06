@@ -5,6 +5,8 @@ const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
 const HeadMotionScript := preload("res://src/ui/battle_head_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
 const FOLLOW_EDGE_MARGIN: float = 12.0
+const WHIP_REACH_START_Q: float = 0.30
+const WHIP_REACH_FULL_Q: float = 0.65
 
 var arena_canvas_rect: Rect2 = Rect2()
 var last_contact_error: float = INF
@@ -358,6 +360,19 @@ func _follow_end_for(target: Vector2) -> Vector2:
 	return result
 
 
+func _fixed_axis_reach(base: Transform2D, axis_value: Vector2, ratio_value: float) -> Transform2D:
+	if axis_value.length() <= 0.01 or not axis_value.is_finite() or not is_finite(ratio_value):
+		return base
+	var axis: Vector2 = axis_value.normalized()
+	var ratio: float = clampf(ratio_value, 0.25, 3.0)
+	var stretch: Transform2D = Transform2D(
+		Vector2.RIGHT + axis * ((ratio - 1.0) * axis.x),
+		Vector2.DOWN + axis * ((ratio - 1.0) * axis.y),
+		Vector2.ZERO
+	)
+	return stretch * base
+
+
 func _project_tip(base: Transform2D, reference_tip: Vector2, aim: Vector2, reach_weight: float, turn_weight: float) -> Transform2D:
 	var target_local: Vector2 = _ahoge_rig.to_local(aim)
 	if reference_tip.length() <= 0.01 or target_local.length() <= 0.01:
@@ -379,6 +394,8 @@ func present_toward(target_canvas: Vector2) -> void:
 	_force_contact = false
 	var pose_vertices: PackedVector2Array = action_motion.visual_vertices()
 	var active_q: float = 0.0
+	var active_reach_ratio: float = 1.0
+	var active_reach_axis: Vector2 = Vector2.RIGHT
 	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_vertices.is_empty():
 		var parry_join: float = smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed)
 		if parry_join <= 0.001:
@@ -399,7 +416,12 @@ func present_toward(target_canvas: Vector2) -> void:
 		# q=1でtipを目標へ一致させるため、方向だけでなく距離もmesh-localへ変換する。
 		var active_base: Transform2D = _neutral_transform()
 		var active_target_local: Vector2 = active_base.affine_inverse() * _ahoge_rig.to_local(active_target_canvas)
-		pose_vertices = action_motion.active_strike_vertices(active_target_local, active_q, _visual_charge_ratio())
+		var active_charge: float = _visual_charge_ratio()
+		pose_vertices = action_motion.active_strike_vertices(active_target_local, active_q, active_charge)
+		var final_active_vertices: PackedVector2Array = action_motion.active_strike_vertices(active_target_local, 1.0, active_charge)
+		if not final_active_vertices.is_empty() and final_active_vertices[-1].length() > 0.01:
+			active_reach_ratio = clampf(active_target_local.length() / final_active_vertices[-1].length(), 0.25, 3.0)
+			active_reach_axis = active_target_local.normalized()
 	_mesh_node.set_action_pose(pose_vertices, action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
@@ -431,9 +453,11 @@ func present_toward(target_canvas: Vector2) -> void:
 				# 過去のHit位置へ正確に戻すため、この経路だけ完全投影を許可する。
 				base = _project_tip(base, base * source_tip, target_canvas, 1.0, 1.0)
 			else:
-				# 通常STRIKEの接触残差はActive Strikeのdistal centerlineで解消済み。
-				# MotionRoot全体を投影せず、中央以前の速度ピークを終盤補正へ巻き込まない。
-				pass
+				# q=1のActive形状から求めた最終reach倍率を早い区間で確定する。
+				# terminal snap開始前に倍率変化を終え、接触直前の中央同時加速を防ぐ。
+				var reach_progress: float = smoothstep(WHIP_REACH_START_Q, WHIP_REACH_FULL_Q, q)
+				var reach_ratio: float = lerpf(1.0, active_reach_ratio, reach_progress)
+				base = _fixed_axis_reach(base, active_reach_axis, reach_ratio)
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
