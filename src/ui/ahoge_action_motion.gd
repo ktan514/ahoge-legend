@@ -824,15 +824,17 @@ func _active_distal_aim(source: PackedVector2Array, target_local: Vector2, q: fl
 	if source_centers.size() != _centers.size() or source_centers.size() < 3:
 		return source
 	var source_tip: Vector2 = source_centers[-1]
+	if source_tip.length() <= 0.01:
+		return source
 	var time_weight: float = smoothstep(ACTIVE_TIP_SNAP_START_Q, 1.0, q)
-	var residual: Vector2 = (target_local - source_tip) * time_weight
-	if residual.length_squared() <= 0.000001:
+	var turn: float = wrapf(target_local.angle() - source_tip.angle(), -PI, PI) * time_weight
+	if absf(turn) <= 0.000001:
 		return source
 	var arc: PackedFloat32Array = ParryScript.arc_fractions(source_centers)
 	var posed: PackedVector2Array = source_centers.duplicate()
 	for i in range(1, posed.size()):
 		var space_weight: float = smoothstep(ACTIVE_DISTAL_AIM_FRACTION, 1.0, arc[i])
-		posed[i] = source_centers[i] + residual * space_weight
+		posed[i] = source_centers[i].rotated(turn * space_weight)
 	posed[0] = Vector2.ZERO
 	return _vertices_from_posed_centers(posed)
 
