@@ -29,6 +29,7 @@ const NECK_SOFT_TUNING := {
 	"tip_spring_gain": 0.45,
 	"dynamic_curve_retention": 0.12,
 	"directional_curve_retention": 0.03,
+	"directional_root_hz": 9.0,
 	"directional_root_max_offset": 1.75,
 	"directional_max_offset": 2.40,
 	"curve_release_speed": 1500.0,
