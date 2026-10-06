@@ -21,9 +21,11 @@ const SOFT_NEXT_DRIVE_RATIO: float = 0.35
 const SOFT_THIRD_DRIVE_RATIO: float = 0.20
 const SOFT_CHAIN_HZ: float = 6.5
 const SOFT_ROOT_DAMPING: float = 0.34
-const SOFT_TIP_DAMPING: float = 0.30
+const SOFT_TIP_DAMPING: float = 0.60
 const SOFT_SHAPE_RESTORE_RATIO: float = 0.025
-const SOFT_TIP_SPRING_GAIN: float = 1.15
+const SOFT_RELATIVE_DAMPING_ROOT: float = 0.10
+const SOFT_RELATIVE_DAMPING_TIP: float = 0.60
+const SOFT_TIP_SPRING_GAIN: float = 0.85
 const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000012
 const SOFT_DRIVE_LIMIT: float = 0.65
 const SOFT_MAX_OFFSET: float = 0.65
@@ -432,9 +434,15 @@ func _advance_softness(
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var damping: float = lerpf(SOFT_ROOT_DAMPING, SOFT_TIP_DAMPING, fraction)
+			var relative_damping: float = lerpf(SOFT_RELATIVE_DAMPING_ROOT, SOFT_RELATIVE_DAMPING_TIP, fraction)
 			var spring_gain: float = lerpf(1.0, SOFT_TIP_SPRING_GAIN, fraction * fraction)
 			var omega: float = TAU * SOFT_CHAIN_HZ
-			var acceleration: float = omega * omega * spring_gain * error - 2.0 * damping * omega * previous_velocity[control]
+			var relative_velocity: float = previous_velocity[control] - previous_velocity[control - 1]
+			var acceleration: float = (
+				omega * omega * spring_gain * error
+				- 2.0 * damping * omega * previous_velocity[control]
+				- 2.0 * relative_damping * omega * relative_velocity
+			)
 			var velocity: float = previous_velocity[control] + acceleration * step
 			var world_angle: float = previous_world[control] + velocity * step
 			_soft_velocities[control] = velocity
