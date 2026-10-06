@@ -14,6 +14,7 @@ var last_contact_error: float = INF
 var last_safety_scale: float = 1.0
 var last_presentation_weight: float = 0.0
 var action_motion = ActionMotionScript.new()
+var motion_softness_amount: float = 1.0
 var _head_image: Image
 var _head_image_texture: Texture2D
 var _head_used: Rect2 = Rect2()
@@ -39,6 +40,27 @@ func _ready() -> void:
 	_mesh_node = find_child("AhogeDeformMesh", true, false)
 	_motion_node = find_child("AhogeMotionRoot", true, false) as Node2D
 	_cache_head_image()
+
+
+func set_motion_softness_amount(value: float) -> bool:
+	if not is_finite(value):
+		return false
+	motion_softness_amount = clampf(value, 0.0, 1.0)
+	return true
+
+
+func _state_softness_weight(action: int) -> float:
+	match action:
+		CombatantStateScript.ActionState.IDLE:
+			return 1.0
+		CombatantStateScript.ActionState.CHARGING:
+			return 0.65
+		CombatantStateScript.ActionState.WINDUP:
+			return 0.85
+		CombatantStateScript.ActionState.STRIKE, CombatantStateScript.ActionState.COOLDOWN:
+			return 1.0
+		_:
+			return 0.0
 
 
 func _process(delta: float) -> void:
@@ -73,13 +95,9 @@ func _process(delta: float) -> void:
 		action_motion.configure(_mesh_node.profile)
 	var charge: float = _visual_charge_ratio()
 	action_motion.contact_ratio = float(combat_state.config.attack_contact_ratio) if combat_state.config != null else 0.70
-	# 溜め/予備動作は専用の後方アーチを正とし、二重変形しない。
-	# 柔軟層は直前姿勢を記録し続けるため、STRIKE開始frameの切り返し速度は保持される。
-	var motion_softness: float = 1.0 if next_state in [
-		CombatantStateScript.ActionState.IDLE,
-		CombatantStateScript.ActionState.STRIKE,
-		CombatantStateScript.ActionState.COOLDOWN
-	] else 0.0
+	# NeckRangePreview / MotionPreview / 通常Battleで同じ柔らかさ設定を使用する。
+	# 溜め形そのものはActionMotionを正としつつ、頭部の後退・切り返しへ二次動作を重ねる。
+	var motion_softness: float = motion_softness_amount * _state_softness_weight(next_state)
 	action_motion.advance(
 		next_state,
 		delta,
