@@ -184,7 +184,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var near_lag: float = absf(wrapf(softened[near_index] - actor.action_motion.rest_angles[near_index], -PI, PI))
 	var middle_lag: float = absf(wrapf(softened[middle_index] - actor.action_motion.rest_angles[middle_index], -PI, PI))
 	var tip_lag: float = absf(wrapf(softened[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
-	_expect(maxf(middle_lag, tip_lag) > 0.20, "前方切り返しで中央〜毛先に十分な遅れが出ません: " + label)
+	_expect(maxf(middle_lag, tip_lag) > 0.25, "前方切り返しで中央〜毛先に十分な柔らかさが出ません: " + label)
 	var control_velocities: PackedFloat32Array = actor.action_motion.soft_control_velocities()
 	_expect(control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
 	if control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT:
@@ -196,7 +196,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(dynamic_points[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "動的柔軟化で根元が頭部から外れました: " + label)
 
 	# 前端で保持するとchainの角速度が減衰して現在姿勢へ追いつく。
-	var settle_seconds: float = 0.35
+	var settle_seconds: float = 0.55
 	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
 		actor.advance_neck_preview(1.0 / fps)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and settle_frame in [0, 3, 7, 11]:
