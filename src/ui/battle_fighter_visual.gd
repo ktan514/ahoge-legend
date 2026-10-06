@@ -54,9 +54,9 @@ func _state_softness_weight(action: int) -> float:
 		CombatantStateScript.ActionState.IDLE:
 			return 1.0
 		CombatantStateScript.ActionState.CHARGING:
-			return 0.65
+			return 0.0
 		CombatantStateScript.ActionState.WINDUP:
-			return 0.85
+			return 0.45
 		CombatantStateScript.ActionState.STRIKE, CombatantStateScript.ActionState.COOLDOWN:
 			return 1.0
 		_:
