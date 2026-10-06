@@ -232,6 +232,7 @@ Active Strikeは頭部運動を置き換えない。現在の柔軟chainで得�
 | active最大q | 0.88 | 接触前に最大能動制御へ到達 |
 | root turn開始 | s=0.12 | 根元直後は頭の慣性を残す |
 | full turn | s=0.55 | 中央以降は相手方向へ強く向ける |
+| active turn隣接差 | 0.045rad以下 | 能動turnによる折れ・面反転を防ぐ |
 | 通常最大stretch | 1.22x | 通常攻撃のメッシュ伸長 |
 | 最大charge stretch | 1.45x | チャージ攻撃のメッシュ伸長 |
 
