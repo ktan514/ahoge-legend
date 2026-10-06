@@ -172,7 +172,12 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var sweep_frames: int = maxi(2, ceili(sweep_seconds * fps))
 	var peak_speeds: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0])
 	var peak_times: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0])
+	var max_root_dynamic_offset: float = 0.0
 	var observed_seconds: float = 0.0
+	var control_indices: PackedInt32Array = actor.action_motion.soft_control_indices()
+	_expect(control_indices.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
+	if control_indices.size() == actor.action_motion.SOFT_CONTROL_COUNT:
+		_expect(actor.action_motion.fractions[control_indices[1]] <= 0.065, "根元側controlが遠すぎます: " + label)
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		var step_seconds: float = sweep_seconds / float(sweep_frames)
@@ -180,6 +185,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		actor.advance_neck_preview(step_seconds)
 		observed_seconds += step_seconds
 		_track_soft_peaks(actor.action_motion, observed_seconds, peak_speeds, peak_times)
+		max_root_dynamic_offset = maxf(max_root_dynamic_offset, absf(actor.action_motion._control_offset(0)))
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
@@ -199,8 +205,10 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		actor.advance_neck_preview(1.0 / fps)
 		observed_seconds += 1.0 / fps
 		_track_soft_peaks(actor.action_motion, observed_seconds, peak_speeds, peak_times)
+		max_root_dynamic_offset = maxf(max_root_dynamic_offset, absf(actor.action_motion._control_offset(0)))
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and propagation_frame in [0, 3, 7, 11, 17, 23]:
 			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % propagation_frame)
+	_expect(max_root_dynamic_offset >= 0.06, "根元直後が硬いままで動的に曲がりません: %s offset=%f" % [label, max_root_dynamic_offset])
 	_expect(peak_times[0] < peak_times[1] and peak_times[1] < peak_times[2], "速度ピークが根元→中央→毛先の順に伝播しません: %s times=%s" % [label, str(peak_times)])
 	_expect(peak_speeds[2] >= peak_speeds[1] * 0.90, "毛先の速度ピークが中央で減衰しすぎています: %s speeds=%s" % [label, str(peak_speeds)])
 
