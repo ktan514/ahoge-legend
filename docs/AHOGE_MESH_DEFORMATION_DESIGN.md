@@ -72,7 +72,9 @@
 
 - UV / index / mesh RID / 断面幅は固定。
 - 根元頂点は頭部anchorへ固定。
-- IDLE / CHARGING / WINDUP / COOLDOWN / PARRYでは基準弧長を維持。
+- IDLE / CHARGING / WINDUP / COOLDOWNでは基準弧長を維持。
+- PARRYは原則基準弧長。ただしActive Strikeからキャンセルした直後の`ENTRY_SECONDS`だけは、直前の伸長弧長から基準弧長へ連続的に戻す。ENTRY終了時には基準弧長へ復帰する。
+- PARRY ENTRY中も断面幅はprofile基準幅を維持し、頂点直接lerpによる横潰れを禁止する。
 - STRIKEでは各区間長へ1.00〜最大1.45倍のscaleを掛ける。
 - scaleは根元1.00から毛先側へ連続分布し、不連続な1区間伸長を禁止。
 - 通常攻撃は最大1.22倍、最大チャージは最大1.45倍。
