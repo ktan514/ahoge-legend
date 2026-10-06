@@ -196,7 +196,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_DRIVE_LIMIT` | 0.65 rad | drive上限 |
 | `SOFT_MAX_OFFSET` | 0.65 rad | 動的追加角の上限 |
 
-NeckRangePreviewの「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、1.0ではNeck専用tuning profileの出力を100%使用する。ここで確定するまではMotionPreviewへ係数を同期しない。
+NeckRangePreviewの「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、1.0ではNeck専用tuning profileの出力を100%使用する。専用profileは `src/ui/neck_range_fighter.gd::NECK_SOFT_TUNING` に置き、ActionMotion configure直後に1回だけ適用する。ここで確定するまではMotionPreviewへ係数を同期しない。
 
 確認する順序:
 
