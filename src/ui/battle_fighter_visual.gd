@@ -260,6 +260,11 @@ func _blend_parry_entry_shape(
 		var posed_next: Vector2 = blended_centers[mini(center_index + 1, blended_centers.size() - 1)]
 		var rest_tangent: Vector2 = rest_next - rest_prev
 		var posed_tangent: Vector2 = posed_next - posed_prev
+		if center_index == blended_centers.size() - 2:
+			# ENTRY補間の最終断面もtipへ向かう最終edgeを基準にする。
+			# 平均接線だと伸長を畳む途中でtip三角形が反転する。
+			rest_tangent = rest_centers[-1] - rest_centers[-2]
+			posed_tangent = blended_centers[-1] - blended_centers[-2]
 		var turn: float = 0.0
 		if rest_tangent.length() > 0.000001 and posed_tangent.length() > 0.000001:
 			turn = wrapf(posed_tangent.angle() - rest_tangent.angle(), -PI, PI)
