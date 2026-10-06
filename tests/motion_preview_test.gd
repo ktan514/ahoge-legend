@@ -38,6 +38,33 @@ func _run() -> void:
 	preview._resolution.select(0)
 	preview._side.select(0)
 	preview._scenario.select(1)
+	# MotionPreviewの柔らかさ0/1が実BattleFighterVisualへ渡り、実頂点に差を出す。
+	preview._fps.select(1)
+	preview._softness.set_value_no_signal(0.0)
+	await preview.rebuild()
+	var strike_probe: float = _phase_probe(preview.session.phases, 3, 0.45)
+	preview.session.advance_to(strike_probe)
+	var rigid_strike: PackedVector2Array = preview.session.pose().duplicate()
+	_expect(is_equal_approx(preview.session.softness, 0.0), "MotionPreview柔らかさ0がSessionへ反映")
+	preview._softness.set_value_no_signal(1.0)
+	await preview.rebuild()
+	strike_probe = _phase_probe(preview.session.phases, 3, 0.45)
+	preview.session.advance_to(strike_probe)
+	var soft_strike: PackedVector2Array = preview.session.pose().duplicate()
+	_expect(is_equal_approx(preview.session.softness, 1.0), "MotionPreview柔らかさ1がSessionへ反映")
+	_expect(_difference(rigid_strike, soft_strike) > 4.0, "MotionPreviewのSTRIKEへ柔軟chainが実描画反映")
+	var charge_probe: float = _phase_probe(preview.session.phases, 1, 0.35)
+	preview._softness.set_value_no_signal(0.0)
+	await preview.rebuild()
+	charge_probe = _phase_probe(preview.session.phases, 1, 0.35)
+	preview.session.advance_to(charge_probe)
+	var rigid_charge: PackedVector2Array = preview.session.pose().duplicate()
+	preview._softness.set_value_no_signal(1.0)
+	await preview.rebuild()
+	charge_probe = _phase_probe(preview.session.phases, 1, 0.35)
+	preview.session.advance_to(charge_probe)
+	var soft_charge: PackedVector2Array = preview.session.pose().duplicate()
+	_expect(_difference(rigid_charge, soft_charge) > 2.0, "MotionPreviewのCHARGINGへ柔軟chainが実描画反映")
 	for fps_index in range(3):
 		preview._fps.select(fps_index)
 		await preview.rebuild()
@@ -64,6 +91,7 @@ func _run() -> void:
 	var args: PackedStringArray = preview.reload_arguments()
 	_expect(args.has("res://tools/motion_preview/MotionPreview.tscn"), "再読込は通常ゲームでなく開発Scene")
 	_expect(args.has("--preview-scenario=1"), "再読込は動作選択を保持")
+	_expect(_has_prefix(args, "--preview-softness="), "再読込は柔らかさ設定を保持")
 	var online = root.get_node_or_null("OnlineSession")
 	_expect(online == null or (online.session == null and online.client == null and online.current_match_id.is_empty()), "認証・HTTPクライアント・試合を作らない")
 	if DisplayServer.get_name() != "headless":
@@ -76,6 +104,20 @@ func _run() -> void:
 	print("AHOGE motion preview: %s cases=%d checks=%d failures=%s" % ["PASS" if failures.is_empty() else "FAIL", cases, checks, JSON.stringify(failures)])
 	preview.free()
 	quit(0 if failures.is_empty() else 1)
+
+
+func _phase_probe(phases: Array[Dictionary], action: int, progress: float) -> float:
+	for phase in phases:
+		if int(phase["state"]) == action:
+			return lerpf(float(phase["start"]), float(phase["end"]), clampf(progress, 0.0, 1.0))
+	return 0.0
+
+
+func _has_prefix(values: PackedStringArray, prefix: String) -> bool:
+	for value in values:
+		if value.begins_with(prefix):
+			return true
+	return false
 
 
 func _difference(a: PackedVector2Array, b: PackedVector2Array) -> float:
