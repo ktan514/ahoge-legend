@@ -49,7 +49,7 @@ func set_motion_softness_amount(value: float) -> bool:
 	return true
 
 
-func _state_softness_weight(action: int) -> float:
+func _state_softness_weight(action: int, charge: float) -> float:
 	match action:
 		CombatantStateScript.ActionState.IDLE:
 			return 1.0
@@ -57,8 +57,12 @@ func _state_softness_weight(action: int) -> float:
 			return 0.0
 		CombatantStateScript.ActionState.WINDUP:
 			return 0.45
-		CombatantStateScript.ActionState.STRIKE, CombatantStateScript.ActionState.COOLDOWN:
-			return 1.0
+		CombatantStateScript.ActionState.STRIKE:
+			var contact_seconds: float = _phase_duration_for_state(action, charge) * action_motion.contact_ratio
+			var q: float = _visual_action_age / maxf(contact_seconds, 0.001)
+			return lerpf(1.0, 0.10, smoothstep(0.52, 0.98, q))
+		CombatantStateScript.ActionState.COOLDOWN:
+			return 0.10 * (1.0 - smoothstep(0.0, 0.20, _visual_action_age))
 		_:
 			return 0.0
 
@@ -97,7 +101,7 @@ func _process(delta: float) -> void:
 	action_motion.contact_ratio = float(combat_state.config.attack_contact_ratio) if combat_state.config != null else 0.70
 	# NeckRangePreview / MotionPreview / 通常Battleで同じ柔らかさ設定を使用する。
 	# 溜め形そのものはActionMotionを正としつつ、頭部の後退・切り返しへ二次動作を重ねる。
-	var motion_softness: float = motion_softness_amount * _state_softness_weight(next_state)
+	var motion_softness: float = motion_softness_amount * _state_softness_weight(next_state, charge)
 	action_motion.advance(
 		next_state,
 		delta,
