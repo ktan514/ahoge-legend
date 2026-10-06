@@ -16,6 +16,9 @@ const ACTIVE_FULL_FRACTION: float = 0.55
 const ACTIVE_NORMAL_STRETCH: float = 1.22
 const ACTIVE_CHARGED_STRETCH: float = 1.45
 const ACTIVE_MAX_OFFSET_STEP: float = 0.045
+const ACTIVE_TIP_SNAP_START_Q: float = 0.90
+const ACTIVE_TIP_SNAP_FRACTION: float = 0.70
+const ACTIVE_TIP_SNAP_WEIGHT: float = 0.70
 const SOFT_CONTROL_COUNT: int = 9
 # 共通default。NeckRangePreviewの未承認調整値はこのconstを書き換えず、
 # set_soft_tuning()で当該ActionMotionインスタンスだけへ適用する。
@@ -764,7 +767,15 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 			section_full = lerpf(0.84, 1.0, distal)
 		var section_active: float = smoothstep(section_start, section_full, q)
 		var turn_weight: float = smoothstep(ACTIVE_ROOT_FRACTION, ACTIVE_FULL_FRACTION, s) * section_active
-		active_offsets[i] = wrapf(desired_angle - base_angles[i], -PI, PI) * turn_weight
+		var target_delta: float = wrapf(desired_angle - base_angles[i], -PI, PI)
+		active_offsets[i] = target_delta * turn_weight
+
+		# 中央のピーク後に毛先自身が最後の加速を出すterminal snap。
+		# q=0.90までは0なので、中央の0.125秒付近のピークへ重ならない。
+		var snap_time: float = smoothstep(ACTIVE_TIP_SNAP_START_Q, 1.0, q)
+		var snap_space: float = smoothstep(ACTIVE_TIP_SNAP_FRACTION, 1.0, s)
+		active_offsets[i] += target_delta * snap_time * snap_space * ACTIVE_TIP_SNAP_WEIGHT
+
 		var stretch_weight: float = smoothstep(0.08, 0.92, s) * section_active
 		length_scales[i] = lerpf(1.0, stretch_max, stretch_weight)
 
