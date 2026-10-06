@@ -211,7 +211,9 @@ NeckRangePreviewでは、単にC字曲率を弱めるだけでは不足する。
 - 前端保持: directional amount=1、direction=+1。毛束全区間を前方へほぼ直線に伸ばす。
 - テスト停止/手動位置: directional amount=0。方向付き伸長を解除し、待機C字へ復元する。
 
-directional target中は待機C字の局所曲率保持をほぼ0へ落とし、ActionMotionのsegment lengthは保つ。つまり「C字のまま位置だけ移動」ではなく、同じ毛束長を使って後方直線→遅れを伴う反転→前方直線へ変形する。
+directional target中は待機C字の局所曲率保持をほぼ0へ落とし、ActionMotionのsegment lengthは保つ。さらに描画時も「待機角＋offset」へ戻さず、control chainが保持しているworld angleを現在の取り付け角からlocal angleへ戻して直接補間する。これにより、後端/前端の保持中はほぼ直線、切り返し中だけcontrol間の位相差で曲がる。
+
+つまり「C字のまま位置だけ移動」ではなく、同じ毛束長を使って **後方直線 → 遅れで一時的に曲がる反転 → 前方直線** へ変形する。
 
 新しい目標:
 
