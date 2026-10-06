@@ -248,8 +248,8 @@ NeckRangePreviewだけに柔軟追従を閉じ込めず、通常BattleとMotionP
 - IDLE: 100%。
 - CHARGING: 0%。最大溜めの後方アーチと長押し静止を正とし、chainは現在姿勢へ同期する。
 - WINDUP: 45%。最大溜めを壊さず、前方切り返し直前からchainを立ち上げる。
-- STRIKE: ③〜④では100%。q=0.52以降は接触へ向けて徐々に弱め、q≈0.98で10%まで落とす。前半は慣性を見せ、⑥ではstraight形状を優先する。
-- COOLDOWN: 接触時の10%から0.20秒で0へ減衰。振り抜き形状そのものはActionMotionのFollowThroughで維持する。
+- STRIKE: ③〜④では100%。q=0.52以降は接触へ向けて徐々に弱め、q≈0.98で10%まで落とす。前半は慣性を見せ、⑥ではstraight形状を優先する。この減衰は`AhogeActionMotion`自身の`elapsed / (duration * contact_ratio)`を正本時計として計算する。
+- COOLDOWN: `AhogeActionMotion`自身の経過時間で接触時の10%から0.20秒で0へ減衰。振り抜き形状そのものはActionMotionのFollowThroughで維持する。
 - PARRY: 現段階では0%。既存の局所先端払いを維持する。
 - ROUND_LOCKED・アホ毛非表示: 動的状態を破棄する。
 
