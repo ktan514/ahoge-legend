@@ -435,7 +435,7 @@ func present_toward(target_canvas: Vector2) -> void:
 			# Active Strike自身の時間差を接触直前まで優先する。
 			# whole-transformはq=0.90以降だけ、reach/turn共通の残差weightで最終誤差を埋める。
 			var residual_weight: float = approach_weight * smoothstep(WHIP_RESIDUAL_START_Q, 1.0, q)
-			base = _project_tip(base, base * source_tip, approach, residual_weight, residual_weight)
+			base = _project_tip(base, base * source_tip, approach, residual_weight, 0.0)
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
