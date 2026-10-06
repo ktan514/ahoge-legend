@@ -136,7 +136,13 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 				break
 			for point in points:
 				_expect(actor.arena_canvas_rect.grow(0.5).has_point(point), "三動作の途中でアホ毛が見切れました: " + label)
-			var allow_active_stretch: bool = state.action_state == StateScript.ActionState.STRIKE
+			var allow_active_stretch: bool = (
+				state.action_state == StateScript.ActionState.STRIKE
+				or (
+					state.action_state == StateScript.ActionState.PARRY
+					and actor.action_motion.elapsed < ParryScript.ENTRY_SECONDS + 0.000001
+				)
+			)
 			_check_geometry(mesh_node.current_vertices, label, allow_active_stretch)
 			var root: Vector2 = points[0]
 			var tip: Vector2 = points[-1]
@@ -212,7 +218,7 @@ func _check_geometry(vertices: PackedVector2Array, label: String, allow_active_s
 	var length_error: float = absf(current_length - _rest_length)
 	maximum_length_error = maxf(maximum_length_error, length_error)
 	if allow_active_stretch:
-		_expect(current_length >= _rest_length * 0.995 and current_length <= _rest_length * 1.50, "Active Strikeの弧長が許容範囲外です: " + label)
+		_expect(current_length >= _rest_length * 0.995 and current_length <= _rest_length * 1.50, "Active Strike/PARRY ENTRYの弧長が許容範囲外です: " + label)
 	else:
 		_expect(length_error < 0.04, "STRIKE以外で局所弧長が変化しました: " + label)
 	for row in range(85):
