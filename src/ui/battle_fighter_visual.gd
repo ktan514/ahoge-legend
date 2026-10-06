@@ -237,16 +237,52 @@ func _blend_parry_entry_shape(
 
 	# center座標を直接lerpすると、向きの違うsegmentが途中でショートカットして
 	# 弧長が基準長より短くなる。segment長と角度を補間してrootから再積算する。
-	var blended_centers: PackedVector2Array = PackedVector2Array([Vector2.ZERO])
-	for i in range(1, target_centers.size()):
-		var entry_edge: Vector2 = entry_centers[i] - entry_centers[i - 1]
-		var target_edge: Vector2 = target_centers[i] - target_centers[i - 1]
+	var segment_count: int = target_centers.size() - 1
+	var blended_lengths: PackedFloat32Array = PackedFloat32Array()
+	var blended_angles: PackedFloat32Array = PackedFloat32Array()
+	var entry_angles: PackedFloat32Array = PackedFloat32Array()
+	var target_angles: PackedFloat32Array = PackedFloat32Array()
+	blended_lengths.resize(segment_count)
+	blended_angles.resize(segment_count)
+	entry_angles.resize(segment_count)
+	target_angles.resize(segment_count)
+	for segment in range(segment_count):
+		var entry_edge: Vector2 = entry_centers[segment + 1] - entry_centers[segment]
+		var target_edge: Vector2 = target_centers[segment + 1] - target_centers[segment]
 		if entry_edge.length() <= 0.000001 or target_edge.length() <= 0.000001:
 			return target_vertices.duplicate()
-		var blended_length: float = lerpf(entry_edge.length(), target_edge.length(), t)
-		var blended_angle: float = lerp_angle(entry_edge.angle(), target_edge.angle(), t)
+		entry_angles[segment] = entry_edge.angle()
+		target_angles[segment] = target_edge.angle()
+		if segment > 0:
+			entry_angles[segment] = entry_angles[segment - 1] + wrapf(entry_angles[segment] - entry_angles[segment - 1], -PI, PI)
+			target_angles[segment] = target_angles[segment - 1] + wrapf(target_angles[segment] - target_angles[segment - 1], -PI, PI)
+		blended_lengths[segment] = lerpf(entry_edge.length(), target_edge.length(), t)
+		blended_angles[segment] = lerpf(entry_angles[segment], target_angles[segment], t)
+
+	# endpointのどちらよりも急な局所折れをENTRY途中に生成しない。
+	for segment in range(1, segment_count):
+		var entry_curve: float = absf(entry_angles[segment] - entry_angles[segment - 1])
+		var target_curve: float = absf(target_angles[segment] - target_angles[segment - 1])
+		var limit: float = maxf(entry_curve, target_curve) + 0.03
+		blended_angles[segment] = clampf(
+			blended_angles[segment],
+			blended_angles[segment - 1] - limit,
+			blended_angles[segment - 1] + limit
+		)
+	for segment in range(segment_count - 2, -1, -1):
+		var entry_curve: float = absf(entry_angles[segment + 1] - entry_angles[segment])
+		var target_curve: float = absf(target_angles[segment + 1] - target_angles[segment])
+		var limit: float = maxf(entry_curve, target_curve) + 0.03
+		blended_angles[segment] = clampf(
+			blended_angles[segment],
+			blended_angles[segment + 1] - limit,
+			blended_angles[segment + 1] + limit
+		)
+
+	var blended_centers: PackedVector2Array = PackedVector2Array([Vector2.ZERO])
+	for segment in range(segment_count):
 		blended_centers.append(
-			blended_centers[-1] + Vector2.from_angle(blended_angle) * blended_length
+			blended_centers[-1] + Vector2.from_angle(blended_angles[segment]) * blended_lengths[segment]
 		)
 
 	var result: PackedVector2Array = profile.rest_vertices.duplicate()
