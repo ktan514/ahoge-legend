@@ -32,6 +32,7 @@ var _parry_blocks_old_contact: bool = false
 var _contact_frozen: bool = false
 var _contact_anchor_canvas: Vector2 = Vector2.ZERO
 var _follow_end_canvas: Vector2 = Vector2.ZERO
+var _parry_entry_vertices: PackedVector2Array = PackedVector2Array()
 var _parry_entry_centers: PackedVector2Array = PackedVector2Array()
 
 
@@ -75,12 +76,25 @@ func _process(delta: float) -> void:
 			_entry_transform = _motion_node.transform
 		if next_state == CombatantStateScript.ActionState.PARRY:
 			_parry_blocks_old_contact = true
+			_parry_entry_vertices = PackedVector2Array()
+			_parry_entry_centers = PackedVector2Array()
 			if _mesh_node != null and _mesh_node.configured:
-				_parry_entry_centers = ParryMotionScript.centers_of(
+				var width_points: int = int(_mesh_node.profile.WIDTH_POINTS)
+				var current_centers: PackedVector2Array = ParryMotionScript.centers_of(
 					_mesh_node.current_vertices,
-					int(_mesh_node.profile.WIDTH_POINTS)
+					width_points
 				)
+				var rest_centers: PackedVector2Array = ParryMotionScript.centers_of(
+					_mesh_node.profile.rest_vertices,
+					width_points
+				)
+				var current_length: float = _centerline_length(current_centers)
+				var rest_length: float = _centerline_length(rest_centers)
+				if rest_length > 0.001 and current_length > rest_length * 1.005:
+					_parry_entry_vertices = _mesh_node.current_vertices.duplicate()
+					_parry_entry_centers = current_centers
 		else:
+			_parry_entry_vertices = PackedVector2Array()
 			_parry_entry_centers = PackedVector2Array()
 		if next_state in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP, CombatantStateScript.ActionState.STRIKE]:
 			_parry_blocks_old_contact = false
@@ -312,6 +326,13 @@ func _blend_parry_entry_shape(
 	return result
 
 
+func _centerline_length(points: PackedVector2Array) -> float:
+	var total: float = 0.0
+	for i in range(1, points.size()):
+		total += points[i].distance_to(points[i - 1])
+	return total
+
+
 func _neutral_transform() -> Transform2D:
 	var base_scale: float = maxf(0.21, get_viewport_rect().size.x / 5200.0)
 	# 頭部の位置と傾きはroot anchorへ反映済み。全毛束を一体で回さない。
@@ -357,8 +378,12 @@ func present_toward(target_canvas: Vector2) -> void:
 	var active_q: float = 0.0
 	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_centers.is_empty():
 		var parry_join: float = smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed)
-		pose_vertices = _blend_parry_entry_shape(_parry_entry_centers, pose_vertices, parry_join)
+		if parry_join <= 0.001 and not _parry_entry_vertices.is_empty():
+			pose_vertices = _parry_entry_vertices.duplicate()
+		else:
+			pose_vertices = _blend_parry_entry_shape(_parry_entry_centers, pose_vertices, parry_join)
 		if parry_join >= 0.999:
+			_parry_entry_vertices = PackedVector2Array()
 			_parry_entry_centers = PackedVector2Array()
 	if _presentation_state == CombatantStateScript.ActionState.STRIKE and not confirmed:
 		var active_contact_seconds: float = action_motion.duration * action_motion.contact_ratio
