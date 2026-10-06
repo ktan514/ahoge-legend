@@ -10,21 +10,23 @@ const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
 const SOFT_CONTROL_COUNT: int = 9
-const SOFT_ROOT_HINGE_HZ: float = 7.0
-const SOFT_ROOT_HINGE_DAMPING: float = 0.44
-const SOFT_ROOT_MAX_OFFSET: float = 0.22
-const SOFT_ROOT_BLEND_END: float = 0.12
-const SOFT_MAX_OFFSET_STEP: float = 0.055
-const SOFT_ROOT_DRIVE_RATIO: float = 0.70
-const SOFT_NEXT_DRIVE_RATIO: float = 0.30
-const SOFT_CHAIN_HZ: float = 8.5
-const SOFT_ROOT_DAMPING: float = 0.50
-const SOFT_TIP_DAMPING: float = 0.18
-const SOFT_SHAPE_RESTORE_RATIO: float = 0.05
-const SOFT_TIP_SPRING_GAIN: float = 1.75
-const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000010
-const SOFT_DRIVE_LIMIT: float = 0.70
-const SOFT_MAX_OFFSET: float = 0.70
+const SOFT_ROOT_HINGE_HZ: float = 4.5
+const SOFT_ROOT_HINGE_DAMPING: float = 0.34
+const SOFT_ROOT_MAX_OFFSET: float = 0.36
+const SOFT_ROOT_BLEND_END: float = 0.30
+const SOFT_ROOT_START_WEIGHT: float = 0.35
+const SOFT_MAX_OFFSET_STEP: float = 0.045
+const SOFT_ROOT_DRIVE_RATIO: float = 0.45
+const SOFT_NEXT_DRIVE_RATIO: float = 0.35
+const SOFT_THIRD_DRIVE_RATIO: float = 0.20
+const SOFT_CHAIN_HZ: float = 6.5
+const SOFT_ROOT_DAMPING: float = 0.34
+const SOFT_TIP_DAMPING: float = 0.30
+const SOFT_SHAPE_RESTORE_RATIO: float = 0.025
+const SOFT_TIP_SPRING_GAIN: float = 1.15
+const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000012
+const SOFT_DRIVE_LIMIT: float = 0.65
+const SOFT_MAX_OFFSET: float = 0.65
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -333,7 +335,7 @@ func _build_soft_controls() -> void:
 	if fractions.is_empty():
 		return
 	# 根元側へcontrolを密に置き、最初の10%を剛体にしない。
-	var targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
+	var targets: Array[float] = [0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00]
 	for target in targets:
 		var best_index: int = 0
 		var best_distance: float = INF
@@ -423,10 +425,12 @@ func _advance_softness(
 			var coupled_target: float = previous_world[control - 1] + desired_curve
 			if control == 1:
 				coupled_target += drive * SOFT_NEXT_DRIVE_RATIO
+			elif control == 2:
+				coupled_target += drive * SOFT_THIRD_DRIVE_RATIO
 			var absolute_target: float = angle + current_angles[index]
 			var target: float = lerp_angle(coupled_target, absolute_target, SOFT_SHAPE_RESTORE_RATIO)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
-			var fraction: float = float(control) / float(_soft_control_indices.size() - 1)
+			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var damping: float = lerpf(SOFT_ROOT_DAMPING, SOFT_TIP_DAMPING, fraction)
 			var spring_gain: float = lerpf(1.0, SOFT_TIP_SPRING_GAIN, fraction * fraction)
 			var omega: float = TAU * SOFT_CHAIN_HZ
@@ -465,8 +469,13 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 		var right_s: float = fractions[right_index]
 		var weight: float = 0.0 if right_s <= left_s else clampf((s - left_s) / (right_s - left_s), 0.0, 1.0)
 		var interpolated: float = lerpf(_control_offset(control), _control_offset(control + 1), weight)
-		# 根元ヒンジを1断面へ集中させず、先頭12%へ滑らかに広げる。
-		offsets[i] = lerpf(root_offset, interpolated, smoothstep(0.0, SOFT_ROOT_BLEND_END, s))
+		# 根元〜30%へ勾配を作る。根元区間を一体回転させず、最初の区間から
+		# 中央手前まで角度差を積み上げて「根元から曲がる」見え方にする。
+		var root_progress: float = smoothstep(0.0, SOFT_ROOT_BLEND_END, s)
+		var root_weight: float = lerpf(SOFT_ROOT_START_WEIGHT, 1.0, root_progress)
+		var root_component: float = root_offset * root_weight
+		var chain_component: float = (interpolated - root_offset) * root_progress
+		offsets[i] = root_component + chain_component
 
 	# 動的offset自体も軽く平滑化し、根元で折れた関節のような角を作らない。
 	for pass_index in range(2):
