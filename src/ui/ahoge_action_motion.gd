@@ -595,9 +595,9 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 
 	# 隣接区間の角度差を両方向から制限し、面反転を防ぎながら曲げを全体へ分散する。
 	for i in range(1, offsets.size()):
-		offsets[i] = clampf(offsets[i], offsets[i - 1] - soft_max_offset_STEP, offsets[i - 1] + soft_max_offset_STEP)
+		offsets[i] = clampf(offsets[i], offsets[i - 1] - soft_max_offset_step, offsets[i - 1] + soft_max_offset_step)
 	for i in range(offsets.size() - 2, -1, -1):
-		offsets[i] = clampf(offsets[i], offsets[i + 1] - soft_max_offset_STEP, offsets[i + 1] + soft_max_offset_STEP)
+		offsets[i] = clampf(offsets[i], offsets[i + 1] - soft_max_offset_step, offsets[i + 1] + soft_max_offset_step)
 
 	for i in range(result.size()):
 		result[i] += offsets[i] * softness
