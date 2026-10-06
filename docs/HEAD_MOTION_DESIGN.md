@@ -81,7 +81,9 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
    - chargedほど最大伸長量と能動turnを増やす。
    - 接触直前の全体Transform投影は残差補正だけに縮小する。
 - 接触確定後はActive Strikeのtargetも接触時Canvas座標へfreezeし、相手のその後の移動を追尾しない。振り抜きは固定接触点からFollowThrough終点へ進む。
-- Active Strike中にPARRYへキャンセルした場合、直前の実メッシュから中心線を保存し、PARRY entry時間で中心線だけを補間する。断面はprofileの固定幅から毎frame再構築し、伸長中の弧長を滑らかに戻しながら断面幅を潰さない。
+- Active Strike中にPARRYへキャンセルした場合、直前の実メッシュから中心線を保存する。PARRY entryでは中心点座標を直接lerpせず、各segmentの長さと角度を個別補間してrootから再積算する。これにより向きの違うsegment同士のショートカットで弧長が基準長より短くなることを防ぐ。
+- 断面はprofileの固定幅から毎frame再構築し、伸長中の弧長を滑らかに戻しながら断面幅を潰さない。
+- `parry_join >= 0.999`では再構築を打ち切り、PARRY本来のtarget verticesをそのまま採用する。固定部境界の接線再計算で根元〜62%が動くことを防ぐ。
 
 ### Active Strike初期仕様
 
