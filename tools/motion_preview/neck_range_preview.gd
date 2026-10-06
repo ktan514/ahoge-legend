@@ -134,7 +134,7 @@ func _build_ui() -> void:
 	stack.add_child(actions)
 	_button(actions, "PNG保存", save_capture)
 	_button(actions, "モーション調整へ戻る", func(): get_tree().change_scene_to_file("res://tools/motion_preview/MotionPreview.tscn"))
-	_notice = _text(actions, "手動位置では柔らかさ差を判定しません。「攻撃速度テスト」で柔らかさ0.0と1.0の伝播差を比較してください。")
+	_notice = _text(actions, "「攻撃速度テスト」では後端で後方へ伸び、切り返し後は前方へ伸びます。C字のまま前後移動するのはNGです。")
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_notice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var display := TextureRect.new()
@@ -249,6 +249,7 @@ func toggle_oscillation() -> void:
 		_phase = 0.0
 		_apply_ratio(-0.4)
 		if is_instance_valid(fighter):
+			fighter.set_neck_ahoge_directional_extension(1.0, -1.0)
 			fighter.reset_ahoge_soft_follow()
 		oscillating = true
 		_auto_button.text = "テスト停止"
@@ -256,8 +257,26 @@ func toggle_oscillation() -> void:
 
 func stop_oscillation() -> void:
 	oscillating = false
+	if ready_for_input and is_instance_valid(fighter):
+		fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
 	if _auto_button != null:
 		_auto_button.text = "攻撃速度テスト"
+
+
+static func attack_preview_direction(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), ATTACK_PREVIEW_SECONDS)
+	if t < REAR_HOLD_SECONDS:
+		return -1.0
+	t -= REAR_HOLD_SECONDS
+	if t < STRIKE_SWING_SECONDS:
+		var u: float = smoothstep(0.0, STRIKE_SWING_SECONDS, t)
+		return lerpf(-1.0, 1.0, u)
+	t -= STRIKE_SWING_SECONDS
+	if t < FRONT_HOLD_SECONDS:
+		return 1.0
+	t -= FRONT_HOLD_SECONDS
+	var back: float = smoothstep(0.0, RESET_SECONDS, t)
+	return lerpf(1.0, -1.0, back)
 
 
 static func attack_preview_ratio(seconds: float) -> float:
@@ -279,6 +298,7 @@ static func attack_preview_ratio(seconds: float) -> float:
 func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
 		_phase = fposmod(_phase + delta, ATTACK_PREVIEW_SECONDS)
+		fighter.set_neck_ahoge_directional_extension(1.0, attack_preview_direction(_phase))
 		_apply_ratio(attack_preview_ratio(_phase), delta)
 
 
