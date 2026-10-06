@@ -10,25 +10,27 @@ const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
 const SOFT_CONTROL_COUNT: int = 9
-const SOFT_ROOT_HINGE_HZ: float = 4.5
-const SOFT_ROOT_HINGE_DAMPING: float = 0.34
-const SOFT_ROOT_MAX_OFFSET: float = 0.36
-const SOFT_ROOT_BLEND_END: float = 0.30
-const SOFT_ROOT_START_WEIGHT: float = 0.35
-const SOFT_MAX_OFFSET_STEP: float = 0.045
-const SOFT_ROOT_DRIVE_RATIO: float = 0.45
-const SOFT_NEXT_DRIVE_RATIO: float = 0.35
-const SOFT_THIRD_DRIVE_RATIO: float = 0.20
-const SOFT_CHAIN_HZ: float = 6.5
-const SOFT_ROOT_DAMPING: float = 0.34
-const SOFT_TIP_DAMPING: float = 0.60
-const SOFT_SHAPE_RESTORE_RATIO: float = 0.025
-const SOFT_RELATIVE_DAMPING_ROOT: float = 0.10
-const SOFT_RELATIVE_DAMPING_TIP: float = 0.60
-const SOFT_TIP_SPRING_GAIN: float = 0.85
-const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000012
-const SOFT_DRIVE_LIMIT: float = 0.65
-const SOFT_MAX_OFFSET: float = 0.65
+# 共通default。NeckRangePreviewの未承認調整値はこのconstを書き換えず、
+# set_soft_tuning()で当該ActionMotionインスタンスだけへ適用する。
+const SOFT_ROOT_HINGE_HZ: float = 7.0
+const SOFT_ROOT_HINGE_DAMPING: float = 0.44
+const SOFT_ROOT_MAX_OFFSET: float = 0.22
+const SOFT_ROOT_BLEND_END: float = 0.12
+const SOFT_ROOT_START_WEIGHT: float = 1.0
+const SOFT_MAX_OFFSET_STEP: float = 0.055
+const SOFT_ROOT_DRIVE_RATIO: float = 0.70
+const SOFT_NEXT_DRIVE_RATIO: float = 0.30
+const SOFT_THIRD_DRIVE_RATIO: float = 0.0
+const SOFT_CHAIN_HZ: float = 8.5
+const SOFT_ROOT_DAMPING: float = 0.50
+const SOFT_TIP_DAMPING: float = 0.18
+const SOFT_SHAPE_RESTORE_RATIO: float = 0.05
+const SOFT_RELATIVE_DAMPING_ROOT: float = 0.0
+const SOFT_RELATIVE_DAMPING_TIP: float = 0.0
+const SOFT_TIP_SPRING_GAIN: float = 1.75
+const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000010
+const SOFT_DRIVE_LIMIT: float = 0.70
+const SOFT_MAX_OFFSET: float = 0.70
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -66,6 +68,107 @@ var _soft_previous_forward_px: float = 0.0
 var _soft_previous_forward_velocity: float = 0.0
 var _soft_previous_angle: float = 0.0
 var _soft_motion_initialized: bool = false
+
+var soft_control_targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
+var soft_root_hinge_hz: float = SOFT_ROOT_HINGE_HZ
+var soft_root_hinge_damping: float = SOFT_ROOT_HINGE_DAMPING
+var soft_root_max_offset: float = SOFT_ROOT_MAX_OFFSET
+var soft_root_blend_end: float = SOFT_ROOT_BLEND_END
+var soft_root_start_weight: float = SOFT_ROOT_START_WEIGHT
+var soft_max_offset_step: float = SOFT_MAX_OFFSET_STEP
+var soft_root_drive_ratio: float = SOFT_ROOT_DRIVE_RATIO
+var soft_next_drive_ratio: float = SOFT_NEXT_DRIVE_RATIO
+var soft_third_drive_ratio: float = SOFT_THIRD_DRIVE_RATIO
+var soft_chain_hz: float = SOFT_CHAIN_HZ
+var soft_root_damping: float = SOFT_ROOT_DAMPING
+var soft_tip_damping: float = SOFT_TIP_DAMPING
+var soft_shape_restore_ratio: float = SOFT_SHAPE_RESTORE_RATIO
+var soft_relative_damping_root: float = SOFT_RELATIVE_DAMPING_ROOT
+var soft_relative_damping_tip: float = SOFT_RELATIVE_DAMPING_TIP
+var soft_tip_spring_gain: float = SOFT_TIP_SPRING_GAIN
+var soft_forward_accel_drive: float = SOFT_FORWARD_ACCEL_DRIVE
+var soft_drive_limit: float = SOFT_DRIVE_LIMIT
+var soft_max_offset: float = SOFT_MAX_OFFSET
+
+
+func set_soft_tuning(tuning: Dictionary) -> bool:
+	var targets_value = tuning.get("control_targets", soft_control_targets)
+	if not (targets_value is Array) or targets_value.size() != SOFT_CONTROL_COUNT:
+		return false
+	var targets: Array[float] = []
+	var previous: float = -1.0
+	for raw in targets_value:
+		if typeof(raw) not in [TYPE_FLOAT, TYPE_INT]:
+			return false
+		var value: float = float(raw)
+		if not is_finite(value) or value < 0.0 or value > 1.0 or value <= previous:
+			return false
+		targets.append(value)
+		previous = value
+	if not is_zero_approx(targets[0]) or not is_equal_approx(targets[-1], 1.0):
+		return false
+
+	var numeric_keys: Array[String] = [
+		"root_hinge_hz", "root_hinge_damping", "root_max_offset", "root_blend_end",
+		"root_start_weight", "max_offset_step", "root_drive_ratio", "next_drive_ratio",
+		"third_drive_ratio", "chain_hz", "root_damping", "tip_damping",
+		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
+		"tip_spring_gain", "forward_accel_drive", "drive_limit", "max_offset"
+	]
+	for key in numeric_keys:
+		if tuning.has(key):
+			var raw_value = tuning[key]
+			if typeof(raw_value) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(raw_value)):
+				return false
+
+	soft_control_targets = targets
+	soft_root_hinge_hz = maxf(0.01, float(tuning.get("root_hinge_hz", soft_root_hinge_hz)))
+	soft_root_hinge_damping = maxf(0.0, float(tuning.get("root_hinge_damping", soft_root_hinge_damping)))
+	soft_root_max_offset = maxf(0.0, float(tuning.get("root_max_offset", soft_root_max_offset)))
+	soft_root_blend_end = clampf(float(tuning.get("root_blend_end", soft_root_blend_end)), 0.001, 1.0)
+	soft_root_start_weight = clampf(float(tuning.get("root_start_weight", soft_root_start_weight)), 0.0, 1.0)
+	soft_max_offset_step = maxf(0.0001, float(tuning.get("max_offset_step", soft_max_offset_step)))
+	soft_root_drive_ratio = maxf(0.0, float(tuning.get("root_drive_ratio", soft_root_drive_ratio)))
+	soft_next_drive_ratio = maxf(0.0, float(tuning.get("next_drive_ratio", soft_next_drive_ratio)))
+	soft_third_drive_ratio = maxf(0.0, float(tuning.get("third_drive_ratio", soft_third_drive_ratio)))
+	soft_chain_hz = maxf(0.01, float(tuning.get("chain_hz", soft_chain_hz)))
+	soft_root_damping = maxf(0.0, float(tuning.get("root_damping", soft_root_damping)))
+	soft_tip_damping = maxf(0.0, float(tuning.get("tip_damping", soft_tip_damping)))
+	soft_shape_restore_ratio = clampf(float(tuning.get("shape_restore_ratio", soft_shape_restore_ratio)), 0.0, 1.0)
+	soft_relative_damping_root = maxf(0.0, float(tuning.get("relative_damping_root", soft_relative_damping_root)))
+	soft_relative_damping_tip = maxf(0.0, float(tuning.get("relative_damping_tip", soft_relative_damping_tip)))
+	soft_tip_spring_gain = maxf(0.0, float(tuning.get("tip_spring_gain", soft_tip_spring_gain)))
+	soft_forward_accel_drive = maxf(0.0, float(tuning.get("forward_accel_drive", soft_forward_accel_drive)))
+	soft_drive_limit = maxf(0.0, float(tuning.get("drive_limit", soft_drive_limit)))
+	soft_max_offset = maxf(0.0, float(tuning.get("max_offset", soft_max_offset)))
+	_build_soft_controls()
+	_reset_soft_motion()
+	return true
+
+
+func soft_tuning_snapshot() -> Dictionary:
+	return {
+		"control_targets": soft_control_targets.duplicate(),
+		"root_hinge_hz": soft_root_hinge_hz,
+		"root_hinge_damping": soft_root_hinge_damping,
+		"root_max_offset": soft_root_max_offset,
+		"root_blend_end": soft_root_blend_end,
+		"root_start_weight": soft_root_start_weight,
+		"max_offset_step": soft_max_offset_step,
+		"root_drive_ratio": soft_root_drive_ratio,
+		"next_drive_ratio": soft_next_drive_ratio,
+		"third_drive_ratio": soft_third_drive_ratio,
+		"chain_hz": soft_chain_hz,
+		"root_damping": soft_root_damping,
+		"tip_damping": soft_tip_damping,
+		"shape_restore_ratio": soft_shape_restore_ratio,
+		"relative_damping_root": soft_relative_damping_root,
+		"relative_damping_tip": soft_relative_damping_tip,
+		"tip_spring_gain": soft_tip_spring_gain,
+		"forward_accel_drive": soft_forward_accel_drive,
+		"drive_limit": soft_drive_limit,
+		"max_offset": soft_max_offset
+	}
 
 
 func configure(profile) -> bool:
@@ -337,8 +440,7 @@ func _build_soft_controls() -> void:
 	if fractions.is_empty():
 		return
 	# 根元側へcontrolを密に置き、最初の10%を剛体にしない。
-	var targets: Array[float] = [0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00]
-	for target in targets:
+	for target in soft_control_targets:
 		var best_index: int = 0
 		var best_distance: float = INF
 		for i in range(fractions.size()):
@@ -401,7 +503,7 @@ func _advance_softness(
 	_soft_previous_forward_px = forward_px
 	_soft_previous_forward_velocity = forward_velocity
 	_soft_previous_angle = angle
-	var drive: float = clampf(-forward_acceleration * SOFT_FORWARD_ACCEL_DRIVE, -SOFT_DRIVE_LIMIT, SOFT_DRIVE_LIMIT)
+	var drive: float = clampf(-forward_acceleration * soft_forward_accel_drive, -soft_drive_limit, soft_drive_limit)
 	var remaining: float = delta
 	while remaining > 0.0000001:
 		var step: float = minf(remaining, SOFT_MAX_STEP)
@@ -409,16 +511,16 @@ func _advance_softness(
 		var previous_velocity: PackedFloat32Array = _soft_velocities.duplicate()
 		var root_index: int = _soft_control_indices[0]
 		var root_baseline: float = angle + current_angles[root_index]
-		var root_target: float = root_baseline + drive * SOFT_ROOT_DRIVE_RATIO
+		var root_target: float = root_baseline + drive * soft_root_drive_ratio
 		var root_error: float = wrapf(root_target - previous_world[0], -PI, PI)
-		var root_omega: float = TAU * SOFT_ROOT_HINGE_HZ
-		var root_acceleration: float = root_omega * root_omega * root_error - 2.0 * SOFT_ROOT_HINGE_DAMPING * root_omega * previous_velocity[0]
+		var root_omega: float = TAU * soft_root_hinge_hz
+		var root_acceleration: float = root_omega * root_omega * root_error - 2.0 * soft_root_hinge_damping * root_omega * previous_velocity[0]
 		var root_velocity: float = previous_velocity[0] + root_acceleration * step
 		var root_world: float = previous_world[0] + root_velocity * step
-		var root_offset: float = clampf(wrapf(root_world - root_baseline, -PI, PI), -SOFT_ROOT_MAX_OFFSET, SOFT_ROOT_MAX_OFFSET)
+		var root_offset: float = clampf(wrapf(root_world - root_baseline, -PI, PI), -soft_root_max_offset, soft_root_max_offset)
 		_soft_world_angles[0] = root_baseline + root_offset
 		_soft_velocities[0] = root_velocity
-		if absf(root_offset) >= SOFT_ROOT_MAX_OFFSET - 0.0001:
+		if absf(root_offset) >= soft_root_max_offset - 0.0001:
 			_soft_velocities[0] *= 0.35
 		for control in range(1, _soft_control_indices.size()):
 			var index: int = _soft_control_indices[control]
@@ -426,17 +528,17 @@ func _advance_softness(
 			var desired_curve: float = wrapf(current_angles[index] - current_angles[previous_index], -PI, PI)
 			var coupled_target: float = previous_world[control - 1] + desired_curve
 			if control == 1:
-				coupled_target += drive * SOFT_NEXT_DRIVE_RATIO
+				coupled_target += drive * soft_next_drive_ratio
 			elif control == 2:
-				coupled_target += drive * SOFT_THIRD_DRIVE_RATIO
+				coupled_target += drive * soft_third_drive_ratio
 			var absolute_target: float = angle + current_angles[index]
-			var target: float = lerp_angle(coupled_target, absolute_target, SOFT_SHAPE_RESTORE_RATIO)
+			var target: float = lerp_angle(coupled_target, absolute_target, soft_shape_restore_ratio)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
-			var damping: float = lerpf(SOFT_ROOT_DAMPING, SOFT_TIP_DAMPING, fraction)
-			var relative_damping: float = lerpf(SOFT_RELATIVE_DAMPING_ROOT, SOFT_RELATIVE_DAMPING_TIP, fraction)
-			var spring_gain: float = lerpf(1.0, SOFT_TIP_SPRING_GAIN, fraction * fraction)
-			var omega: float = TAU * SOFT_CHAIN_HZ
+			var damping: float = lerpf(soft_root_damping, soft_tip_damping, fraction)
+			var relative_damping: float = lerpf(soft_relative_damping_root, soft_relative_damping_tip, fraction)
+			var spring_gain: float = lerpf(1.0, soft_tip_spring_gain, fraction * fraction)
+			var omega: float = TAU * soft_chain_hz
 			var relative_velocity: float = previous_velocity[control] - previous_velocity[control - 1]
 			var acceleration: float = (
 				omega * omega * spring_gain * error
@@ -455,7 +557,7 @@ func _control_offset(control: int) -> float:
 		return 0.0
 	var index: int = _soft_control_indices[control]
 	var baseline: float = attachment_angle + current_angles[index]
-	var limit: float = SOFT_ROOT_MAX_OFFSET if control == 0 else SOFT_MAX_OFFSET
+	var limit: float = soft_root_max_offset if control == 0 else soft_max_offset
 	return clampf(wrapf(_soft_world_angles[control] - baseline, -PI, PI), -limit, limit)
 
 
@@ -479,8 +581,8 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 		var interpolated: float = lerpf(_control_offset(control), _control_offset(control + 1), weight)
 		# 根元〜30%へ勾配を作る。根元区間を一体回転させず、最初の区間から
 		# 中央手前まで角度差を積み上げて「根元から曲がる」見え方にする。
-		var root_progress: float = smoothstep(0.0, SOFT_ROOT_BLEND_END, s)
-		var root_weight: float = lerpf(SOFT_ROOT_START_WEIGHT, 1.0, root_progress)
+		var root_progress: float = smoothstep(0.0, soft_root_blend_end, s)
+		var root_weight: float = lerpf(soft_root_start_weight, 1.0, root_progress)
 		var root_component: float = root_offset * root_weight
 		var chain_component: float = (interpolated - root_offset) * root_progress
 		offsets[i] = root_component + chain_component
@@ -493,9 +595,9 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 
 	# 隣接区間の角度差を両方向から制限し、面反転を防ぎながら曲げを全体へ分散する。
 	for i in range(1, offsets.size()):
-		offsets[i] = clampf(offsets[i], offsets[i - 1] - SOFT_MAX_OFFSET_STEP, offsets[i - 1] + SOFT_MAX_OFFSET_STEP)
+		offsets[i] = clampf(offsets[i], offsets[i - 1] - soft_max_offset_STEP, offsets[i - 1] + soft_max_offset_STEP)
 	for i in range(offsets.size() - 2, -1, -1):
-		offsets[i] = clampf(offsets[i], offsets[i + 1] - SOFT_MAX_OFFSET_STEP, offsets[i + 1] + SOFT_MAX_OFFSET_STEP)
+		offsets[i] = clampf(offsets[i], offsets[i + 1] - soft_max_offset_STEP, offsets[i + 1] + soft_max_offset_STEP)
 
 	for i in range(result.size()):
 		result[i] += offsets[i] * softness
