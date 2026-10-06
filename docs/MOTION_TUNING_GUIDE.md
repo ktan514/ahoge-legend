@@ -172,7 +172,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 旧4秒往復は廃止した。「攻撃速度テスト」は後端-0.4Dで保持した後、約0.15秒で前端+0.4Dへ切り返す。
 
-現在の調整対象はNeckRangePreviewだけ。頭部運動は変更しない。NeckRangePreview専用tuning profileで9 controlを0/2/5/10/18/30/45/65/100%へ配置し、根元側へさらに密にする。共通defaultとMotionPreviewはこの実験値をまだ使わない。Human Verification合格後に、このprofileをそのまま共通defaultへ昇格する。
+現在の調整対象はNeckRangePreviewだけ。頭部運動は変更しない。NeckRangePreview専用tuning profileで9 controlを0/2/5/10/18/30/45/65/100%へ配置する。さらに、頭部が高速移動している間だけ待機C字の局所曲率保持を弱め、根元〜中央からC字自体をほどく。停止時は曲率保持を100%へ戻し、元のC字へ復元する。共通defaultとMotionPreviewはこの実験値をまだ使わない。
 
 主な初期値:
 
@@ -185,13 +185,16 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_ROOT_BLEND_END` | 0.30 | 根元の曲げを根元〜中央手前へ分散する範囲 |
 | `SOFT_ROOT_START_WEIGHT` | 0.35 | 最初の区間へ与えるroot offset比率。剛体回転を避ける |
 | `SOFT_MAX_OFFSET_STEP` | 0.045 rad | 隣接区間のoffset差上限 |
-| `SOFT_CHAIN_HZ` | 6.5 Hz | 全体の追従速度 |
-| `SOFT_ROOT_DAMPING` | 0.34 | 根元側controlの減衰 |
-| `SOFT_TIP_DAMPING` | 0.60 | 毛先側の絶対減衰。先端だけの振動を抑える |
-| `SOFT_RELATIVE_DAMPING_ROOT` | 0.10 | 根元側の隣接区間相対速度減衰 |
-| `SOFT_RELATIVE_DAMPING_TIP` | 0.60 | 毛先側の隣接区間相対速度減衰。局所共振を抑える |
-| `SOFT_SHAPE_RESTORE_RATIO` | 0.025 | 基準形状への直接復元 |
-| `SOFT_TIP_SPRING_GAIN` | 0.85 | 毛先ばね。1未満として先端増幅をしない |
+| `SOFT_CHAIN_HZ` | 5.2 Hz | 全体の追従速度。根元〜中央も遅らせる |
+| `SOFT_ROOT_DAMPING` | 0.38 | 根元側controlの減衰 |
+| `SOFT_TIP_DAMPING` | 0.82 | 毛先側の絶対減衰。先端だけの振動を強く抑える |
+| `SOFT_RELATIVE_DAMPING_ROOT` | 0.18 | 根元側の隣接区間相対速度減衰 |
+| `SOFT_RELATIVE_DAMPING_TIP` | 0.82 | 毛先側の隣接区間相対速度減衰 |
+| `SOFT_SHAPE_RESTORE_RATIO` | 0.018 | 基準形状への直接復元 |
+| `SOFT_TIP_SPRING_GAIN` | 0.62 | 毛先ばね。先端増幅を抑える |
+| `SOFT_DYNAMIC_CURVE_RETENTION` | 0.12 | 高速移動時に残す待機C字の局所曲率比率 |
+| `SOFT_CURVE_RELEASE_SPEED` | 1500 px/s | C字曲率をほどく前後速度基準 |
+| `SOFT_CURVE_RELEASE_ANGULAR_SPEED` | 6 rad/s | C字曲率をほどく角速度基準 |
 | `SOFT_FORWARD_ACCEL_DRIVE` | 0.000012 | 頭部Canvas X加速度drive |
 | `SOFT_DRIVE_LIMIT` | 0.65 rad | drive上限 |
 | `SOFT_MAX_OFFSET` | 0.65 rad | 動的追加角の上限 |
@@ -209,7 +212,7 @@ NeckRangePreviewの「アホ毛柔らかさ」0.0ではchainを基準形状へ�
 6. 頭部停止後も中央・毛先が少し動き、その後基準形状へ収束。
 7. 実STRIKEでは接触2px、固定メッシュ、振り抜き契約を維持する。
 
-現在は先端速度ではなく根元〜中央の柔らかさを優先する。確認順は「根元位置固定 → 根元直後が遅れる → 0〜30%に曲率が出る → 中央も追従遅れする → 毛先だけが大振幅にならない」。このゲートが合格するまでMotionPreviewの柔軟係数・STRIKE形状は変更しない。
+現在は先端速度ではなく根元〜中央の柔らかさを優先する。確認順は「根元位置固定 → 根元直後が遅れる → 高速移動中にC字そのものがほどける → 0〜30%から中央まで長い弧になる → 毛先だけが大振幅にならない → 停止するとC字へ戻る」。このゲートが合格するまでMotionPreviewの柔軟係数・STRIKE形状は変更しない。
 
 ## 9. 最小の反復手順
 
