@@ -20,6 +20,7 @@ Godot importが必要なfresh checkoutでは、先に `./scripts/godot-import.sh
 | --- | --- |
 | 動作 | 通常攻撃、チャージ攻撃、溜め保持、パリィ、攻撃からパリィへの中断 |
 | チャージ量 | チャージ攻撃/中断で使用。通常攻撃は0、溜め保持は最大まで保持 |
+| アホ毛柔らかさ | 0.0で動的chainなし、1.0で最大。NeckRangePreviewと同じ設定 |
 | LONG側/相手 | 左右反転と、相手LONG/SHORTを確認 |
 | 再生/停止 | Spaceでも切替可能。キー入力欄の編集中はショートカットを使わない |
 | 1コマ戻る/進む | 選択した計算fpsの1コマ。30fps=1/30秒、60fps=1/60秒、120fps=1/120秒 |
@@ -178,14 +179,14 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | 定数 | 現在値 | 主な効果 |
 | --- | ---: | --- |
 | `SOFT_CONTROL_COUNT` | 9 | 毛束を代表する動的control数 |
-| `SOFT_CHAIN_HZ` | 13 Hz | control間で運動を伝える速さ |
-| `SOFT_ROOT_DAMPING` | 0.72 | 根元側の減衰 |
-| `SOFT_TIP_DAMPING` | 0.34 | 毛先側の減衰 |
-| `SOFT_SHAPE_RESTORE_RATIO` | 0.10 | 現在のActionMotion形状へ直接戻す弱い復元。30fpsでも波を毛先まで通す |
-| `SOFT_TIP_SPRING_GAIN` | 2.0 | 毛先側のspring力。遅れて到達した運動を弱めすぎない |
-| `SOFT_FORWARD_ACCEL_DRIVE` | 0.000008 | 頭部Canvas X加速度をcontrol 1へ与えるdrive |
-| `SOFT_DRIVE_LIMIT` | 0.65 rad | 加速度driveの上限 |
-| `SOFT_MAX_OFFSET` | 0.55 rad | 動的追加角の上限。高速切り返しで輪状に巻き込まないため制限 |
+| `SOFT_CHAIN_HZ` | 8.5 Hz | control間で運動を伝える速さ。低いほど柔らかく遅れる |
+| `SOFT_ROOT_DAMPING` | 0.56 | 根元側の減衰 |
+| `SOFT_TIP_DAMPING` | 0.18 | 毛先側の減衰。低いほど振り遅れ・反動が残る |
+| `SOFT_SHAPE_RESTORE_RATIO` | 0.05 | ActionMotion基準形状へ直接戻す弱い復元 |
+| `SOFT_TIP_SPRING_GAIN` | 1.75 | 毛先へ伝播を運ぶspring力 |
+| `SOFT_FORWARD_ACCEL_DRIVE` | 0.000010 | 頭部Canvas X加速度をcontrol 1へ与えるdrive |
+| `SOFT_DRIVE_LIMIT` | 0.70 rad | 加速度driveの上限 |
+| `SOFT_MAX_OFFSET` | 0.70 rad | 動的追加角の上限 |
 
 「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、動的offsetを描画しない。1.0ではchain出力を100%使用する。静止時の形を別物にするパラメータではない。
 
