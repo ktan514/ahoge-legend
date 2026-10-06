@@ -80,6 +80,7 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
    - 区間長を弧長方向に増加させ、メッシュ自体を伸長する。
    - chargedほど最大伸長量と能動turnを増やす。
    - 接触直前の全体Transform投影は残差補正だけに縮小する。
+- 接触確定後はActive Strikeのtargetも接触時Canvas座標へfreezeし、相手のその後の移動を追尾しない。振り抜きは固定接触点からFollowThrough終点へ進む。
 
 ### Active Strike初期仕様
 
