@@ -100,8 +100,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(is_equal_approx(float(tuning["root_blend_end"]), 0.30), "NeckRange専用root blendが未適用です: " + label)
 	_expect(is_equal_approx(float(tuning["root_start_weight"]), 0.35), "NeckRange専用root weightが未適用です: " + label)
 	_expect(is_equal_approx(float(tuning["chain_hz"]), 6.5), "NeckRange専用chain Hzが未適用です: " + label)
-	_expect(is_equal_approx(float(tuning["tip_damping"]), 0.60), "NeckRange専用tip dampingが未適用です: " + label)
-	_expect(is_equal_approx(float(tuning["tip_spring_gain"]), 0.85), "NeckRange専用tip springが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["tip_damping"]), 0.82), "NeckRange専用tip dampingが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["tip_spring_gain"]), 0.62), "NeckRange専用tip springが未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["dynamic_curve_retention"]), 0.12), "NeckRange専用C字曲率解放が未適用です: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
@@ -185,6 +186,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var max_root_zone_offset: float = 0.0
 	var max_root_curve: float = 0.0
 	var max_tip_offset: float = 0.0
+	var rest_body_curvature: float = _body_curvature(actor.action_motion.rest_angles, actor.action_motion.fractions, 0.75)
+	var min_body_curvature: float = rest_body_curvature
 	var observed_seconds: float = 0.0
 	var control_indices: PackedInt32Array = actor.action_motion.soft_control_indices()
 	_expect(control_indices.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
@@ -202,6 +205,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		max_root_zone_offset = maxf(max_root_zone_offset, shape_metrics.x)
 		max_root_curve = maxf(max_root_curve, shape_metrics.y)
 		max_tip_offset = maxf(max_tip_offset, shape_metrics.z)
+		var sweep_softened: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
+		min_body_curvature = minf(min_body_curvature, _body_curvature(sweep_softened, actor.action_motion.fractions, 0.75))
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
@@ -228,6 +233,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		max_tip_offset = maxf(max_tip_offset, propagation_metrics.z)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and propagation_frame in [0, 3, 7, 11, 17, 23]:
 			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % propagation_frame)
+	_expect(rest_body_curvature > 0.10, "待機C字の曲率を測定できません: " + label)
+	_expect(min_body_curvature <= rest_body_curvature * 0.72, "高速移動中もC字曲率を保持しすぎています: %s rest=%f dynamic=%f" % [label, rest_body_curvature, min_body_curvature])
 	_expect(max_root_dynamic_offset >= 0.10, "根元ヒンジの遅れが小さすぎます: %s offset=%f" % [label, max_root_dynamic_offset])
 	_expect(max_root_zone_offset >= 0.12, "根元〜30%%が硬いままです: %s root_zone=%f" % [label, max_root_zone_offset])
 	_expect(max_root_curve >= 0.055, "根元〜30%%が一体回転して曲率が出ていません: %s curve=%f" % [label, max_root_curve])
@@ -290,6 +297,17 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_ratio(0.0)
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
+
+func _body_curvature(angles: PackedFloat32Array, fractions: PackedFloat32Array, max_fraction: float) -> float:
+	if angles.size() < 2 or angles.size() != fractions.size():
+		return 0.0
+	var total: float = 0.0
+	for i in range(1, angles.size()):
+		if fractions[i] > max_fraction:
+			break
+		total += absf(wrapf(angles[i] - angles[i - 1], -PI, PI))
+	return total
+
 
 func _soft_shape_metrics(action_motion) -> Vector3:
 	var softened: PackedFloat32Array = action_motion._softened_angles(action_motion.rest_angles)
