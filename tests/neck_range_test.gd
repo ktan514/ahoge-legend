@@ -173,6 +173,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var peak_speeds: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0])
 	var peak_times: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0])
 	var max_root_dynamic_offset: float = 0.0
+	var max_root_zone_offset: float = 0.0
+	var max_root_curve: float = 0.0
+	var max_tip_offset: float = 0.0
 	var observed_seconds: float = 0.0
 	var control_indices: PackedInt32Array = actor.action_motion.soft_control_indices()
 	_expect(control_indices.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
@@ -186,6 +189,14 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		observed_seconds += step_seconds
 		_track_soft_peaks(actor.action_motion, observed_seconds, peak_speeds, peak_times)
 		max_root_dynamic_offset = maxf(max_root_dynamic_offset, absf(actor.action_motion._control_offset(0)))
+		var shape_metrics: Vector3 = _soft_shape_metrics(actor.action_motion)
+		max_root_zone_offset = maxf(max_root_zone_offset, shape_metrics.x)
+		max_root_curve = maxf(max_root_curve, shape_metrics.y)
+		max_tip_offset = maxf(max_tip_offset, shape_metrics.z)
+		var shape_metrics: Vector3 = _soft_shape_metrics(actor.action_motion)
+		max_root_zone_offset = maxf(max_root_zone_offset, shape_metrics.x)
+		max_root_curve = maxf(max_root_curve, shape_metrics.y)
+		max_tip_offset = maxf(max_tip_offset, shape_metrics.z)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
@@ -208,12 +219,16 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		max_root_dynamic_offset = maxf(max_root_dynamic_offset, absf(actor.action_motion._control_offset(0)))
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and propagation_frame in [0, 3, 7, 11, 17, 23]:
 			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % propagation_frame)
-	_expect(max_root_dynamic_offset >= 0.06, "根元直後が硬いままで動的に曲がりません: %s offset=%f" % [label, max_root_dynamic_offset])
+	_expect(max_root_dynamic_offset >= 0.10, "根元ヒンジの遅れが小さすぎます: %s offset=%f" % [label, max_root_dynamic_offset])
+	_expect(max_root_zone_offset >= 0.12, "根元〜30%%が硬いままです: %s root_zone=%f" % [label, max_root_zone_offset])
+	_expect(max_root_curve >= 0.055, "根元〜30%%が一体回転して曲率が出ていません: %s curve=%f" % [label, max_root_curve])
+	_expect(max_root_zone_offset >= max_tip_offset * 0.30, "柔らかさが毛先へ偏りすぎています: %s root=%f tip=%f" % [label, max_root_zone_offset, max_tip_offset])
 	_expect(peak_times[0] < peak_times[1] and peak_times[1] < peak_times[2], "速度ピークが根元→中央→毛先の順に伝播しません: %s times=%s" % [label, str(peak_times)])
-	_expect(peak_speeds[2] >= peak_speeds[1] * 0.90, "毛先の速度ピークが中央で減衰しすぎています: %s speeds=%s" % [label, str(peak_speeds)])
+	_expect(peak_speeds[2] >= peak_speeds[1] * 0.55, "毛先まで運動が伝わっていません: %s speeds=%s" % [label, str(peak_speeds)])
+	_expect(peak_speeds[2] <= peak_speeds[1] * 2.20, "毛先だけがびよよーんと増幅されています: %s speeds=%s" % [label, str(peak_speeds)])
 
 	# 柔らかくしても永久に揺れ続けず、十分な保持時間で基準形へ戻る。
-	var settle_seconds: float = 0.75
+	var settle_seconds: float = 1.20
 	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
 		actor.advance_neck_preview(1.0 / fps)
 	var settled: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
@@ -266,6 +281,23 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_ratio(0.0)
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
+
+func _soft_shape_metrics(action_motion) -> Vector3:
+	var softened: PackedFloat32Array = action_motion._softened_angles(action_motion.rest_angles)
+	if softened.size() != action_motion.rest_angles.size():
+		return Vector3.ZERO
+	var i03: int = _nearest_fraction(action_motion.fractions, 0.03)
+	var i12: int = _nearest_fraction(action_motion.fractions, 0.12)
+	var i28: int = _nearest_fraction(action_motion.fractions, 0.28)
+	var i95: int = _nearest_fraction(action_motion.fractions, 0.95)
+	var o03: float = wrapf(softened[i03] - action_motion.rest_angles[i03], -PI, PI)
+	var o12: float = wrapf(softened[i12] - action_motion.rest_angles[i12], -PI, PI)
+	var o28: float = wrapf(softened[i28] - action_motion.rest_angles[i28], -PI, PI)
+	var o95: float = wrapf(softened[i95] - action_motion.rest_angles[i95], -PI, PI)
+	var root_zone: float = maxf(absf(o03), maxf(absf(o12), absf(o28)))
+	var root_curve: float = absf(o12 - o03) + absf(o28 - o12)
+	return Vector3(root_zone, root_curve, absf(o95))
+
 
 func _track_soft_peaks(action_motion, seconds: float, peak_speeds: PackedFloat32Array, peak_times: PackedFloat32Array) -> void:
 	var velocities: PackedFloat32Array = action_motion.soft_control_velocities()
