@@ -12,7 +12,9 @@ const FOLLOW_SECONDS: float = 0.16
 const SOFT_CONTROL_COUNT: int = 9
 const SOFT_ROOT_HINGE_HZ: float = 7.0
 const SOFT_ROOT_HINGE_DAMPING: float = 0.44
-const SOFT_ROOT_MAX_OFFSET: float = 0.38
+const SOFT_ROOT_MAX_OFFSET: float = 0.22
+const SOFT_ROOT_BLEND_END: float = 0.12
+const SOFT_MAX_OFFSET_STEP: float = 0.055
 const SOFT_ROOT_DRIVE_RATIO: float = 0.70
 const SOFT_NEXT_DRIVE_RATIO: float = 0.30
 const SOFT_CHAIN_HZ: float = 8.5
@@ -449,7 +451,10 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 	if values.size() != fractions.size() or softness <= 0.000001 or _soft_control_indices.size() < 2:
 		return values.duplicate()
 	var result: PackedFloat32Array = values.duplicate()
+	var offsets: PackedFloat32Array = PackedFloat32Array()
+	offsets.resize(result.size())
 	var control: int = 0
+	var root_offset: float = _control_offset(0)
 	for i in range(result.size()):
 		var s: float = fractions[i]
 		while control < _soft_control_indices.size() - 2 and s > fractions[_soft_control_indices[control + 1]]:
@@ -459,8 +464,24 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 		var left_s: float = fractions[left_index]
 		var right_s: float = fractions[right_index]
 		var weight: float = 0.0 if right_s <= left_s else clampf((s - left_s) / (right_s - left_s), 0.0, 1.0)
-		var offset: float = lerpf(_control_offset(control), _control_offset(control + 1), weight)
-		result[i] += offset * softness
+		var interpolated: float = lerpf(_control_offset(control), _control_offset(control + 1), weight)
+		# 根元ヒンジを1断面へ集中させず、先頭12%へ滑らかに広げる。
+		offsets[i] = lerpf(root_offset, interpolated, smoothstep(0.0, SOFT_ROOT_BLEND_END, s))
+
+	# 動的offset自体も軽く平滑化し、根元で折れた関節のような角を作らない。
+	for pass_index in range(2):
+		var source: PackedFloat32Array = offsets.duplicate()
+		for i in range(1, offsets.size() - 1):
+			offsets[i] = source[i - 1] * 0.20 + source[i] * 0.60 + source[i + 1] * 0.20
+
+	# 隣接区間の角度差を両方向から制限し、面反転を防ぎながら曲げを全体へ分散する。
+	for i in range(1, offsets.size()):
+		offsets[i] = clampf(offsets[i], offsets[i - 1] - SOFT_MAX_OFFSET_STEP, offsets[i - 1] + SOFT_MAX_OFFSET_STEP)
+	for i in range(offsets.size() - 2, -1, -1):
+		offsets[i] = clampf(offsets[i], offsets[i + 1] - SOFT_MAX_OFFSET_STEP, offsets[i + 1] + SOFT_MAX_OFFSET_STEP)
+
+	for i in range(result.size()):
+		result[i] += offsets[i] * softness
 	return result
 
 
