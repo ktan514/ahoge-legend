@@ -28,6 +28,9 @@ const NECK_SOFT_TUNING := {
 	"relative_damping_tip": 0.82,
 	"tip_spring_gain": 0.62,
 	"dynamic_curve_retention": 0.12,
+	"directional_curve_retention": 0.03,
+	"directional_root_max_offset": 1.75,
+	"directional_max_offset": 2.40,
 	"curve_release_speed": 1500.0,
 	"curve_release_angular_speed": 6.0,
 	"forward_accel_drive": 0.000012,
@@ -39,6 +42,8 @@ var neck_preview_enabled: bool = false
 var neck_travel_ratio: float = 0.0
 var neck_gaze_max_degrees: float = DEFAULT_GAZE_MAX_DEGREES
 var ahoge_softness: float = 1.0
+var ahoge_directional_amount: float = 0.0
+var ahoge_directional_direction: float = 0.0
 var _neck_soft_tuning_applied: bool = false
 
 
@@ -87,6 +92,14 @@ func _ensure_neck_soft_tuning() -> bool:
 	return _neck_soft_tuning_applied
 
 
+func set_neck_ahoge_directional_extension(amount: float, direction: float) -> bool:
+	if not is_finite(amount) or not is_finite(direction):
+		return false
+	ahoge_directional_amount = clampf(amount, 0.0, 1.0)
+	ahoge_directional_direction = clampf(direction, -1.0, 1.0)
+	return true
+
+
 func reset_ahoge_soft_follow() -> void:
 	if not _ensure_neck_soft_tuning():
 		return
@@ -107,6 +120,8 @@ func neck_gaze_elevation_degrees() -> float:
 func clear_neck_preview() -> void:
 	neck_preview_enabled = false
 	neck_travel_ratio = 0.0
+	ahoge_directional_amount = 0.0
+	ahoge_directional_direction = 0.0
 	_head_offset = Vector2.ZERO
 	_head_velocity = Vector2.ZERO
 	_head_acceleration = Vector2.ZERO
@@ -175,7 +190,9 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 						true,
 						deg_to_rad(_head_rotation),
 						ahoge_softness,
-						_head_offset.x
+						_head_offset.x,
+						ahoge_directional_amount,
+						ahoge_directional_direction
 					)
 					idle_vertices = action_motion.visual_vertices()
 				else:
