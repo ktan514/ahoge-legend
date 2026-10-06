@@ -172,7 +172,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 旧4秒往復は廃止した。「攻撃速度テスト」は後端-0.4Dで保持した後、約0.15秒で前端+0.4Dへ切り返す。
 
-現在の調整対象はNeckRangePreview。頭部運動は変更しない。9 controlを0/2/5/10/18/30/45/65/100%へ配置し、根元側へさらに密にする。根元頂点の位置は固定したまま、根元接線は4.5Hzで遅れて追従し、加速度driveも根元〜30%へ分配する。毛先側のspring増幅は弱め、根元〜中央の曲率を優先する。
+現在の調整対象はNeckRangePreviewだけ。頭部運動は変更しない。NeckRangePreview専用tuning profileで9 controlを0/2/5/10/18/30/45/65/100%へ配置し、根元側へさらに密にする。共通defaultとMotionPreviewはこの実験値をまだ使わない。Human Verification合格後に、このprofileをそのまま共通defaultへ昇格する。
 
 主な初期値:
 
@@ -196,7 +196,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_DRIVE_LIMIT` | 0.65 rad | drive上限 |
 | `SOFT_MAX_OFFSET` | 0.65 rad | 動的追加角の上限 |
 
-「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、動的offsetを描画しない。1.0ではchain出力を100%使用する。静止時の形を別物にするパラメータではない。
+NeckRangePreviewの「アホ毛柔らかさ」0.0ではchainを基準形状へ同期し、1.0ではNeck専用tuning profileの出力を100%使用する。ここで確定するまではMotionPreviewへ係数を同期しない。
 
 確認する順序:
 
@@ -209,7 +209,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 6. 頭部停止後も中央・毛先が少し動き、その後基準形状へ収束。
 7. 実STRIKEでは接触2px、固定メッシュ、振り抜き契約を維持する。
 
-現在は先端速度ではなく根元〜中央の柔らかさを優先する。確認順は「根元位置固定 → 根元直後が遅れる → 0〜30%に曲率が出る → 中央も追従遅れする → 毛先だけが大振幅にならない」。このゲートが合格するまでMotionPreviewのSTRIKE形状は調整しない。
+現在は先端速度ではなく根元〜中央の柔らかさを優先する。確認順は「根元位置固定 → 根元直後が遅れる → 0〜30%に曲率が出る → 中央も追従遅れする → 毛先だけが大振幅にならない」。このゲートが合格するまでMotionPreviewの柔軟係数・STRIKE形状は変更しない。
 
 ## 9. 最小の反復手順
 
