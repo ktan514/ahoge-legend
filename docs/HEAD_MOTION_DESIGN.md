@@ -207,8 +207,9 @@ NeckRangePreviewでは、単にC字曲率を弱めるだけでは不足する。
 このため「攻撃速度テスト」は方向付き伸長targetを持つ。
 
 - 後端保持: directional amount=1、direction=-1。毛束全区間の目標接線を後方へ揃え、ほぼ直線へ伸ばす。
-- 前方切り返し: 0.15秒でdirectionを-1→+1へ反転する。根元側controlは先に向きを変え、中腹・毛先は慣性で後方へ残る。
-- 前端保持: directional amount=1、direction=+1。毛束全区間を前方へほぼ直線に伸ばす。
+- 前方切り返し: 0.15秒でdirectionを-1→+1へ反転する。**絶対方向targetを直接受けるのはrootだけ**とし、control 1〜8は直前controlから伝わった角度でのみ反転する。これにより中腹・毛先は慣性で後方へ残る。
+- 前端保持: rootはdirection=+1へ向く。control 1〜8はrootから順に伝播して前方へ揃い、最終的に毛束全区間がほぼ直線になる。
+- directional amount=1の間、control 1〜8へ現在directionのabsolute targetを直接混ぜない。直接混ぜると中央・毛先がchainを飛び越えて同時反転するため禁止する。
 - テスト停止/手動位置: directional amount=0。方向付き伸長を解除し、待機C字へ復元する。
 
 directional target中は待機C字の局所曲率保持をほぼ0へ落とし、ActionMotionのsegment lengthは保つ。さらに描画時も「待機角＋offset」へ戻さず、control chainが保持しているworld angleを現在の取り付け角からlocal angleへ戻して直接補間する。これにより、後端/前端の保持中はほぼ直線、切り返し中だけcontrol間の位相差で曲がる。
