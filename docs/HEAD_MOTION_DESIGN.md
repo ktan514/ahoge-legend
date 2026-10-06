@@ -83,7 +83,8 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
 - 接触確定後はActive Strikeのtargetも接触時Canvas座標へfreezeし、相手のその後の移動を追尾しない。振り抜きは固定接触点からFollowThrough終点へ進む。
 - Active Strike中にPARRYへキャンセルした場合、直前の実メッシュから中心線を保存する。PARRY entryでは中心点座標を直接lerpせず、各segmentの長さと角度を個別補間してrootから再積算する。これにより向きの違うsegment同士のショートカットで弧長が基準長より短くなることを防ぐ。
 - 断面はprofileの固定幅から毎frame再構築し、伸長中の弧長を滑らかに戻しながら断面幅を潰さない。
-- 特殊な中心線補間は、PARRY開始直前の実中心線長がprofile基準長より0.5%以上伸びている場合だけ有効化する。通常PARRY、CHARGING/WINDUPからのPARRYでは既存入口処理を使う。
+- 特殊な中心線補間は、**直前表示stateがSTRIKE**で、かつPARRY開始直前の実中心線長がprofile基準長より0.5%以上伸びている場合だけ有効化する。
+- IDLE / CHARGING / WINDUP / COOLDOWNからのPARRYでは、中心線長に関係なく既存入口処理を使う。WINDUPの後方アーチをActive Strike伸長と誤認しない。
 - Active StrikeからPARRYへ入る最初の1frame（parry_join≈0）は、再構築せず直前の実427頂点をそのまま表示する。2frame目以降だけ中心線補間へ移る。
 - `parry_join >= 0.999`では再構築を打ち切り、PARRY本来のtarget verticesをそのまま採用する。固定部境界の接線再計算で根元〜62%が動くことを防ぐ。
 - ENTRY中心線から断面を再構築するときも、最終断面だけは平均接線ではなく「最終断面中心→tip」の最終edgeを基準にする。Active Strikeからの長い中心線を畳む途中でもtip三角形を反転させない。
