@@ -466,6 +466,10 @@ func _test_character_catalog_ui_contract() -> void:
 		"LONG_TESTは承認済み直線アホ毛asset pathを固定で持つ"
 	)
 	_expect_true(
+		absf(float(long_character.ahoge_head_anchor_x_ratio) - 0.64) < 0.0001,
+		"LONG_TESTは承認済み頭頂アンカーX比率0.64を持つ"
+	)
+	_expect_true(
 		str(short_character.head_asset_path).is_empty()
 			and str(short_character.ahoge_asset_path).is_empty(),
 		"SHORT_TESTは未素材のため従来fallbackを維持する"
