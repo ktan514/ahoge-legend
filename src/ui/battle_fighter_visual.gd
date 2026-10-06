@@ -5,8 +5,11 @@ const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
 const HeadMotionScript := preload("res://src/ui/battle_head_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
 const FOLLOW_EDGE_MARGIN: float = 12.0
-const WHIP_REACH_START_Q: float = 0.30
-const WHIP_REACH_FULL_Q: float = 0.65
+const WHIP_REACH_EARLY_START_Q: float = 0.20
+const WHIP_REACH_EARLY_FULL_Q: float = 0.42
+const WHIP_REACH_EARLY_WEIGHT: float = 0.36
+const WHIP_REACH_LATE_START_Q: float = 0.45
+const WHIP_REACH_LATE_FULL_Q: float = 0.68
 
 var arena_canvas_rect: Rect2 = Rect2()
 var last_contact_error: float = INF
@@ -455,7 +458,17 @@ func present_toward(target_canvas: Vector2) -> void:
 			else:
 				# q=1のActive形状から求めた最終reach倍率を早い区間で確定する。
 				# terminal snap開始前に倍率変化を終え、接触直前の中央同時加速を防ぐ。
-				var reach_progress: float = smoothstep(WHIP_REACH_START_Q, WHIP_REACH_FULL_Q, q)
+				var early_reach: float = WHIP_REACH_EARLY_WEIGHT * smoothstep(
+					WHIP_REACH_EARLY_START_Q,
+					WHIP_REACH_EARLY_FULL_Q,
+					q
+				)
+				var late_reach: float = (1.0 - WHIP_REACH_EARLY_WEIGHT) * smoothstep(
+					WHIP_REACH_LATE_START_Q,
+					WHIP_REACH_LATE_FULL_Q,
+					q
+				)
+				var reach_progress: float = clampf(early_reach + late_reach, 0.0, 1.0)
 				var reach_ratio: float = lerpf(1.0, active_reach_ratio, reach_progress)
 				base = _fixed_axis_reach(base, active_reach_axis, reach_ratio)
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
