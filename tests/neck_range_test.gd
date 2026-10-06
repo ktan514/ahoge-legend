@@ -193,10 +193,6 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		max_root_zone_offset = maxf(max_root_zone_offset, shape_metrics.x)
 		max_root_curve = maxf(max_root_curve, shape_metrics.y)
 		max_tip_offset = maxf(max_tip_offset, shape_metrics.z)
-		var shape_metrics: Vector3 = _soft_shape_metrics(actor.action_motion)
-		max_root_zone_offset = maxf(max_root_zone_offset, shape_metrics.x)
-		max_root_curve = maxf(max_root_curve, shape_metrics.y)
-		max_tip_offset = maxf(max_tip_offset, shape_metrics.z)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
@@ -217,6 +213,10 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		observed_seconds += 1.0 / fps
 		_track_soft_peaks(actor.action_motion, observed_seconds, peak_speeds, peak_times)
 		max_root_dynamic_offset = maxf(max_root_dynamic_offset, absf(actor.action_motion._control_offset(0)))
+		var propagation_metrics: Vector3 = _soft_shape_metrics(actor.action_motion)
+		max_root_zone_offset = maxf(max_root_zone_offset, propagation_metrics.x)
+		max_root_curve = maxf(max_root_curve, propagation_metrics.y)
+		max_tip_offset = maxf(max_tip_offset, propagation_metrics.z)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and propagation_frame in [0, 3, 7, 11, 17, 23]:
 			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % propagation_frame)
 	_expect(max_root_dynamic_offset >= 0.10, "根元ヒンジの遅れが小さすぎます: %s offset=%f" % [label, max_root_dynamic_offset])
