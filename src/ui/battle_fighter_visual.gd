@@ -232,10 +232,22 @@ func _blend_parry_entry_shape(
 		return target_vertices.duplicate()
 
 	var t: float = clampf(weight, 0.0, 1.0)
-	var blended_centers: PackedVector2Array = PackedVector2Array()
-	blended_centers.resize(target_centers.size())
-	for i in range(target_centers.size()):
-		blended_centers[i] = entry_centers[i].lerp(target_centers[i], t)
+	if t >= 0.999:
+		return target_vertices.duplicate()
+
+	# center座標を直接lerpすると、向きの違うsegmentが途中でショートカットして
+	# 弧長が基準長より短くなる。segment長と角度を補間してrootから再積算する。
+	var blended_centers: PackedVector2Array = PackedVector2Array([Vector2.ZERO])
+	for i in range(1, target_centers.size()):
+		var entry_edge: Vector2 = entry_centers[i] - entry_centers[i - 1]
+		var target_edge: Vector2 = target_centers[i] - target_centers[i - 1]
+		if entry_edge.length() <= 0.000001 or target_edge.length() <= 0.000001:
+			return target_vertices.duplicate()
+		var blended_length: float = lerpf(entry_edge.length(), target_edge.length(), t)
+		var blended_angle: float = lerp_angle(entry_edge.angle(), target_edge.angle(), t)
+		blended_centers.append(
+			blended_centers[-1] + Vector2.from_angle(blended_angle) * blended_length
+		)
 
 	var result: PackedVector2Array = profile.rest_vertices.duplicate()
 	result[0] = Vector2.ZERO
