@@ -207,7 +207,8 @@ NeckRangePreviewでは、単にC字曲率を弱めるだけでは不足する。
 このため「攻撃速度テスト」は方向付き伸長targetを持つ。
 
 - 後端保持: directional amount=1、direction=-1。毛束全区間の目標接線を後方へ揃え、ほぼ直線へ伸ばす。
-- 前方切り返し: 0.15秒でdirectionを-1→+1へ反転する。**絶対方向targetを直接受けるのはrootだけ**とし、control 1〜8は直前controlから伝わった角度でのみ反転する。これにより中腹・毛先は慣性で後方へ残る。
+- 前方切り返し: 頭部は従来どおり0.15秒で前へ移動する。アホ毛のdirection targetは頭部と同じsmoothstepで連続反転させず、最初の約22%は後方targetを保持した後、進行22%→62%の短区間で-1→+1へ急反転させる。これにより頭が先行し、rootが遅れて急加速する。
+- directional target中のroot hingeは通常4.5Hzではなく9.0Hzで追従し、反転開始後だけrootへ明確な加速を与える。control 1〜8は絶対方向targetを直接受けず、直前controlから伝わった角度でのみ反転する。中腹・毛先は後方へ残り、後から前方へ加速する。
 - 前端保持: rootはdirection=+1へ向く。control 1〜8はrootから順に伝播して前方へ揃い、最終的に毛束全区間がほぼ直線になる。
 - directional amount=1の間、control 1〜8へ現在directionのabsolute targetを直接混ぜない。直接混ぜると中央・毛先がchainを飛び越えて同時反転するため禁止する。
 - テスト停止/手動位置: directional amount=0。方向付き伸長を解除し、待機C字へ復元する。
@@ -242,6 +243,7 @@ directional target中は待機C字の局所曲率保持をほぼ0へ落とし、
 - 毛先spring gain: 0.45。30fpsで中央と同frame反転したため、毛先だけ応答を遅らせる。
 - 高速移動時のC字曲率保持率: 0.12。方向付き伸長targetが無い場合の補助。
 - 方向付き伸長時のC字曲率保持率: 0.03。
+- 方向付き伸長のroot hinge固有周波数: 9.0Hz。通常の柔らかさ4.5Hzとは分離し、前方切り返し時だけ鋭く反転する。
 - 方向付き伸長の根元角度上限: 1.75rad。
 - 方向付き伸長の全体動的offset上限: 2.40rad。
 - 曲率解放activityの基準: 前後速度1500px/s、角速度6rad/s、加速度drive上限。
