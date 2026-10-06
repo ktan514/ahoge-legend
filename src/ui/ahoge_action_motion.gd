@@ -19,6 +19,7 @@ const ACTIVE_MAX_OFFSET_STEP: float = 0.045
 const ACTIVE_TIP_SNAP_START_Q: float = 0.90
 const ACTIVE_TIP_SNAP_FRACTION: float = 0.70
 const ACTIVE_TIP_SNAP_WEIGHT: float = 0.70
+const ACTIVE_DISTAL_AIM_FRACTION: float = 0.55
 const SOFT_CONTROL_COUNT: int = 9
 # 共通default。NeckRangePreviewの未承認調整値はこのconstを書き換えず、
 # set_soft_tuning()で当該ActionMotionインスタンスだけへ適用する。
@@ -811,7 +812,31 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 		)
 	for i in range(base_angles.size()):
 		aimed_angles[i] = base_angles[i] + active_offsets[i]
-	return vertices_from_angles_scaled(aimed_angles, length_scales)
+	var active_vertices: PackedVector2Array = vertices_from_angles_scaled(aimed_angles, length_scales)
+	return _active_distal_aim(active_vertices, target_local, q)
+
+
+func _active_distal_aim(source: PackedVector2Array, target_local: Vector2, q: float) -> PackedVector2Array:
+	if q <= ACTIVE_TIP_SNAP_START_Q or source.is_empty() or target_local.length() <= 0.01:
+		return source
+	var width_points: int = int(_profile.WIDTH_POINTS)
+	var source_centers: PackedVector2Array = ParryScript.centers_of(source, width_points)
+	if source_centers.size() != _centers.size() or source_centers.size() < 3:
+		return source
+	var source_tip: Vector2 = source_centers[-1]
+	if source_tip.length() <= 0.01:
+		return source
+	var time_weight: float = smoothstep(ACTIVE_TIP_SNAP_START_Q, 1.0, q)
+	var turn: float = wrapf(target_local.angle() - source_tip.angle(), -PI, PI) * time_weight
+	if absf(turn) <= 0.000001:
+		return source
+	var arc: PackedFloat32Array = ParryScript.arc_fractions(source_centers)
+	var posed: PackedVector2Array = source_centers.duplicate()
+	for i in range(1, posed.size()):
+		var space_weight: float = smoothstep(ACTIVE_DISTAL_AIM_FRACTION, 1.0, arc[i])
+		posed[i] = source_centers[i].rotated(turn * space_weight)
+	posed[0] = Vector2.ZERO
+	return _vertices_from_posed_centers(posed)
 
 
 func active_stretch_ratio(contact_progress: float, charge_ratio: float) -> float:
