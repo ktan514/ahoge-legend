@@ -246,7 +246,14 @@ func present_toward(target_canvas: Vector2) -> void:
 		return
 	var confirmed: bool = _force_contact and action_motion.force_contact()
 	_force_contact = false
-	_mesh_node.set_action_pose(action_motion.visual_vertices(), action_motion.straighten, action_motion.sweep)
+	var pose_vertices: PackedVector2Array = action_motion.visual_vertices()
+	var active_q: float = 0.0
+	if _presentation_state == CombatantStateScript.ActionState.STRIKE and not confirmed:
+		var active_contact_seconds: float = action_motion.duration * action_motion.contact_ratio
+		active_q = action_motion.elapsed / maxf(active_contact_seconds, 0.001)
+		var active_target_local: Vector2 = _ahoge_rig.to_local(target_canvas)
+		pose_vertices = action_motion.active_strike_vertices(active_target_local, active_q, _visual_charge_ratio())
+	_mesh_node.set_action_pose(pose_vertices, action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
 	var base: Transform2D = _neutral_transform()
@@ -272,13 +279,14 @@ func present_toward(target_canvas: Vector2) -> void:
 			var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, action_motion.follow_progress())
 			base = _project_tip(base, base * source_tip, aim, 1.0, 1.0)
 		else:
-			var contact_vertices: PackedVector2Array = action_motion.visual_vertices_from_angles(action_motion.straight_angles)
 			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
-			# 接触前から下向きの速度を持たせ、接触後の減速曲線へつなぐ。
+			# Active Strikeで実メッシュ自身を先に相手方向へ曲げ・伸ばす。
+			# whole-transform投影は接触直前の残差補正だけへ寄せる。
 			var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
 			var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
-			var reach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
-			base = _project_tip(base, base * contact_vertices[-1], approach, reach_weight, smoothstep(0.0, WHIP_TURN_END, q))
+			var approach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
+			var residual_weight: float = approach_weight * smoothstep(0.72, 0.98, q)
+			base = _project_tip(base, base * source_tip, approach, residual_weight, smoothstep(0.55, WHIP_TURN_END, q))
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
