@@ -34,6 +34,9 @@ var _parry_blocks_old_contact: bool = false
 var _contact_frozen: bool = false
 var _contact_anchor_canvas: Vector2 = Vector2.ZERO
 var _follow_end_canvas: Vector2 = Vector2.ZERO
+var _contact_pose_vertices: PackedVector2Array = PackedVector2Array()
+var _contact_motion_transform: Transform2D = Transform2D.IDENTITY
+var _capture_contact_transform: bool = false
 var _parry_entry_vertices: PackedVector2Array = PackedVector2Array()
 var _parry_entry_centers: PackedVector2Array = PackedVector2Array()
 
@@ -109,10 +112,16 @@ func _process(delta: float) -> void:
 			_force_contact = false
 		if next_state == CombatantStateScript.ActionState.STRIKE:
 			_contact_frozen = false
+			_contact_pose_vertices = PackedVector2Array()
+			_contact_motion_transform = Transform2D.IDENTITY
+			_capture_contact_transform = false
 		_presentation_state = next_state
 	if not bool(combat_state.ahoge_available) or next_state == CombatantStateScript.ActionState.ROUND_LOCKED:
 		_force_contact = false
 		_contact_frozen = false
+		_contact_pose_vertices = PackedVector2Array()
+		_contact_motion_transform = Transform2D.IDENTITY
+		_capture_contact_transform = false
 		_parry_blocks_old_contact = true
 	# 頭部を先に更新し、同じ時計で根元から毛先へしなりを渡す。
 	super._process(delta)
@@ -351,6 +360,7 @@ func _neutral_transform() -> Transform2D:
 func _freeze_contact(target: Vector2) -> void:
 	_contact_anchor_canvas = target
 	_follow_end_canvas = _follow_end_for(target)
+	_capture_contact_transform = true
 	_contact_frozen = true
 
 
@@ -361,6 +371,68 @@ func _follow_end_for(target: Vector2) -> Vector2:
 		result.x = clampf(result.x, safe.position.x, safe.end.x)
 		result.y = clampf(result.y, safe.position.y, safe.end.y)
 	return result
+
+
+func _vertices_inside_arena_actual(candidate: Transform2D, vertices: PackedVector2Array) -> bool:
+	if not arena_canvas_rect.has_area() or _motion_node == null or _mesh_node == null:
+		return true
+	var previous: Transform2D = _motion_node.transform
+	_motion_node.transform = candidate
+	var world: Transform2D = _mesh_node.global_transform
+	var safe: Rect2 = arena_canvas_rect.grow(-0.25)
+	var inside: bool = true
+	for point in vertices:
+		if not safe.has_point(world * point):
+			inside = false
+			break
+	_motion_node.transform = previous
+	return inside
+
+
+func _follow_transform_inside_arena(
+	vertices: PackedVector2Array,
+	source_tip: Vector2,
+	progress: float
+) -> Transform2D:
+	if _contact_pose_vertices.is_empty() or source_tip.length() <= 0.01:
+		return _contact_motion_transform
+	var desired_progress: float = clampf(progress, 0.0, 1.0)
+	var desired_aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, desired_progress)
+	var reference_tip: Vector2 = _contact_motion_transform * source_tip
+	var desired: Transform2D = _project_tip(
+		_contact_motion_transform,
+		reference_tip,
+		desired_aim,
+		1.0,
+		1.0
+	)
+	if _vertices_inside_arena_actual(desired, vertices):
+		return desired
+
+	var low: float = 0.0
+	var high: float = desired_progress
+	for _iteration in range(14):
+		var middle: float = (low + high) * 0.5
+		var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, middle)
+		var candidate: Transform2D = _project_tip(
+			_contact_motion_transform,
+			reference_tip,
+			aim,
+			1.0,
+			1.0
+		)
+		if _vertices_inside_arena_actual(candidate, vertices):
+			low = middle
+		else:
+			high = middle
+	var limited_aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, low)
+	return _project_tip(
+		_contact_motion_transform,
+		reference_tip,
+		limited_aim,
+		1.0,
+		1.0
+	)
 
 
 func _fixed_axis_reach(base: Transform2D, axis_value: Vector2, ratio_value: float) -> Transform2D:
@@ -425,6 +497,16 @@ func present_toward(target_canvas: Vector2) -> void:
 		if not final_active_vertices.is_empty() and final_active_vertices[-1].length() > 0.01:
 			active_reach_ratio = clampf(active_target_local.length() / final_active_vertices[-1].length(), 0.25, 3.0)
 			active_reach_axis = active_target_local.normalized()
+	var frozen_tail_seconds: float = action_motion.follow_seconds()
+	var use_frozen_follow_pose: bool = (
+		_contact_frozen
+		and not _capture_contact_transform
+		and frozen_tail_seconds >= 0.0
+		and frozen_tail_seconds < ActionMotionScript.FOLLOW_SECONDS - 0.000001
+		and not _contact_pose_vertices.is_empty()
+	)
+	if use_frozen_follow_pose:
+		pose_vertices = _contact_pose_vertices.duplicate()
 	_mesh_node.set_action_pose(pose_vertices, action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
@@ -447,9 +529,17 @@ func present_toward(target_canvas: Vector2) -> void:
 			var end_transform: Transform2D = _project_tip(base, base * final_vertices[-1], _follow_end_canvas, 1.0, 1.0)
 			base = end_transform.interpolate_with(base, smoothstep(0.0, 0.20, action_motion.recovery_seconds()))
 		elif tail_seconds >= 0.0 and _contact_frozen and not confirmed:
-			# 接触後は実毛先を下向き軌道へ合わせる。相手の移動は参照しない。
-			var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, action_motion.follow_progress())
-			base = _project_tip(base, base * source_tip, aim, 1.0, 1.0)
+			# 接触後は接触frameの実メッシュとTransformを基準にし、
+			# 相手を追尾せず、画面内に収まる最大位置まで下方向へ振り抜く。
+			if (
+				tail_seconds < ActionMotionScript.FOLLOW_SECONDS - 0.000001
+				and not _contact_pose_vertices.is_empty()
+				and not _capture_contact_transform
+			):
+				base = _follow_transform_inside_arena(vertices, source_tip, action_motion.follow_progress())
+			else:
+				var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, action_motion.follow_progress())
+				base = _project_tip(base, base * source_tip, aim, 1.0, 1.0)
 		else:
 			if confirmed:
 				# 確定Hitの再提示は攻撃速度を進めるframeではない。
@@ -475,7 +565,22 @@ func present_toward(target_canvas: Vector2) -> void:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, 0.20, action_motion.elapsed))
-	_motion_node.transform = _fit_to_arena(base, vertices)
+	var constrained_follow: bool = (
+		_contact_frozen
+		and not _capture_contact_transform
+		and tail_seconds >= 0.0
+		and tail_seconds < ActionMotionScript.FOLLOW_SECONDS - 0.000001
+		and not _contact_pose_vertices.is_empty()
+	)
+	if constrained_follow:
+		last_safety_scale = 1.0
+		_motion_node.transform = base
+	else:
+		_motion_node.transform = _fit_to_arena(base, vertices)
+	if _capture_contact_transform:
+		_contact_motion_transform = _motion_node.transform
+		_contact_pose_vertices = _mesh_node.current_vertices.duplicate()
+		_capture_contact_transform = false
 	if confirmed:
 		_entry_transform = _motion_node.transform
 	last_contact_error = _mesh_node.to_global(source_tip).distance_to(target_canvas)
