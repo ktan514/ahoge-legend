@@ -454,8 +454,19 @@ func _control_offset(control: int) -> float:
 	return clampf(wrapf(_soft_world_angles[control] - baseline, -PI, PI), -limit, limit)
 
 
+func effective_softness() -> float:
+	var amount: float = softness
+	if state == StateScript.ActionState.STRIKE:
+		var q: float = elapsed / maxf(duration * contact_ratio, 0.001)
+		amount *= lerpf(1.0, 0.10, smoothstep(0.52, 0.98, q))
+	elif state == StateScript.ActionState.COOLDOWN:
+		amount *= 0.10 * (1.0 - smoothstep(0.0, 0.20, elapsed))
+	return clampf(amount, 0.0, 1.0)
+
+
 func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
-	if values.size() != fractions.size() or softness <= 0.000001 or _soft_control_indices.size() < 2:
+	var visual_softness: float = effective_softness()
+	if values.size() != fractions.size() or visual_softness <= 0.000001 or _soft_control_indices.size() < 2:
 		return values.duplicate()
 	var result: PackedFloat32Array = values.duplicate()
 	var offsets: PackedFloat32Array = PackedFloat32Array()
@@ -488,7 +499,7 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 		offsets[i] = clampf(offsets[i], offsets[i + 1] - SOFT_MAX_OFFSET_STEP, offsets[i + 1] + SOFT_MAX_OFFSET_STEP)
 
 	for i in range(result.size()):
-		result[i] += offsets[i] * softness
+		result[i] += offsets[i] * visual_softness
 	return result
 
 
