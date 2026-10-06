@@ -738,24 +738,29 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 	if not configured or target_local.length() <= 0.01 or not target_local.is_finite():
 		return visual_vertices()
 	var q: float = clampf(contact_progress, 0.0, 1.0)
-	var active: float = smoothstep(ACTIVE_START_Q, ACTIVE_FULL_Q, q)
-	if active <= 0.000001:
+	var global_active: float = smoothstep(ACTIVE_START_Q, ACTIVE_FULL_Q, q)
+	if global_active <= 0.000001:
 		return visual_vertices()
 	var base_angles: PackedFloat32Array = _softened_angles(current_angles)
 	var aimed_angles: PackedFloat32Array = base_angles.duplicate()
 	var desired_angle: float = target_local.angle()
 	var stretch_max: float = lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0))
-	var stretch_now: float = lerpf(1.0, stretch_max, active)
 	var length_scales: PackedFloat32Array = PackedFloat32Array()
 	var active_offsets: PackedFloat32Array = PackedFloat32Array()
 	length_scales.resize(base_angles.size())
 	active_offsets.resize(base_angles.size())
 	for i in range(base_angles.size()):
 		var s: float = fractions[i]
-		var turn_weight: float = smoothstep(ACTIVE_ROOT_FRACTION, ACTIVE_FULL_FRACTION, s) * active
+		# 能動制御もchainと同様に根元側から毛先側へ時間差で伝える。
+		# 全区間を同じactive値で動かすとmiddle/tipの速度ピークが同時になる。
+		var timing: float = smoothstep(0.08, 1.0, s)
+		var section_start: float = lerpf(ACTIVE_START_Q, 0.38, timing)
+		var section_full: float = lerpf(0.72, 0.96, timing)
+		var section_active: float = smoothstep(section_start, section_full, q)
+		var turn_weight: float = smoothstep(ACTIVE_ROOT_FRACTION, ACTIVE_FULL_FRACTION, s) * section_active
 		active_offsets[i] = wrapf(desired_angle - base_angles[i], -PI, PI) * turn_weight
-		var stretch_weight: float = smoothstep(0.08, 0.92, s) * active
-		length_scales[i] = lerpf(1.0, stretch_now, stretch_weight)
+		var stretch_weight: float = smoothstep(0.08, 0.92, s) * section_active
+		length_scales[i] = lerpf(1.0, stretch_max, stretch_weight)
 
 	# 能動turnを弧長方向へ平滑化し、1区間だけ折れる形を作らない。
 	for pass_index in range(2):
