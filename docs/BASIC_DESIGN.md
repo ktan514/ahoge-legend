@@ -266,6 +266,8 @@ Hit数が同点の場合は延長戦へ移行せず、**両者へラウンドポ
 
 ## 10. 頭部・アホ毛モーション
 
+2026-10-06更新: LONG_TESTは承認済み `ahoge_straight.png` を正本素材とする。素材上の直線形状は `bind_vertices` としてUVへ固定し、ゲーム内の待機C字は `idle_pose_vertices` として分離する。頭部固定・ロング柔軟chain・接触表示は同じprofileから生成した実メッシュへ適用する。詳細は `STRAIGHT_ASSET_HEAD_MOTION.md` を参照する。
+
 ### 10.1 基本原則
 
 マウス操作はアホ毛を直接動かす入力ではない。

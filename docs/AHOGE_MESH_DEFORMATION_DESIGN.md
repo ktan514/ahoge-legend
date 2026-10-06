@@ -51,12 +51,14 @@
 
 `src/ui/ahoge_prototype_rig.gd` は `AhogeMotionRoot` と `AhogeSprite` を持ち、全体角度とreachを描画へ適用している。これを全体運動の基準として残す。
 
-現行LONG画像:
+現行LONG画像（2026-10-06正本化）:
 
-- `assets/characters/prototype/charactor_01/ahoge.png`
-- 基準commitでのGit blob SHA: `a88e4ddec49ba65d79460f952ae3a3b841e8203a`
+- `assets/characters/prototype/charactor_01/ahoge_straight.png`
+- file SHA-256: `9055d9d420b6d81b8545a479e9eebeae995e06a6057d666be35fed01e62ca0a7`
+- Git blob SHA: `d9125c8ef6a12a8000d5976d5691c5cb1944ce39`
+- 963×1633、root `(476,1596)`、tip `(622.5,13)`
 
-ZIP内の旧素材と現行のピンクの素材は同一画像として扱わない。旧素材の固定anchor `180,1175` を、新しい画像の実際の根元だと無検証でみなさない。実装前に現行PNGの寸法、根元、実際の毛先を確認してデータへ記録する。
+この素材はほぼ直線なので、PNG上の断面を `bind_vertices` としてUVへ固定し、ゲーム内のC字待機姿勢を `idle_pose_vertices` へ分離する。以下のC字画像を直接変形する説明は旧 `ahoge.png` を使った設計履歴として残し、現行UV sourceの説明とは区別する。
 
 ### 3.3 動画と新規設計
 

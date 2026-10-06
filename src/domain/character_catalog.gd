@@ -12,7 +12,7 @@ static func all() -> Array:
 		CharacterDefinitionScript.AttackType.SWING,
 		"長いアホ毛で間合いを取るスタンダード型",
 		"res://assets/characters/prototype/charactor_01/head.png",
-		"res://assets/characters/prototype/charactor_01/ahoge.png"
+		"res://assets/characters/prototype/charactor_01/ahoge_straight.png"
 	))
 	characters.append(CharacterDefinitionScript.create(
 		"SHORT_TEST",

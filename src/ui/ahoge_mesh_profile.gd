@@ -1,6 +1,7 @@
 extends Resource
 
-# 現行素材の輪郭に沿って制作した断面を読み、固定UVと9形状を一度だけ作る。
+# 素材ごとに制作した断面を読み、固定UVと9形状を一度だけ作る。
+# 直線素材では素材座標(bind)とゲーム内待機姿勢(idle)を分離する。
 # 画像の横走査や実行中の輪郭推測は行わない。
 @export var source_texture_path: String = ""
 @export var source_size: Vector2i = Vector2i(1254, 1254)
@@ -11,6 +12,8 @@ extends Resource
 @export var section_left_px: PackedVector2Array = PackedVector2Array()
 @export var section_right_px: PackedVector2Array = PackedVector2Array()
 @export var straight_direction: float = -0.85
+@export var idle_pose_vertices: PackedVector2Array = PackedVector2Array()
+var bind_vertices: PackedVector2Array = PackedVector2Array()
 
 const WIDTH_POINTS: int = 5
 const KEY_COUNT: int = 9
@@ -26,6 +29,10 @@ var _prepared: bool = false
 func prepare() -> bool:
 	if _prepared:
 		return true
+	uvs.clear()
+	indices.clear()
+	shape_keys.clear()
+	boundary_indices.clear()
 	var count: int = section_left_px.size()
 	if count < 8 or count != section_right_px.size():
 		return false
@@ -40,8 +47,21 @@ func prepare() -> bool:
 			rest_vertices.append(section_left_px[row].lerp(section_right_px[row], across) - root_anchor_px)
 	centers.append(tip_px)
 	rest_vertices.append(tip_px - root_anchor_px)
-	for point in rest_vertices:
+	bind_vertices = rest_vertices.duplicate()
+	for point in bind_vertices:
 		uvs.append((point + root_anchor_px) / Vector2(source_size))
+	if not idle_pose_vertices.is_empty():
+		if idle_pose_vertices.size() != bind_vertices.size() or not idle_pose_vertices[0].is_equal_approx(Vector2.ZERO):
+			return false
+		for point in idle_pose_vertices:
+			if not point.is_finite():
+				return false
+		rest_vertices = idle_pose_vertices.duplicate()
+		centers = PackedVector2Array([root_anchor_px])
+		for row in range(count):
+			var first: int = 1 + row * WIDTH_POINTS
+			centers.append((rest_vertices[first] + rest_vertices[first + WIDTH_POINTS - 1]) * 0.5 + root_anchor_px)
+		centers.append(rest_vertices[-1] + root_anchor_px)
 	for column in range(WIDTH_POINTS - 1):
 		_append_triangle(0, 1 + column, 2 + column)
 	for row in range(count - 1):

@@ -1,0 +1,44 @@
+name: Straight asset and head motion
+on:
+  pull_request:
+    paths:
+      - 'assets/characters/**'
+      - 'src/ui/**'
+      - 'src/domain/character_catalog.gd'
+      - 'tests/straight_head_motion_test.gd'
+      - '.github/workflows/straight-head-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  straight-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Godotを準備
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < .godot-version)"
+          curl -L --fail --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${version}-stable/Godot_v${version}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 0755 /tmp/godot-bin/Godot* /usr/local/bin/godot
+      - name: 素材読込と既存試験
+        run: |
+          ./scripts/godot-import.sh
+          ./scripts/godot-strict.sh --headless --path . --script res://tests/run_all.gd
+      - name: 承認素材と頭部連動を実描画で検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 180s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/straight_head_motion_test.gd
+      - name: 検証資料を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: straight-head-verification
+          path: artifacts/straight-head/
+          if-no-files-found: error
+          retention-days: 7

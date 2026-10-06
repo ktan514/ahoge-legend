@@ -2,7 +2,9 @@ extends MeshInstance2D
 
 const ProfileScript := preload("res://src/ui/ahoge_mesh_profile.gd")
 const ParryMotionScript := preload("res://src/ui/ahoge_parry_motion.gd")
-const PROFILE_PATH: String = "res://assets/characters/prototype/charactor_01/ahoge_mesh_profile.tres"
+const PROFILE_PATH: String = "res://assets/characters/prototype/charactor_01/ahoge_straight_profile.tres"
+const LEGACY_PROFILE_PATH: String = "res://assets/characters/prototype/charactor_01/ahoge_mesh_profile.tres"
+const STRAIGHT_TEXTURE: String = "res://assets/characters/prototype/charactor_01/ahoge_straight.png"
 var profile: ProfileScript
 var current_vertices: PackedVector2Array = PackedVector2Array()
 var straighten: float = 0.0
@@ -18,7 +20,10 @@ func configure(source: Texture2D) -> bool:
 	mesh = null
 	_custom_pose = false
 	parry_sweep = 0.0
-	profile = load(PROFILE_PATH) as ProfileScript
+	if source == null:
+		return false
+	var profile_path: String = PROFILE_PATH if source.resource_path == STRAIGHT_TEXTURE else LEGACY_PROFILE_PATH
+	profile = load(profile_path) as ProfileScript
 	if profile == null or not profile.matches_texture(source) or not profile.prepare():
 		return false
 	texture = source

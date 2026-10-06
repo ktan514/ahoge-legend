@@ -1434,6 +1434,8 @@ MotionProfile
 
 ## 13. モーション詳細
 
+2026-10-06更新: LONG_TESTのTexture/Profile正本は `ahoge_straight.png` / `ahoge_straight_profile.tres`。Profileは素材座標の `bind_vertices` とゲーム空間の `idle_pose_vertices` を分離し、UV/indexを固定したままActionMotion・柔軟chainで頂点だけを更新する。旧 `ahoge.png` / `ahoge_mesh_profile.tres` は回帰用に保持する。
+
 ### 13.1 HeadMotion
 
 HeadMotionはアクションごとに頭部のローカル位置・回転を生成する。

@@ -462,8 +462,8 @@ func _test_character_catalog_ui_contract() -> void:
 	)
 	_expect_equal(
 		str(long_character.ahoge_asset_path),
-		"res://assets/characters/prototype/charactor_01/ahoge.png",
-		"LONG_TESTはprototypeアホ毛asset pathを固定で持つ"
+		"res://assets/characters/prototype/charactor_01/ahoge_straight.png",
+		"LONG_TESTは承認済み直線アホ毛asset pathを固定で持つ"
 	)
 	_expect_true(
 		str(short_character.head_asset_path).is_empty()

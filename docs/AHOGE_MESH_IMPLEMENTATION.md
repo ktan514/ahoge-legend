@@ -51,27 +51,28 @@ CI復旧後に新しいHEADで全検査を実行し、証跡を確認してか�
 
 ## 素材と固定メッシュ
 
-対象: `assets/characters/prototype/charactor_01/ahoge.png`
+現行LONG正本: `assets/characters/prototype/charactor_01/ahoge_straight.png`
 
-- PNG寸法: 1254 × 1254
-- PNG SHA-256: `bc0503b4ff52ce224201a58df4050eef386ab3bc1b3d34f3ec712fc26ea7c31c`
-- Git blob SHA: `a88e4ddec49ba65d79460f952ae3a3b841e8203a`
-- メッシュの根元接続点: `(558, 1146)`
-- 毛先の閉じ点: `(1050, 544)`
+- PNG寸法: 963 × 1633
+- PNG file SHA-256: `9055d9d420b6d81b8545a479e9eebeae995e06a6057d666be35fed01e62ca0a7`
+- Git blob SHA: `d9125c8ef6a12a8000d5976d5691c5cb1944ce39`
+- 素材上の根元anchor: `(476, 1596)`
+- 素材上のtip: `(622.5, 13)`
 - 85断面、幅方向5頂点、根元と先端の単独閉じ点: 427頂点
 - 固定三角形: 680面
 - 形状キー: Straighten=0から1まで0.125刻みの9形状
 
-旧HTML素材のanchor `(180,1175)` を現行メッシュへ流用しない。現行PNGに合わせた断面と接続点を `.tres` に保持する。元画像自体は変更していない。
+直線PNG上の頂点は `bind_vertices` としてUVだけの正本にする。ゲーム内の待機C字は `idle_pose_vertices` として独立保持し、PNGの縦長寸法をそのままゲーム内の長さへ変換しない。これにより承認済みの直線素材を使いながら、既存の待機シルエット・全長・断面幅を維持する。
 
-画像のY方向の走査で別の毛束部分を結ばず、根元からC字の折り返しを通って本当の先端へ向かう断面順序を固定した。待機頂点は元PNG座標そのもの、UVは0..1、隣接面は頂点IDを共有する。
+旧 `ahoge.png` / `ahoge_mesh_profile.tres` は比較・回帰用に残す。Deformerは実際のTexture pathから対応profileを選び、path・寸法・digestが一致しない組合せを拒否する。
 
 形状は読み込み時に一度だけ生成する。中心線の各区間長を維持し、弧長の先頭10%を固定、10〜32%を移行区間として、後段の向きを最終的に-0.85 radへ揃える。断面内の元頂点位置は接線変化に合わせて回転する。実行時は隣接キーの同じ頂点だけを線形補間する。
 
 ## 基準の実装ファイル
 
 - `src/ui/ahoge_mesh_profile.gd`: 素材照合、固定断面、固定UV/index、9形状の生成と補間。
-- `assets/characters/prototype/charactor_01/ahoge_mesh_profile.tres`: 現行LONG素材固有の断面座標・根元・毛先・識別情報。
+- `assets/characters/prototype/charactor_01/ahoge_straight_profile.tres`: 現行LONG正本。直線素材のbind断面、待機idle pose、根元・毛先・識別情報。
+- `assets/characters/prototype/charactor_01/ahoge_mesh_profile.tres`: 旧C字素材の比較・回帰用profile。
 - `src/ui/ahoge_mesh_deformer.gd`: MeshInstance2D / ArrayMesh。固定UV/indexを維持し、XYZ頂点領域だけを更新。全キーを含む描画境界を保持。
 - `src/ui/ahoge_mesh_motion.gd`: 接触時刻までの直線化と中断・非表示時の復帰。
 - `src/ui/ahoge_prototype_rig.gd`: 元の全体運動を残し、その内側へメッシュを接続。素材不一致時のSpriteを維持。
