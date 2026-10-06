@@ -69,6 +69,7 @@ func _process(delta: float) -> void:
 	if combat_state == null or delta <= 0.0:
 		return
 	var next_state: int = int(combat_state.action_state)
+	var previous_presentation_state: int = _presentation_state
 	if next_state != _presentation_state:
 		_recovery_head_from = _head_offset
 		_head_entry_pose = Vector3(_head_offset.x * facing, _head_offset.y, _head_rotation * facing)
@@ -90,7 +91,11 @@ func _process(delta: float) -> void:
 				)
 				var current_length: float = _centerline_length(current_centers)
 				var rest_length: float = _centerline_length(rest_centers)
-				if rest_length > 0.001 and current_length > rest_length * 1.005:
+				if (
+					previous_presentation_state == CombatantStateScript.ActionState.STRIKE
+					and rest_length > 0.001
+					and current_length > rest_length * 1.005
+				):
 					_parry_entry_vertices = _mesh_node.current_vertices.duplicate()
 					_parry_entry_centers = current_centers
 		else:
