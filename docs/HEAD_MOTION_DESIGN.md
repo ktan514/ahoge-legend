@@ -243,7 +243,7 @@ Human Verificationでは、速度driveを使うと前へ移動している間ず
 
 ### ロング攻撃への合成
 
-NeckRangePreviewだけに柔軟追従を閉じ込めず、通常BattleとMotionPreviewへ同じ柔らかさ設定を渡す。
+段階調整中はNeckRangePreviewの係数を通常Battle/MotionPreviewから隔離する。0.0〜1.0の柔らかさ入力インターフェースは共通だが、NeckRangePreviewだけが未承認の実験用tuning profileを使用する。Human Verification合格後に係数を共通defaultへ昇格する。
 
 - IDLE: 100%。
 - CHARGING: 0%。最大溜めの後方アーチと長押し静止を正とし、chainは現在姿勢へ同期する。
@@ -253,7 +253,7 @@ NeckRangePreviewだけに柔軟追従を閉じ込めず、通常BattleとMotionP
 - PARRY: 現段階では0%。既存の局所先端払いを維持する。
 - ROUND_LOCKED・アホ毛非表示: 動的状態を破棄する。
 
-MotionPreviewにはNeckRangePreviewと同じ0.0〜1.0の「アホ毛柔らかさ」入力を追加し、選択値を実BattleFighterVisualへそのまま渡す。0.0では全状態の動的chainを無効、1.0では上記state weightを100%使用する。
+MotionPreviewの0.0〜1.0入力は残すが、現段階では共通default係数を使う。NeckRangePreviewの実験係数を自動で参照しない。NeckRangePreviewがHuman Verification合格した時点で、その係数セットを共通defaultへ1回の昇格変更として反映する。
 
 攻撃では次の見え方を狙う。
 
@@ -268,7 +268,7 @@ MotionPreviewにはNeckRangePreviewと同じ0.0〜1.0の「アホ毛柔らかさ
 
 ### NeckRangePreview
 
-NeckRangePreviewを現在の最優先Human Verificationゲートとする。ここで「根元〜中央が棒で、毛先だけが振れる」状態を解消してからMotionPreviewの攻撃モーション調整へ戻る。
+NeckRangePreviewを現在の最優先Human Verificationゲートとする。ここで「頭＋アホ毛」の基礎モーションを完成させるまで、MotionPreview/Battle側の柔軟係数は更新しない。NeckRangePreviewでは専用の実験用tuning profileを使い、Human Verification合格後にそのprofile値を共通defaultへ昇格し、MotionPreviewへそのまま反映する。
 
 - 手動の後端/基準/前端ボタンは位置・根元固定確認として残す。
 - 旧4秒sin往復は慣性確認には遅すぎるため廃止する。
