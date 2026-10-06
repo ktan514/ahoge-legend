@@ -9,6 +9,12 @@ const RECOVER_SECONDS: float = 0.24
 const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
+const ACTIVE_START_Q: float = 0.18
+const ACTIVE_FULL_Q: float = 0.88
+const ACTIVE_ROOT_FRACTION: float = 0.12
+const ACTIVE_FULL_FRACTION: float = 0.55
+const ACTIVE_NORMAL_STRETCH: float = 1.22
+const ACTIVE_CHARGED_STRETCH: float = 1.45
 const SOFT_CONTROL_COUNT: int = 9
 # 共通default。NeckRangePreviewの未承認調整値はこのconstを書き換えず、
 # set_soft_tuning()で当該ActionMotionインスタンスだけへ適用する。
@@ -727,12 +733,47 @@ func _reset_soft_motion() -> void:
 	_soft_directional_direction = 0.0
 
 
-func vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
-	if not configured or values.size() != _lengths.size():
+func active_strike_vertices(target_local: Vector2, contact_progress: float, charge_ratio: float) -> PackedVector2Array:
+	if not configured or target_local.length() <= 0.01 or not target_local.is_finite():
+		return visual_vertices()
+	var q: float = clampf(contact_progress, 0.0, 1.0)
+	var active: float = smoothstep(ACTIVE_START_Q, ACTIVE_FULL_Q, q)
+	if active <= 0.000001:
+		return visual_vertices()
+	var base_angles: PackedFloat32Array = _softened_angles(current_angles)
+	var aimed_angles: PackedFloat32Array = base_angles.duplicate()
+	var desired_angle: float = target_local.angle()
+	var stretch_max: float = lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0))
+	var stretch_now: float = lerpf(1.0, stretch_max, active)
+	var length_scales: PackedFloat32Array = PackedFloat32Array()
+	length_scales.resize(base_angles.size())
+	for i in range(base_angles.size()):
+		var s: float = fractions[i]
+		var turn_weight: float = smoothstep(ACTIVE_ROOT_FRACTION, ACTIVE_FULL_FRACTION, s) * active
+		aimed_angles[i] = lerp_angle(base_angles[i], desired_angle, turn_weight)
+		var stretch_weight: float = smoothstep(0.08, 0.92, s) * active
+		length_scales[i] = lerpf(1.0, stretch_now, stretch_weight)
+	return vertices_from_angles_scaled(aimed_angles, length_scales)
+
+
+func active_stretch_ratio(contact_progress: float, charge_ratio: float) -> float:
+	var active: float = smoothstep(ACTIVE_START_Q, ACTIVE_FULL_Q, clampf(contact_progress, 0.0, 1.0))
+	return lerpf(1.0, lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0)), active)
+
+
+func vertices_from_angles_scaled(values: PackedFloat32Array, length_scales: PackedFloat32Array) -> PackedVector2Array:
+	if not configured or values.size() != _lengths.size() or length_scales.size() != _lengths.size():
 		return PackedVector2Array()
 	var posed: PackedVector2Array = PackedVector2Array([_centers[0]])
 	for i in range(values.size()):
-		posed.append(posed[-1] + Vector2.from_angle(values[i]) * _lengths[i])
+		var scale_value: float = clampf(length_scales[i], 0.25, 2.0)
+		posed.append(posed[-1] + Vector2.from_angle(values[i]) * _lengths[i] * scale_value)
+	return _vertices_from_posed_centers(posed)
+
+
+func _vertices_from_posed_centers(posed: PackedVector2Array) -> PackedVector2Array:
+	if posed.size() != _centers.size():
+		return PackedVector2Array()
 	var result: PackedVector2Array = _profile.rest_vertices.duplicate()
 	var width: int = int(_profile.WIDTH_POINTS)
 	for row in range(_centers.size() - 2):
@@ -746,6 +787,15 @@ func vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
 	result[0] = Vector2.ZERO
 	result[-1] = posed[-1]
 	return result
+
+
+func vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
+	if not configured or values.size() != _lengths.size():
+		return PackedVector2Array()
+	var posed: PackedVector2Array = PackedVector2Array([_centers[0]])
+	for i in range(values.size()):
+		posed.append(posed[-1] + Vector2.from_angle(values[i]) * _lengths[i])
+	return _vertices_from_posed_centers(posed)
 
 
 func _reset_pose() -> void:
