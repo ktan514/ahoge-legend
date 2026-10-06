@@ -172,15 +172,18 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 旧4秒往復は廃止した。「攻撃速度テスト」は後端-0.4Dで保持した後、約0.15秒で前端+0.4Dへ切り返す。
 
-現在の柔軟追従は固定遅延ではなく、9 controlの連結chain。control 0は頭部へ固定し、control 1〜8が直前controlの運動を受け取る。毛先ほど減衰を弱め、spring gainを上げる。頭部の並進は速度ではなくCanvas X加速度をcontrol 1へ入れ、加速時に後ろへ残り、減速時に毛先が追い越す波を作る。
+現在の柔軟追従は9 controlの連結chain。根元頂点の位置だけを頭部へ固定し、control 0の角度は7Hzの根元ヒンジとして遅れて追従する。controlは0/4/10/18/30/45/62/80/100%へ配置して根元側を密にし、頭部Canvas X加速度も根元ヒンジから入力する。これにより毛先だけでなく根元直後から曲げを発生させる。
 
 主な初期値:
 
 | 定数 | 現在値 | 主な効果 |
 | --- | ---: | --- |
-| `SOFT_CONTROL_COUNT` | 9 | 毛束を代表する動的control数 |
-| `SOFT_CHAIN_HZ` | 8.5 Hz | control間で運動を伝える速さ。低いほど柔らかく遅れる |
-| `SOFT_ROOT_DAMPING` | 0.56 | 根元側の減衰 |
+| `SOFT_CONTROL_COUNT` | 9 | 毛束を代表する動的control数。根元側へ密配置 |
+| `SOFT_ROOT_HINGE_HZ` | 7.0 Hz | 根元直後の角度が頭へ追従する速さ |
+| `SOFT_ROOT_HINGE_DAMPING` | 0.44 | 根元ヒンジの減衰 |
+| `SOFT_ROOT_MAX_OFFSET` | 0.38 rad | 根元直後で許す動的角度差 |
+| `SOFT_CHAIN_HZ` | 8.5 Hz | control間で運動を伝える速さ |
+| `SOFT_ROOT_DAMPING` | 0.50 | 根元側controlの減衰 |
 | `SOFT_TIP_DAMPING` | 0.18 | 毛先側の減衰。低いほど振り遅れ・反動が残る |
 | `SOFT_SHAPE_RESTORE_RATIO` | 0.05 | ActionMotion基準形状へ直接戻す弱い復元 |
 | `SOFT_TIP_SPRING_GAIN` | 1.75 | 毛先へ伝播を運ぶspring力 |
@@ -192,8 +195,9 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 確認する順序:
 
-1. 根元位置と取り付け角度は頭部へ固定。
-2. 頭部が前へ切り返した直後、根元側だけが先に反転。
+1. 根元**位置**は頭部へ固定したまま外れない。
+2. 根元直後の接線角度は頭部へ完全固定せず、目視できる遅れが出る。
+3. 頭部が前へ切り返した直後、根元側から曲げが始まる。
 3. 中央の反転が後から来る。
 4. 毛先の反転が最後に来る。
 5. 毛先の移動速度が中央より明確に上がる区間がある。
