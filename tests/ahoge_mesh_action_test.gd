@@ -164,7 +164,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 				if not contact_seen and elapsed >= contact_seconds - 0.000001:
 					contact_seen = true
 					contact_tip = tip
-					contact_softness_released = actor.action_motion.softness <= 0.12
+					contact_softness_released = actor.action_motion.effective_softness() <= 0.12
 					_expect(actor.last_contact_error <= 2.0, "ムチ打ちが接触時刻に届いていません: " + label)
 					_expect(actor.rendered_straighten() >= 0.999, "接触で先端までほどけていません: " + label)
 					if capture:
