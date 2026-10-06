@@ -5,9 +5,6 @@ const ActionMotionScript := preload("res://src/ui/ahoge_action_motion.gd")
 const HeadMotionScript := preload("res://src/ui/battle_head_motion.gd")
 const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
 const FOLLOW_EDGE_MARGIN: float = 12.0
-const WHIP_NORMAL_REACH_POWER: float = 1.8
-const WHIP_CHARGED_REACH_POWER: float = 2.8
-const WHIP_RESIDUAL_START_Q: float = 0.90
 
 var arena_canvas_rect: Rect2 = Rect2()
 var last_contact_error: float = INF
@@ -398,7 +395,10 @@ func present_toward(target_canvas: Vector2) -> void:
 		var active_contact_seconds: float = action_motion.duration * action_motion.contact_ratio
 		active_q = action_motion.elapsed / maxf(active_contact_seconds, 0.001)
 		var active_target_canvas: Vector2 = _contact_anchor_canvas if _contact_frozen else target_canvas
-		var active_target_local: Vector2 = _ahoge_rig.to_local(active_target_canvas)
+		# Active Strikeのcenterline座標系はMotionRootのneutral transformより内側。
+		# q=1でtipを目標へ一致させるため、方向だけでなく距離もmesh-localへ変換する。
+		var active_base: Transform2D = _neutral_transform()
+		var active_target_local: Vector2 = active_base.affine_inverse() * _ahoge_rig.to_local(active_target_canvas)
 		pose_vertices = action_motion.active_strike_vertices(active_target_local, active_q, _visual_charge_ratio())
 	_mesh_node.set_action_pose(pose_vertices, action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
@@ -431,14 +431,9 @@ func present_toward(target_canvas: Vector2) -> void:
 				# 過去のHit位置へ正確に戻すため、この経路だけ完全投影を許可する。
 				base = _project_tip(base, base * source_tip, target_canvas, 1.0, 1.0)
 			else:
-				var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
-				# Active Strikeで実メッシュ自身を先に相手方向へ曲げ・伸ばす。
-				# whole-transform投影は接触直前のreach残差だけへ寄せる。
-				var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
-				var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
-				var approach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
-				var residual_weight: float = approach_weight * smoothstep(WHIP_RESIDUAL_START_Q, 1.0, q)
-				base = _project_tip(base, base * source_tip, approach, residual_weight, 0.0)
+				# 通常STRIKEの接触残差はActive Strikeのdistal centerlineで解消済み。
+				# MotionRoot全体を投影せず、中央以前の速度ピークを終盤補正へ巻き込まない。
+				pass
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
