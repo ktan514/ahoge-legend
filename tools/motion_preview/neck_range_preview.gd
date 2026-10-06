@@ -269,8 +269,14 @@ static func attack_preview_direction(seconds: float) -> float:
 		return -1.0
 	t -= REAR_HOLD_SECONDS
 	if t < STRIKE_SWING_SECONDS:
-		var u: float = smoothstep(0.0, STRIKE_SWING_SECONDS, t)
-		return lerpf(-1.0, 1.0, u)
+		# 頭部は0.15秒で滑らかに前進するが、アホ毛は序盤22%を後方保持。
+		# その後22%→62%の短い区間で急反転し、rootへ明確な加速を作る。
+		var u: float = clampf(t / STRIKE_SWING_SECONDS, 0.0, 1.0)
+		if u <= 0.22:
+			return -1.0
+		if u >= 0.62:
+			return 1.0
+		return lerpf(-1.0, 1.0, smoothstep(0.22, 0.62, u))
 	t -= STRIKE_SWING_SECONDS
 	if t < FRONT_HOLD_SECONDS:
 		return 1.0
