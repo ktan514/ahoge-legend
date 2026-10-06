@@ -109,6 +109,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 	var held_vertices: PackedVector2Array = PackedVector2Array()
 	var hold_difference: float = 0.0
 	var contact_seen: bool = false
+	var max_active_length_ratio: float = 1.0
 	var phases: Array = [
 		[StateScript.ActionState.IDLE, 0.10],
 		[StateScript.ActionState.CHARGING, config.max_charge_seconds + 0.40 if charge > 0.0 else 0.02],
@@ -135,7 +136,8 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 				break
 			for point in points:
 				_expect(actor.arena_canvas_rect.grow(0.5).has_point(point), "三動作の途中でアホ毛が見切れました: " + label)
-			_check_geometry(mesh_node.current_vertices, label)
+			var allow_active_stretch: bool = state.action_state == StateScript.ActionState.STRIKE
+			_check_geometry(mesh_node.current_vertices, label, allow_active_stretch)
 			var root: Vector2 = points[0]
 			var tip: Vector2 = points[-1]
 			if state.action_state == StateScript.ActionState.CHARGING:
@@ -152,6 +154,8 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 				windup_softness_seen = windup_softness_seen or actor.action_motion.softness >= 0.449
 			if state.action_state == StateScript.ActionState.STRIKE:
 				strike_softness_seen = strike_softness_seen or actor.action_motion.softness >= 0.999
+				var active_length: float = _length(ParryScript.centers_of(mesh_node.current_vertices, 5))
+				max_active_length_ratio = maxf(max_active_length_ratio, active_length / maxf(_rest_length, 0.001))
 				trace.append({"time": elapsed, "root": [root.x, root.y], "near": [points[107].x, points[107].y], "middle": [points[237].x, points[237].y], "tip": [tip.x, tip.y]})
 				if not contact_seen and elapsed >= contact_seconds - 0.000001:
 					contact_seen = true
@@ -186,6 +190,9 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 	_expect(charge_softness_disabled, "CHARGING中に柔軟chainが最大溜め形へ重なっています: " + label)
 	_expect(windup_softness_seen, "WINDUPへ柔軟chainが接続されていません: " + label)
 	_expect(strike_softness_seen, "STRIKEへ動的柔軟追従が接続されていません: " + label)
+	var expected_active_ratio: float = 1.08 if charge <= 0.001 else 1.16
+	_expect(max_active_length_ratio >= expected_active_ratio, "STRIKEでアホ毛自身が十分に伸長していません: %s ratio=%f" % [label, max_active_length_ratio])
+	_expect(max_active_length_ratio <= 1.50, "Active Strikeの伸長が上限を超えています: %s ratio=%f" % [label, max_active_length_ratio])
 	_expect(parry_softness_disabled, "PARRYへ未承認の柔軟追従が混入しました: " + label)
 	_expect(contact_tip.distance_to(end_tip) > 10.0, "接触後に毛先が貼り付いています: " + label)
 	_expect(min_charge_guard >= 0.999, "チャージを全体縮小して見切れを隠しています: " + label)
@@ -198,12 +205,16 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 	viewport.free()
 
 
-func _check_geometry(vertices: PackedVector2Array, label: String) -> void:
+func _check_geometry(vertices: PackedVector2Array, label: String, allow_active_stretch: bool = false) -> void:
 	geometry_frames += 1
 	var centers: PackedVector2Array = ParryScript.centers_of(vertices, 5)
-	var length_error: float = absf(_length(centers) - _rest_length)
+	var current_length: float = _length(centers)
+	var length_error: float = absf(current_length - _rest_length)
 	maximum_length_error = maxf(maximum_length_error, length_error)
-	_expect(length_error < 0.04, "三動作で局所弧長が変化しました: " + label)
+	if allow_active_stretch:
+		_expect(current_length >= _rest_length * 0.995 and current_length <= _rest_length * 1.50, "Active Strikeの弧長が許容範囲外です: " + label)
+	else:
+		_expect(length_error < 0.04, "STRIKE以外で局所弧長が変化しました: " + label)
 	for row in range(85):
 		var left: int = 1 + row * 5
 		var right: int = left + 4
