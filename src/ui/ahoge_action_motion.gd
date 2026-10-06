@@ -10,8 +10,13 @@ const FOLLOW_WAVE_BEND: float = 1.10
 const FOLLOW_END_BEND: float = 0.78
 const FOLLOW_SECONDS: float = 0.16
 const SOFT_CONTROL_COUNT: int = 9
+const SOFT_ROOT_HINGE_HZ: float = 7.0
+const SOFT_ROOT_HINGE_DAMPING: float = 0.44
+const SOFT_ROOT_MAX_OFFSET: float = 0.38
+const SOFT_ROOT_DRIVE_RATIO: float = 0.70
+const SOFT_NEXT_DRIVE_RATIO: float = 0.30
 const SOFT_CHAIN_HZ: float = 8.5
-const SOFT_ROOT_DAMPING: float = 0.56
+const SOFT_ROOT_DAMPING: float = 0.50
 const SOFT_TIP_DAMPING: float = 0.18
 const SOFT_SHAPE_RESTORE_RATIO: float = 0.05
 const SOFT_TIP_SPRING_GAIN: float = 1.75
@@ -325,8 +330,9 @@ func _build_soft_controls() -> void:
 	_soft_control_indices = PackedInt32Array()
 	if fractions.is_empty():
 		return
-	for control in range(SOFT_CONTROL_COUNT):
-		var target: float = float(control) / float(SOFT_CONTROL_COUNT - 1)
+	# 根元側へcontrolを密に置き、最初の10%を剛体にしない。
+	var targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
+	for target in targets:
 		var best_index: int = 0
 		var best_distance: float = INF
 		for i in range(fractions.size()):
@@ -378,7 +384,6 @@ func _advance_softness(
 
 	var safe_delta: float = maxf(delta, 0.000001)
 	var forward_velocity: float = (forward_px - _soft_previous_forward_px) / safe_delta
-	var root_velocity: float = wrapf(angle - _soft_previous_angle, -PI, PI) / safe_delta
 	if bounded <= 0.000001:
 		_soft_previous_angle = angle
 		_soft_previous_forward_px = forward_px
@@ -397,16 +402,25 @@ func _advance_softness(
 		var previous_world: PackedFloat32Array = _soft_world_angles.duplicate()
 		var previous_velocity: PackedFloat32Array = _soft_velocities.duplicate()
 		var root_index: int = _soft_control_indices[0]
-		var new_root: float = angle + current_angles[root_index]
+		var root_baseline: float = angle + current_angles[root_index]
+		var root_target: float = root_baseline + drive * SOFT_ROOT_DRIVE_RATIO
+		var root_error: float = wrapf(root_target - previous_world[0], -PI, PI)
+		var root_omega: float = TAU * SOFT_ROOT_HINGE_HZ
+		var root_acceleration: float = root_omega * root_omega * root_error - 2.0 * SOFT_ROOT_HINGE_DAMPING * root_omega * previous_velocity[0]
+		var root_velocity: float = previous_velocity[0] + root_acceleration * step
+		var root_world: float = previous_world[0] + root_velocity * step
+		var root_offset: float = clampf(wrapf(root_world - root_baseline, -PI, PI), -SOFT_ROOT_MAX_OFFSET, SOFT_ROOT_MAX_OFFSET)
+		_soft_world_angles[0] = root_baseline + root_offset
 		_soft_velocities[0] = root_velocity
-		_soft_world_angles[0] = new_root
+		if absf(root_offset) >= SOFT_ROOT_MAX_OFFSET - 0.0001:
+			_soft_velocities[0] *= 0.35
 		for control in range(1, _soft_control_indices.size()):
 			var index: int = _soft_control_indices[control]
 			var previous_index: int = _soft_control_indices[control - 1]
 			var desired_curve: float = wrapf(current_angles[index] - current_angles[previous_index], -PI, PI)
 			var coupled_target: float = previous_world[control - 1] + desired_curve
 			if control == 1:
-				coupled_target += drive
+				coupled_target += drive * SOFT_NEXT_DRIVE_RATIO
 			var absolute_target: float = angle + current_angles[index]
 			var target: float = lerp_angle(coupled_target, absolute_target, SOFT_SHAPE_RESTORE_RATIO)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
@@ -427,7 +441,8 @@ func _control_offset(control: int) -> float:
 		return 0.0
 	var index: int = _soft_control_indices[control]
 	var baseline: float = attachment_angle + current_angles[index]
-	return clampf(wrapf(_soft_world_angles[control] - baseline, -PI, PI), -SOFT_MAX_OFFSET, SOFT_MAX_OFFSET)
+	var limit: float = SOFT_ROOT_MAX_OFFSET if control == 0 else SOFT_MAX_OFFSET
+	return clampf(wrapf(_soft_world_angles[control] - baseline, -PI, PI), -limit, limit)
 
 
 func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
