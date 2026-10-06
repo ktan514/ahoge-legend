@@ -52,7 +52,7 @@ func _cycle(resolution: Vector2i, side: int, scenario: int) -> void:
 	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(view)
 	var session = SessionScript.new()
-	await session.reset(view, scenario, 1.0, side, "SHORT_TEST", 60)
+	await session.reset(view, scenario, 1.0, 1.0, side, "SHORT_TEST", 60)
 	var actor = session.attacker
 	var mesh_node = actor.find_child("AhogeDeformMesh", true, false)
 	var head: Sprite2D = actor.find_child("HeadSprite", true, false)
