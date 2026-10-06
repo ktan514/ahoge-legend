@@ -32,7 +32,7 @@ var _parry_blocks_old_contact: bool = false
 var _contact_frozen: bool = false
 var _contact_anchor_canvas: Vector2 = Vector2.ZERO
 var _follow_end_canvas: Vector2 = Vector2.ZERO
-var _parry_entry_vertices: PackedVector2Array = PackedVector2Array()
+var _parry_entry_centers: PackedVector2Array = PackedVector2Array()
 
 
 func _ready() -> void:
@@ -76,7 +76,12 @@ func _process(delta: float) -> void:
 		if next_state == CombatantStateScript.ActionState.PARRY:
 			_parry_blocks_old_contact = true
 			if _mesh_node != null and _mesh_node.configured:
-				_parry_entry_vertices = _mesh_node.current_vertices.duplicate()
+				_parry_entry_centers = ParryMotionScript.centers_of(
+					_mesh_node.current_vertices,
+					int(_mesh_node.profile.WIDTH_POINTS)
+				)
+		else:
+			_parry_entry_centers = PackedVector2Array()
 		if next_state in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP, CombatantStateScript.ActionState.STRIKE]:
 			_parry_blocks_old_contact = false
 			_force_contact = false
@@ -208,14 +213,49 @@ func confirm_contact() -> bool:
 	return true
 
 
-func _blend_vertices(a: PackedVector2Array, b: PackedVector2Array, weight: float) -> PackedVector2Array:
-	if a.size() != b.size():
-		return b.duplicate()
-	var result: PackedVector2Array = PackedVector2Array()
-	result.resize(a.size())
+func _blend_parry_entry_shape(
+	entry_centers: PackedVector2Array,
+	target_vertices: PackedVector2Array,
+	weight: float
+) -> PackedVector2Array:
+	if _mesh_node == null or not _mesh_node.configured:
+		return target_vertices.duplicate()
+	var profile = _mesh_node.profile
+	var width_points: int = int(profile.WIDTH_POINTS)
+	var target_centers: PackedVector2Array = ParryMotionScript.centers_of(target_vertices, width_points)
+	var rest_centers: PackedVector2Array = ParryMotionScript.centers_of(profile.rest_vertices, width_points)
+	if (
+		entry_centers.size() != target_centers.size()
+		or target_centers.size() != rest_centers.size()
+		or target_centers.size() < 3
+	):
+		return target_vertices.duplicate()
+
 	var t: float = clampf(weight, 0.0, 1.0)
-	for i in range(a.size()):
-		result[i] = a[i].lerp(b[i], t)
+	var blended_centers: PackedVector2Array = PackedVector2Array()
+	blended_centers.resize(target_centers.size())
+	for i in range(target_centers.size()):
+		blended_centers[i] = entry_centers[i].lerp(target_centers[i], t)
+
+	var result: PackedVector2Array = profile.rest_vertices.duplicate()
+	result[0] = Vector2.ZERO
+	var row_count: int = int((result.size() - 2) / width_points)
+	for row in range(row_count):
+		var center_index: int = row + 1
+		var rest_prev: Vector2 = rest_centers[maxi(center_index - 1, 0)]
+		var rest_next: Vector2 = rest_centers[mini(center_index + 1, rest_centers.size() - 1)]
+		var posed_prev: Vector2 = blended_centers[maxi(center_index - 1, 0)]
+		var posed_next: Vector2 = blended_centers[mini(center_index + 1, blended_centers.size() - 1)]
+		var rest_tangent: Vector2 = rest_next - rest_prev
+		var posed_tangent: Vector2 = posed_next - posed_prev
+		var turn: float = 0.0
+		if rest_tangent.length() > 0.000001 and posed_tangent.length() > 0.000001:
+			turn = wrapf(posed_tangent.angle() - rest_tangent.angle(), -PI, PI)
+		for column in range(width_points):
+			var index: int = 1 + row * width_points + column
+			var relative: Vector2 = profile.rest_vertices[index] - rest_centers[center_index]
+			result[index] = blended_centers[center_index] + relative.rotated(turn)
+	result[-1] = blended_centers[-1]
 	return result
 
 
@@ -262,11 +302,11 @@ func present_toward(target_canvas: Vector2) -> void:
 	_force_contact = false
 	var pose_vertices: PackedVector2Array = action_motion.visual_vertices()
 	var active_q: float = 0.0
-	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_vertices.is_empty():
+	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_centers.is_empty():
 		var parry_join: float = smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed)
-		pose_vertices = _blend_vertices(_parry_entry_vertices, pose_vertices, parry_join)
+		pose_vertices = _blend_parry_entry_shape(_parry_entry_centers, pose_vertices, parry_join)
 		if parry_join >= 0.999:
-			_parry_entry_vertices = PackedVector2Array()
+			_parry_entry_centers = PackedVector2Array()
 	if _presentation_state == CombatantStateScript.ActionState.STRIKE and not confirmed:
 		var active_contact_seconds: float = action_motion.duration * action_motion.contact_ratio
 		active_q = action_motion.elapsed / maxf(active_contact_seconds, 0.001)
