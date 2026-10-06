@@ -386,7 +386,11 @@ func _cache_ahoge_head_anchor() -> void:
 	var used: Rect2i = image.get_used_rect()
 	if used.size.x <= 0 or used.size.y <= 0:
 		return
-	var ratio: float = clampf(ahoge_head_anchor_x_ratio, 0.0, 1.0)
+	var ratio: float = clampf(
+		float(character.ahoge_head_anchor_x_ratio) if character != null and "ahoge_head_anchor_x_ratio" in character else ahoge_head_anchor_x_ratio,
+		0.0,
+		1.0
+	)
 	var x: int = clampi(
 		int(round(float(used.position.x) + float(maxi(used.size.x - 1, 0)) * ratio)),
 		used.position.x,
