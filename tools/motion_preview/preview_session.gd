@@ -22,15 +22,17 @@ var fps: int = 60
 var side: int = 0
 var scenario: int = 1
 var charge: float = 1.0
+var softness: float = 1.0
 var opponent: String = "SHORT_TEST"
 var phase_index: int = 0
 var tip_history := PackedVector2Array()
 
 
-func reset(view: SubViewport, mode: int, amount: float, actor_side: int, enemy: String, sample_fps: int) -> void:
+func reset(view: SubViewport, mode: int, amount: float, softness_amount: float, actor_side: int, enemy: String, sample_fps: int) -> void:
 	viewport = view
 	scenario = clampi(mode, 0, SCENARIOS.size() - 1)
 	charge = clampf(amount, 0.0, 1.0)
+	softness = clampf(softness_amount, 0.0, 1.0)
 	side = clampi(actor_side, 0, 1)
 	opponent = enemy if enemy in ["LONG_TEST", "SHORT_TEST"] else "SHORT_TEST"
 	fps = sample_fps if sample_fps in [30, 60, 120] else 60
@@ -53,6 +55,10 @@ func reset(view: SubViewport, mode: int, amount: float, actor_side: int, enemy: 
 		hud.set_combatants(enemy_character, other_state, player, state)
 	attacker = director.fighters[side]
 	defender = director.fighters[1 - side]
+	if attacker.has_method("set_motion_softness_amount"):
+		attacker.set_motion_softness_amount(softness)
+	if attacker.has_method("set_ahoge_softness"):
+		attacker.set_ahoge_softness(softness)
 	_build_phases(config)
 	time = 0.0
 	phase_index = 0
