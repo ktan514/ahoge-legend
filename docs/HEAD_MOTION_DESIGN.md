@@ -231,6 +231,8 @@ Human Verificationでは、速度driveを使うと前へ移動している間ず
 
 これらは見た目専用の初期値。毛先を速くするために単純な先端角度倍率を掛けるのではなく、角速度がchainを通って伝わった結果として毛先のピーク速度が根元・中央より後に出ることを確認する。
 
+この調整値は `src/ui/neck_range_fighter.gd` の `NECK_SOFT_TUNING` を正本とし、NeckRangePreviewでActionMotionをconfigureした直後に1回だけ `set_soft_tuning()` で適用する。毎frame再適用して慣性状態をresetしない。MotionPreview/BattleのActionMotionにはこの専用profileを適用しない。
+
 ### 柔らかさ0.0〜1.0
 
 柔らかさは単なる角度倍率ではなく、動的追従の強さとして扱う。
