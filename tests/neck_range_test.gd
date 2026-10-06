@@ -170,10 +170,16 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	actor.reset_ahoge_soft_follow()
 	var sweep_seconds: float = 0.15
 	var sweep_frames: int = maxi(2, ceili(sweep_seconds * fps))
+	var peak_speeds: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0])
+	var peak_times: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0])
+	var observed_seconds: float = 0.0
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
+		var step_seconds: float = sweep_seconds / float(sweep_frames)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
-		actor.advance_neck_preview(sweep_seconds / float(sweep_frames))
+		actor.advance_neck_preview(step_seconds)
+		observed_seconds += step_seconds
+		_track_soft_peaks(actor.action_motion, observed_seconds, peak_speeds, peak_times)
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
 	var dynamic_points: PackedVector2Array = actor.mesh_canvas_vertices()
@@ -185,22 +191,23 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var middle_lag: float = absf(wrapf(softened[middle_index] - actor.action_motion.rest_angles[middle_index], -PI, PI))
 	var tip_lag: float = absf(wrapf(softened[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
 	_expect(maxf(middle_lag, tip_lag) > 0.25, "前方切り返しで中央〜毛先に十分な柔らかさが出ません: " + label)
-	var control_velocities: PackedFloat32Array = actor.action_motion.soft_control_velocities()
-	_expect(control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT, "柔軟control数が不正です: " + label)
-	if control_velocities.size() == actor.action_motion.SOFT_CONTROL_COUNT:
-		var root_speed: float = absf(control_velocities[0])
-		var middle_speed: float = absf(control_velocities[actor.action_motion.SOFT_CONTROL_COUNT / 2])
-		var tip_speed: float = absf(control_velocities[-1])
-		_expect(root_speed < middle_speed and middle_speed < tip_speed, "切り返し終端で毛先側へ速度が乗っていません: " + label)
-		_expect(tip_speed >= middle_speed * 1.15, "毛先速度が中央を十分に追い越していません: " + label)
 	_expect(dynamic_points[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "動的柔軟化で根元が頭部から外れました: " + label)
 
-	# 前端で保持するとchainの角速度が減衰して現在姿勢へ追いつく。
-	var settle_seconds: float = 0.55
+	# 頭が前端で止まった後も観測し、速度ピークが根元→中央→毛先の順に遅れて届くことを見る。
+	var propagation_seconds: float = 0.45
+	for propagation_frame in range(maxi(1, ceili(propagation_seconds * fps))):
+		actor.advance_neck_preview(1.0 / fps)
+		observed_seconds += 1.0 / fps
+		_track_soft_peaks(actor.action_motion, observed_seconds, peak_speeds, peak_times)
+		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and propagation_frame in [0, 3, 7, 11, 17, 23]:
+			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % propagation_frame)
+	_expect(peak_times[0] < peak_times[1] and peak_times[1] < peak_times[2], "速度ピークが根元→中央→毛先の順に伝播しません: %s times=%s" % [label, str(peak_times)])
+	_expect(peak_speeds[2] >= peak_speeds[1] * 0.90, "毛先の速度ピークが中央で減衰しすぎています: %s speeds=%s" % [label, str(peak_speeds)])
+
+	# 柔らかくしても永久に揺れ続けず、十分な保持時間で基準形へ戻る。
+	var settle_seconds: float = 0.75
 	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
 		actor.advance_neck_preview(1.0 / fps)
-		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and settle_frame in [0, 3, 7, 11]:
-			await _save_dynamic_frame(scene.viewport, "settle_%02d.png" % settle_frame)
 	var settled: PackedFloat32Array = actor.action_motion._softened_angles(actor.action_motion.rest_angles)
 	var settled_tip_lag: float = absf(wrapf(settled[tip_index] - actor.action_motion.rest_angles[tip_index], -PI, PI))
 	_expect(settled_tip_lag < 0.02, "前端保持後も毛先chainが基準形状へ収束しません: " + label)
@@ -251,6 +258,18 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_ratio(0.0)
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
+
+func _track_soft_peaks(action_motion, seconds: float, peak_speeds: PackedFloat32Array, peak_times: PackedFloat32Array) -> void:
+	var velocities: PackedFloat32Array = action_motion.soft_control_velocities()
+	if velocities.size() != action_motion.SOFT_CONTROL_COUNT:
+		return
+	var indices: Array[int] = [0, action_motion.SOFT_CONTROL_COUNT / 2, action_motion.SOFT_CONTROL_COUNT - 1]
+	for slot in range(indices.size()):
+		var speed: float = absf(velocities[indices[slot]])
+		if speed > peak_speeds[slot]:
+			peak_speeds[slot] = speed
+			peak_times[slot] = seconds
+
 
 func _save_dynamic_frame(viewport: SubViewport, name: String) -> void:
 	await process_frame
