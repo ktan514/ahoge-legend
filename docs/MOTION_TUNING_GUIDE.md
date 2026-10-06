@@ -194,6 +194,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_TIP_SPRING_GAIN` | 0.45 | 毛先ばね。30fpsでも中央より後に反転させる |
 | `SOFT_DYNAMIC_CURVE_RETENTION` | 0.12 | 方向target無しの高速移動時に残すC字曲率 |
 | `SOFT_DIRECTIONAL_CURVE_RETENTION` | 0.03 | 後方/前方伸長target中に残すC字曲率 |
+| `SOFT_DIRECTIONAL_ROOT_HZ` | 9.0 Hz | 方向target反転後のroot追従速度。頭部より遅れてから鋭く反転する |
 | `SOFT_DIRECTIONAL_ROOT_MAX_OFFSET` | 1.75 rad | 後方/前方へ根元接線を倒す許容量 |
 | `SOFT_DIRECTIONAL_MAX_OFFSET` | 2.40 rad | 方向付き伸長時の全体offset上限 |
 | `SOFT_CURVE_RELEASE_SPEED` | 1500 px/s | C字曲率をほどく前後速度基準 |
@@ -215,7 +216,7 @@ NeckRangePreviewの「アホ毛柔らかさ」0.0ではchainを基準形状へ�
 6. 頭部停止後も中央・毛先が少し動き、その後基準形状へ収束。
 7. 実STRIKEでは接触2px、固定メッシュ、振り抜き契約を維持する。
 
-確認順は「根元位置固定 → 後端保持で**ほぼ直線**に後方へ伸びる → 前方切り返し直後は毛先が後方へ残って一時的に曲がる → 根元→中央→毛先の順で反転 → 前端保持で**ほぼ直線**に前方へ伸びる → C字を保持し続けない → テスト停止で待機C字へ戻る」。方向targetはrootだけへ直接与え、control 1〜8は直前controlからの結合でのみ方向を受け取る。NeckRange専用chainへ渡す頭部位置・角度は `facing` でキャラクター前方基準へ正規化し、P1/P2で同じ内部運動にする。方向target中の描画はchain実角度を直接使用し、最終左右反転はRig側で行う。
+確認順は「根元位置固定 → 後端保持で**ほぼ直線**に後方へ伸びる → 頭が先に前進してもアホ毛は短時間後方を保持 → rootが急反転 → 中央→毛先へ加速が伝播 → 毛先が最後に前方へ走る → 前端保持で**ほぼ直線**に前方へ伸びる → テスト停止で待機C字へ戻る」。頭部0.15秒移動は変更せず、direction targetだけを進行22%→62%で急反転させる。方向targetはrootだけへ直接与え、control 1〜8は直前controlからの結合でのみ方向を受け取る。NeckRange専用chainへ渡す頭部位置・角度は `facing` でキャラクター前方基準へ正規化し、P1/P2で同じ内部運動にする。方向target中の描画はchain実角度を直接使用し、最終左右反転はRig側で行う。
 
 ## 9. 最小の反復手順
 
