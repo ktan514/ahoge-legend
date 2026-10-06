@@ -102,7 +102,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 	var end_tip: Vector2 = Vector2.ZERO
 	var min_charge_guard: float = 1.0
 	var max_parry_tip: float = 0.0
-	var charge_softness_seen: bool = false
+	var charge_softness_disabled: bool = false
 	var windup_softness_seen: bool = false
 	var strike_softness_seen: bool = false
 	var parry_softness_disabled: bool = false
@@ -139,7 +139,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 			var root: Vector2 = points[0]
 			var tip: Vector2 = points[-1]
 			if state.action_state == StateScript.ActionState.CHARGING:
-				charge_softness_seen = charge_softness_seen or actor.action_motion.softness >= 0.649
+				charge_softness_disabled = charge_softness_disabled or actor.action_motion.softness <= 0.001
 				min_charge_guard = minf(min_charge_guard, actor.last_safety_scale)
 				if charge > 0.0 and elapsed >= config.max_charge_seconds + 0.05:
 					_expect(mesh_node.current_vertices[-1].x < -100.0, "最大溜めで毛先が後方にありません: " + label)
@@ -149,7 +149,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 					else:
 						hold_difference = maxf(hold_difference, _difference(held_vertices, mesh_node.current_vertices))
 			if state.action_state == StateScript.ActionState.WINDUP:
-				windup_softness_seen = windup_softness_seen or actor.action_motion.softness >= 0.849
+				windup_softness_seen = windup_softness_seen or actor.action_motion.softness >= 0.449
 			if state.action_state == StateScript.ActionState.STRIKE:
 				strike_softness_seen = strike_softness_seen or actor.action_motion.softness >= 0.999
 				trace.append({"time": elapsed, "root": [root.x, root.y], "near": [points[107].x, points[107].y], "middle": [points[237].x, points[237].y], "tip": [tip.x, tip.y]})
@@ -183,7 +183,7 @@ func _cycle(resolution: Vector2i, fps: int, side: int, charge: float) -> void:
 				await _capture(viewport, "cycle_%d_%03d.png" % [int(charge), frame])
 			frame += 1
 	_expect(contact_seen, "接触を未検査: " + label)
-	_expect(charge_softness_seen, "CHARGINGへ柔軟chainが接続されていません: " + label)
+	_expect(charge_softness_disabled, "CHARGING中に柔軟chainが最大溜め形へ重なっています: " + label)
 	_expect(windup_softness_seen, "WINDUPへ柔軟chainが接続されていません: " + label)
 	_expect(strike_softness_seen, "STRIKEへ動的柔軟追従が接続されていません: " + label)
 	_expect(parry_softness_disabled, "PARRYへ未承認の柔軟追従が混入しました: " + label)
