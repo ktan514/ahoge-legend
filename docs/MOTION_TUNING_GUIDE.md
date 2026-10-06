@@ -187,9 +187,11 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_MAX_OFFSET_STEP` | 0.045 rad | 隣接区間のoffset差上限 |
 | `SOFT_CHAIN_HZ` | 6.5 Hz | 全体の追従速度 |
 | `SOFT_ROOT_DAMPING` | 0.34 | 根元側controlの減衰 |
-| `SOFT_TIP_DAMPING` | 0.30 | 毛先側の減衰。先端だけの振動を抑える |
+| `SOFT_TIP_DAMPING` | 0.60 | 毛先側の絶対減衰。先端だけの振動を抑える |
+| `SOFT_RELATIVE_DAMPING_ROOT` | 0.10 | 根元側の隣接区間相対速度減衰 |
+| `SOFT_RELATIVE_DAMPING_TIP` | 0.60 | 毛先側の隣接区間相対速度減衰。局所共振を抑える |
 | `SOFT_SHAPE_RESTORE_RATIO` | 0.025 | 基準形状への直接復元 |
-| `SOFT_TIP_SPRING_GAIN` | 1.15 | 毛先spring増幅。先端偏重を抑える |
+| `SOFT_TIP_SPRING_GAIN` | 0.85 | 毛先ばね。1未満として先端増幅をしない |
 | `SOFT_FORWARD_ACCEL_DRIVE` | 0.000012 | 頭部Canvas X加速度drive |
 | `SOFT_DRIVE_LIMIT` | 0.65 rad | drive上限 |
 | `SOFT_MAX_OFFSET` | 0.65 rad | 動的追加角の上限 |
