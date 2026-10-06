@@ -7,7 +7,7 @@ const FOLLOW_THROUGH_PX: Vector2 = Vector2(42.0, 100.0)
 const FOLLOW_EDGE_MARGIN: float = 12.0
 const WHIP_NORMAL_REACH_POWER: float = 1.8
 const WHIP_CHARGED_REACH_POWER: float = 2.8
-const WHIP_TURN_END: float = 0.95
+const WHIP_RESIDUAL_START_Q: float = 0.90
 
 var arena_canvas_rect: Rect2 = Rect2()
 var last_contact_error: float = INF
@@ -432,8 +432,10 @@ func present_toward(target_canvas: Vector2) -> void:
 			var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
 			var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
 			var approach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
-			var residual_weight: float = approach_weight * smoothstep(0.72, 0.98, q)
-			base = _project_tip(base, base * source_tip, approach, residual_weight, smoothstep(0.55, WHIP_TURN_END, q))
+			# Active Strike自身の時間差を接触直前まで優先する。
+			# whole-transformはq=0.90以降だけ、reach/turn共通の残差weightで最終誤差を埋める。
+			var residual_weight: float = approach_weight * smoothstep(WHIP_RESIDUAL_START_Q, 1.0, q)
+			base = _project_tip(base, base * source_tip, approach, residual_weight, residual_weight)
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
