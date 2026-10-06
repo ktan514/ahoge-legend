@@ -24,6 +24,7 @@ var _fps: OptionButton
 var _resolution: OptionButton
 var _speed: OptionButton
 var _charge: SpinBox
+var _softness: SpinBox
 var _play: Button
 var _slider: HSlider
 var _status: Label
@@ -105,11 +106,20 @@ func _build_ui() -> void:
 	_charge.step = 0.1
 	_charge.value = 1.0
 	choices.add_child(_charge)
+	_label(choices, "アホ毛柔らかさ")
+	_softness = SpinBox.new()
+	_softness.min_value = 0.0
+	_softness.max_value = 1.0
+	_softness.step = 0.05
+	_softness.value = 1.0
+	_softness.custom_minimum_size.x = 100
+	choices.add_child(_softness)
 	_fps = _options(choices, "計算fps", [30, 60, 120], 1)
 	_resolution = _options(choices, "内部解像度", ["1280×720", "1600×900"], 0)
 	for option in [_scenario, _side, _opponent, _fps, _resolution]:
 		option.item_selected.connect(func(_index: int): rebuild())
 	_charge.value_changed.connect(func(_value: float): rebuild())
+	_softness.value_changed.connect(func(_value: float): rebuild())
 
 	var transport := _row(stack)
 	_play = _button(transport, "再生", toggle_play)
@@ -178,7 +188,7 @@ func rebuild() -> void:
 	playing = false
 	_accumulator = 0.0
 	_viewport.size = Vector2i(1280, 720) if _resolution.selected == 0 else Vector2i(1600, 900)
-	await session.reset(_viewport, _scenario.selected, _charge.value, _side.selected, "SHORT_TEST" if _opponent.selected == 0 else "LONG_TEST", FPS_VALUES[_fps.selected])
+	await session.reset(_viewport, _scenario.selected, _charge.value, _softness.value, _side.selected, "SHORT_TEST" if _opponent.selected == 0 else "LONG_TEST", FPS_VALUES[_fps.selected])
 	_overlay = OverlayScript.new()
 	_overlay.session = session
 	_overlay.z_index = 100
@@ -268,7 +278,7 @@ func _update_status() -> void:
 	var error_text: String = "—"
 	if is_instance_valid(session.attacker) and is_finite(float(session.attacker.last_contact_error)):
 		error_text = "%.2fpx" % float(session.attacker.last_contact_error)
-	_status.text = "%.3f / %.3f秒  |  %s  |  全長 %.1fpx  |  目標との差 %s  |  画面保護 %.3f" % [session.time, session.total, session.state_name(), session.length_on_screen(), error_text, float(session.attacker.last_safety_scale)]
+	_status.text = "%.3f / %.3f秒  |  %s  |  柔らかさ %.2f  |  全長 %.1fpx  |  目標との差 %s  |  画面保護 %.3f" % [session.time, session.total, session.state_name(), session.softness, session.length_on_screen(), error_text, float(session.attacker.last_safety_scale)]
 	_update_overlay()
 
 
@@ -287,7 +297,7 @@ func save_capture() -> void:
 
 func reload_arguments() -> PackedStringArray:
 	# ソースのconstは新しいプロセスで読み込む。インスタンスの再生成だけでは不足する。
-	return PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), SCENE, "--", "--preview-scenario=%d" % _scenario.selected, "--preview-side=%d" % _side.selected, "--preview-opponent=%d" % _opponent.selected, "--preview-charge=%f" % _charge.value, "--preview-fps=%d" % _fps.selected, "--preview-resolution=%d" % _resolution.selected, "--preview-speed=%d" % _speed.selected])
+	return PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), SCENE, "--", "--preview-scenario=%d" % _scenario.selected, "--preview-side=%d" % _side.selected, "--preview-opponent=%d" % _opponent.selected, "--preview-charge=%f" % _charge.value, "--preview-softness=%f" % _softness.value, "--preview-fps=%d" % _fps.selected, "--preview-resolution=%d" % _resolution.selected, "--preview-speed=%d" % _speed.selected])
 
 
 func reload_code() -> void:
@@ -324,6 +334,8 @@ func _restore_options() -> void:
 		var pair: PackedStringArray = arg.trim_prefix("--preview-").split("=", true, 1)
 		if pair[0] == "charge" and pair[1].is_valid_float():
 			_charge.set_value_no_signal(clampf(float(pair[1]), 0.0, 1.0))
+		elif pair[0] == "softness" and pair[1].is_valid_float():
+			_softness.set_value_no_signal(clampf(float(pair[1]), 0.0, 1.0))
 		elif options.has(pair[0]) and pair[1].is_valid_int():
 			var control: OptionButton = options[pair[0]]
 			control.select(clampi(int(pair[1]), 0, control.item_count - 1))
