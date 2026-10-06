@@ -426,16 +426,19 @@ func present_toward(target_canvas: Vector2) -> void:
 			var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, action_motion.follow_progress())
 			base = _project_tip(base, base * source_tip, aim, 1.0, 1.0)
 		else:
-			var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
-			# Active Strikeで実メッシュ自身を先に相手方向へ曲げ・伸ばす。
-			# whole-transform投影は接触直前の残差補正だけへ寄せる。
-			var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
-			var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
-			var approach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
-			# Active Strike自身の時間差を接触直前まで優先する。
-			# whole-transformはq=0.90以降だけ、reach/turn共通の残差weightで最終誤差を埋める。
-			var residual_weight: float = approach_weight * smoothstep(WHIP_RESIDUAL_START_Q, 1.0, q)
-			base = _project_tip(base, base * source_tip, approach, residual_weight, 0.0)
+			if confirmed:
+				# 確定Hitの再提示は攻撃速度を進めるframeではない。
+				# 過去のHit位置へ正確に戻すため、この経路だけ完全投影を許可する。
+				base = _project_tip(base, base * source_tip, target_canvas, 1.0, 1.0)
+			else:
+				var power: float = lerpf(WHIP_NORMAL_REACH_POWER, WHIP_CHARGED_REACH_POWER, _visual_charge_ratio())
+				# Active Strikeで実メッシュ自身を先に相手方向へ曲げ・伸ばす。
+				# whole-transform投影は接触直前のreach残差だけへ寄せる。
+				var pass_vector: Vector2 = _follow_end_for(target_canvas) - target_canvas
+				var approach: Vector2 = target_canvas - pass_vector * (2.0 * contact_seconds / (PI * ActionMotionScript.FOLLOW_SECONDS)) * sin(PI * clampf(q, 0.0, 1.0))
+				var approach_weight: float = pow(smoothstep(0.0, 0.90, q), power)
+				var residual_weight: float = approach_weight * smoothstep(WHIP_RESIDUAL_START_Q, 1.0, q)
+				base = _project_tip(base, base * source_tip, approach, residual_weight, 0.0)
 	elif _presentation_state == CombatantStateScript.ActionState.PARRY:
 		base = _entry_transform.interpolate_with(base, smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed))
 	elif _presentation_state not in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP]:
