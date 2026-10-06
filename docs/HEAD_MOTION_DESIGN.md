@@ -112,11 +112,12 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
 - 最大チャージの最大メッシュ伸長: 1.45倍。
 - 伸長は根元1.00倍→毛先側最大値へ滑らかに分布する。
 - 1frameで長さを瞬間切替せず、qに応じてsmoothstepで増加する。
-- 接触直前の最終誤差は、通常STRIKEではwhole-transformで毛束全体へ投影しない。Active Strike後の実メッシュ毛先と目標点の**残差ベクトル**を、毛先側中心線だけへ分配して埋める。
-- q=0.90以降はActive Strike内で弧長70%より先の中心線へ**distal contact correction**を加える。補正量は70%地点0→毛先1の滑らかな空間weightとし、q=0.90→1.00で時間方向にもsmoothstepする。
-- q=1ではtipへ残差ベクトル100%を適用して目標点へ一致させる。弧長70%以前の中心線は残差補正で動かさず、中央速度ピークを終盤の接触補正へ巻き込まない。
-- distal contact correction後はprofile基準断面幅から427頂点を再構築し、中心線だけを補正して断面幅・面向きを維持する。通常1.22倍／最大チャージ1.45倍のActive stretch自体は変更しない。
-- 通常STRIKEのMotionRootはneutral transformだけを使い、接触前のwhole-transform reach/turn投影を行わない。120fps通常/最大チャージで中央ピークより毛先ピークが少なくとも1frame後になることを維持する。
+- 接触の「方向」と「距離」は分離する。通常STRIKEで接触直前にwhole-transformを動的再計算し続けず、中央と毛先を同時加速させない。
+- q=0.90以降はActive Strike内で弧長70%より先の中心線へ**distal aim correction**を加える。補正は中心線各点を根元周りへ回転するだけとし、70%地点0→毛先1の滑らかな空間weightで、q=1ではtipの根元基準方向をtarget方向へ一致させる。
+- distal aim correction後はprofile基準断面幅から427頂点を再構築する。中心線へ平行移動残差を足さず、通常1.22倍／最大チャージ1.45倍のActive stretchと弧長上限を維持する。
+- 距離補正は、同じtarget・chargeでq=1のActive Strike形状を予測し、その最終tip長から必要なreach倍率を先に求める。MotionRootの軸方向reachはq=0.30→0.65でsmoothstepし、q=0.65以降は最終倍率へ固定する。
+- reach軸はtarget方向を使い、terminal snap開始q=0.90より十分前に倍率変化を終える。接触直前にsource tip長から倍率を再計算し続けないことで、中央速度ピークを毛先終盤ピークへ巻き込まない。
+- q=1ではActive Strikeのtip方向一致 + 固定済みreach倍率により接触点へ一致させる。120fps通常/最大チャージで根元→中央→毛先の速度ピークを少なくとも1frameずつ分離する。
 - 確定Hit通知からの再提示は速度ピーク検査対象の攻撃進行ではなく、過去Hitをその場で正確に再表示する経路なので、ここだけはreach/turnの完全投影を許可する。接触後のFollowThroughも既存の固定接触点→終点投影を維持する。
 
 この方式では「頭がアホ毛を運ぶ」のではなく、**頭が初速を与え、アホ毛自身がその初速へ追加加速して相手を叩く**ことを目標とする。
