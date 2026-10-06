@@ -69,7 +69,17 @@ static func deform(profile, vertices: PackedVector2Array, sweep: float) -> Packe
 		var center_index: int = row + 1
 		if fractions[center_index] <= FIXED_FRACTION:
 			continue
-		var turn: float = wrapf(_tangent(posed, center_index).angle() - _tangent(centers, center_index).angle(), -PI, PI)
+		var posed_tangent: Vector2
+		var source_tangent: Vector2
+		if center_index == centers.size() - 2:
+			# 最終断面は平均接線ではなくtipへ向かう最終edgeを基準にする。
+			# 強いsweep時でもtipを含む最後の三角形が反転しないようにする。
+			posed_tangent = posed[-1] - posed[-2]
+			source_tangent = centers[-1] - centers[-2]
+		else:
+			posed_tangent = _tangent(posed, center_index)
+			source_tangent = _tangent(centers, center_index)
+		var turn: float = wrapf(posed_tangent.angle() - source_tangent.angle(), -PI, PI)
 		for column in range(width_points):
 			var index: int = 1 + row * width_points + column
 			result[index] = posed[center_index] + (vertices[index] - centers[center_index]).rotated(turn)
