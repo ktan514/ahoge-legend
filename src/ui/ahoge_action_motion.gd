@@ -30,6 +30,7 @@ const SOFT_RELATIVE_DAMPING_TIP: float = 0.0
 const SOFT_TIP_SPRING_GAIN: float = 1.75
 const SOFT_DYNAMIC_CURVE_RETENTION: float = 1.0
 const SOFT_DIRECTIONAL_CURVE_RETENTION: float = 1.0
+const SOFT_DIRECTIONAL_ROOT_HZ: float = SOFT_ROOT_HINGE_HZ
 const SOFT_DIRECTIONAL_ROOT_MAX_OFFSET: float = SOFT_ROOT_MAX_OFFSET
 const SOFT_DIRECTIONAL_MAX_OFFSET: float = SOFT_MAX_OFFSET
 const SOFT_CURVE_RELEASE_SPEED: float = 1500.0
@@ -96,6 +97,7 @@ var soft_relative_damping_tip: float = SOFT_RELATIVE_DAMPING_TIP
 var soft_tip_spring_gain: float = SOFT_TIP_SPRING_GAIN
 var soft_dynamic_curve_retention: float = SOFT_DYNAMIC_CURVE_RETENTION
 var soft_directional_curve_retention: float = SOFT_DIRECTIONAL_CURVE_RETENTION
+var soft_directional_root_hz: float = SOFT_DIRECTIONAL_ROOT_HZ
 var soft_directional_root_max_offset: float = SOFT_DIRECTIONAL_ROOT_MAX_OFFSET
 var soft_directional_max_offset: float = SOFT_DIRECTIONAL_MAX_OFFSET
 var soft_curve_release_speed: float = SOFT_CURVE_RELEASE_SPEED
@@ -128,7 +130,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"third_drive_ratio", "chain_hz", "root_damping", "tip_damping",
 		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
 		"tip_spring_gain", "dynamic_curve_retention", "directional_curve_retention",
-		"directional_root_max_offset", "directional_max_offset", "curve_release_speed",
+		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset"
 	]
 	for key in numeric_keys:
@@ -156,6 +158,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_tip_spring_gain = maxf(0.0, float(tuning.get("tip_spring_gain", soft_tip_spring_gain)))
 	soft_dynamic_curve_retention = clampf(float(tuning.get("dynamic_curve_retention", soft_dynamic_curve_retention)), 0.0, 1.0)
 	soft_directional_curve_retention = clampf(float(tuning.get("directional_curve_retention", soft_directional_curve_retention)), 0.0, 1.0)
+	soft_directional_root_hz = maxf(0.01, float(tuning.get("directional_root_hz", soft_directional_root_hz)))
 	soft_directional_root_max_offset = maxf(0.0, float(tuning.get("directional_root_max_offset", soft_directional_root_max_offset)))
 	soft_directional_max_offset = maxf(0.0, float(tuning.get("directional_max_offset", soft_directional_max_offset)))
 	soft_curve_release_speed = maxf(1.0, float(tuning.get("curve_release_speed", soft_curve_release_speed)))
@@ -189,6 +192,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"tip_spring_gain": soft_tip_spring_gain,
 		"dynamic_curve_retention": soft_dynamic_curve_retention,
 		"directional_curve_retention": soft_directional_curve_retention,
+		"directional_root_hz": soft_directional_root_hz,
 		"directional_root_max_offset": soft_directional_root_max_offset,
 		"directional_max_offset": soft_directional_max_offset,
 		"curve_release_speed": soft_curve_release_speed,
@@ -576,7 +580,8 @@ func _advance_softness(
 		var root_baseline: float = angle + root_local_baseline
 		var root_target: float = angle + root_local_target + drive * soft_root_drive_ratio
 		var root_error: float = wrapf(root_target - previous_world[0], -PI, PI)
-		var root_omega: float = TAU * soft_root_hinge_hz
+		var root_hz: float = lerpf(soft_root_hinge_hz, soft_directional_root_hz, directional_weight)
+		var root_omega: float = TAU * root_hz
 		var root_acceleration: float = root_omega * root_omega * root_error - 2.0 * soft_root_hinge_damping * root_omega * previous_velocity[0]
 		var root_velocity: float = previous_velocity[0] + root_acceleration * step
 		var root_world: float = previous_world[0] + root_velocity * step
