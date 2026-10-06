@@ -251,7 +251,8 @@ func present_toward(target_canvas: Vector2) -> void:
 	if _presentation_state == CombatantStateScript.ActionState.STRIKE and not confirmed:
 		var active_contact_seconds: float = action_motion.duration * action_motion.contact_ratio
 		active_q = action_motion.elapsed / maxf(active_contact_seconds, 0.001)
-		var active_target_local: Vector2 = _ahoge_rig.to_local(target_canvas)
+		var active_target_canvas: Vector2 = _contact_anchor_canvas if _contact_frozen else target_canvas
+		var active_target_local: Vector2 = _ahoge_rig.to_local(active_target_canvas)
 		pose_vertices = action_motion.active_strike_vertices(active_target_local, active_q, _visual_charge_ratio())
 	_mesh_node.set_action_pose(pose_vertices, action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
