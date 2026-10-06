@@ -750,8 +750,10 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 	var stretch_max: float = lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0))
 	var length_scales: PackedFloat32Array = PackedFloat32Array()
 	var active_offsets: PackedFloat32Array = PackedFloat32Array()
+	var snap_offsets: PackedFloat32Array = PackedFloat32Array()
 	length_scales.resize(base_angles.size())
 	active_offsets.resize(base_angles.size())
+	snap_offsets.resize(base_angles.size())
 	for i in range(base_angles.size()):
 		var s: float = fractions[i]
 		# 能動制御もchainと同様に根元側から毛先側へ時間差で伝える。
@@ -771,10 +773,10 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 		active_offsets[i] = target_delta * turn_weight
 
 		# 中央のピーク後に毛先自身が最後の加速を出すterminal snap。
-		# q=0.90までは0なので、中央の0.125秒付近のピークへ重ならない。
+		# 通常turnとは分離し、後段の双方向clampで中央側へ同frame逆伝播させない。
 		var snap_time: float = smoothstep(ACTIVE_TIP_SNAP_START_Q, 1.0, q)
 		var snap_space: float = smoothstep(ACTIVE_TIP_SNAP_FRACTION, 1.0, s)
-		active_offsets[i] += target_delta * snap_time * snap_space * ACTIVE_TIP_SNAP_WEIGHT
+		snap_offsets[i] = target_delta * snap_time * snap_space * ACTIVE_TIP_SNAP_WEIGHT
 
 		var stretch_weight: float = smoothstep(0.08, 0.92, s) * section_active
 		length_scales[i] = lerpf(1.0, stretch_max, stretch_weight)
@@ -795,6 +797,17 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 			active_offsets[i],
 			active_offsets[i + 1] - ACTIVE_MAX_OFFSET_STEP,
 			active_offsets[i + 1] + ACTIVE_MAX_OFFSET_STEP
+		)
+
+	# terminal snapは時間差を守るため通常turnの双方向clamp後に加える。
+	# 追加後は根元→毛先だけをclampし、毛先の加速を上流へ瞬時に戻さない。
+	for i in range(active_offsets.size()):
+		active_offsets[i] += snap_offsets[i]
+	for i in range(1, active_offsets.size()):
+		active_offsets[i] = clampf(
+			active_offsets[i],
+			active_offsets[i - 1] - ACTIVE_MAX_OFFSET_STEP,
+			active_offsets[i - 1] + ACTIVE_MAX_OFFSET_STEP
 		)
 	for i in range(base_angles.size()):
 		aimed_angles[i] = base_angles[i] + active_offsets[i]
