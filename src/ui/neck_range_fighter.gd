@@ -40,9 +40,9 @@ func set_neck_gaze_max_degrees(value: float) -> bool:
 
 
 func set_ahoge_softness(value: float) -> bool:
-	if not is_finite(value):
+	if not super.set_motion_softness_amount(value):
 		return false
-	ahoge_softness = clampf(value, 0.0, 1.0)
+	ahoge_softness = motion_softness_amount
 	if neck_preview_enabled:
 		_apply_neck_pose()
 		reset_ahoge_soft_follow()
