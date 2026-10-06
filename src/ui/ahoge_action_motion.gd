@@ -15,6 +15,7 @@ const ACTIVE_ROOT_FRACTION: float = 0.12
 const ACTIVE_FULL_FRACTION: float = 0.55
 const ACTIVE_NORMAL_STRETCH: float = 1.22
 const ACTIVE_CHARGED_STRETCH: float = 1.45
+const ACTIVE_MAX_OFFSET_STEP: float = 0.045
 const SOFT_CONTROL_COUNT: int = 9
 # 共通default。NeckRangePreviewの未承認調整値はこのconstを書き換えず、
 # set_soft_tuning()で当該ActionMotionインスタンスだけへ適用する。
@@ -746,13 +747,35 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 	var stretch_max: float = lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0))
 	var stretch_now: float = lerpf(1.0, stretch_max, active)
 	var length_scales: PackedFloat32Array = PackedFloat32Array()
+	var active_offsets: PackedFloat32Array = PackedFloat32Array()
 	length_scales.resize(base_angles.size())
+	active_offsets.resize(base_angles.size())
 	for i in range(base_angles.size()):
 		var s: float = fractions[i]
 		var turn_weight: float = smoothstep(ACTIVE_ROOT_FRACTION, ACTIVE_FULL_FRACTION, s) * active
-		aimed_angles[i] = lerp_angle(base_angles[i], desired_angle, turn_weight)
+		active_offsets[i] = wrapf(desired_angle - base_angles[i], -PI, PI) * turn_weight
 		var stretch_weight: float = smoothstep(0.08, 0.92, s) * active
 		length_scales[i] = lerpf(1.0, stretch_now, stretch_weight)
+
+	# 能動turnを弧長方向へ平滑化し、1区間だけ折れる形を作らない。
+	for pass_index in range(2):
+		var source: PackedFloat32Array = active_offsets.duplicate()
+		for i in range(1, active_offsets.size() - 1):
+			active_offsets[i] = source[i - 1] * 0.20 + source[i] * 0.60 + source[i + 1] * 0.20
+	for i in range(1, active_offsets.size()):
+		active_offsets[i] = clampf(
+			active_offsets[i],
+			active_offsets[i - 1] - ACTIVE_MAX_OFFSET_STEP,
+			active_offsets[i - 1] + ACTIVE_MAX_OFFSET_STEP
+		)
+	for i in range(active_offsets.size() - 2, -1, -1):
+		active_offsets[i] = clampf(
+			active_offsets[i],
+			active_offsets[i + 1] - ACTIVE_MAX_OFFSET_STEP,
+			active_offsets[i + 1] + ACTIVE_MAX_OFFSET_STEP
+		)
+	for i in range(base_angles.size()):
+		aimed_angles[i] = base_angles[i] + active_offsets[i]
 	return vertices_from_angles_scaled(aimed_angles, length_scales)
 
 
