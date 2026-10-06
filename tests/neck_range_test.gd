@@ -104,6 +104,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(is_equal_approx(float(tuning["tip_spring_gain"]), 0.45), "NeckRange専用tip springが未適用です: " + label)
 	_expect(is_equal_approx(float(tuning["dynamic_curve_retention"]), 0.12), "NeckRange専用C字曲率解放が未適用です: " + label)
 	_expect(is_equal_approx(float(tuning["directional_curve_retention"]), 0.03), "NeckRange専用方向伸長が未適用です: " + label)
+	_expect(is_equal_approx(float(tuning["directional_root_hz"]), 9.0), "NeckRange専用directional root Hzが未適用です: " + label)
 	_expect(float(tuning["directional_root_max_offset"]) >= 1.70, "NeckRange専用root伸長角が不足しています: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
@@ -206,7 +207,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		var step_seconds: float = sweep_seconds / float(sweep_frames)
-		var direction: float = lerpf(-1.0, 1.0, smoothstep(0.0, 1.0, u))
+		var phase_seconds: float = scene.REAR_HOLD_SECONDS + sweep_seconds * u
+		var direction: float = scene.attack_preview_direction(phase_seconds)
 		actor.set_neck_ahoge_directional_extension(1.0, direction)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
 		actor.advance_neck_preview(step_seconds)
