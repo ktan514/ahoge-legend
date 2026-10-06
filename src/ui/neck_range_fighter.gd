@@ -7,10 +7,36 @@ const MAX_TRAVEL_DIAMETERS: float = 0.4
 const DEFAULT_GAZE_MAX_DEGREES: float = 30.0
 const MAX_GAZE_MAX_DEGREES: float = 30.0
 
+# NeckRangePreview専用の未承認tuning。
+# MotionPreview/Battleの共通defaultへはHuman Verification合格まで昇格しない。
+const NECK_SOFT_TUNING := {
+	"control_targets": [0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00],
+	"root_hinge_hz": 4.5,
+	"root_hinge_damping": 0.34,
+	"root_max_offset": 0.36,
+	"root_blend_end": 0.30,
+	"root_start_weight": 0.35,
+	"max_offset_step": 0.045,
+	"root_drive_ratio": 0.45,
+	"next_drive_ratio": 0.35,
+	"third_drive_ratio": 0.20,
+	"chain_hz": 6.5,
+	"root_damping": 0.34,
+	"tip_damping": 0.60,
+	"shape_restore_ratio": 0.025,
+	"relative_damping_root": 0.10,
+	"relative_damping_tip": 0.60,
+	"tip_spring_gain": 0.85,
+	"forward_accel_drive": 0.000012,
+	"drive_limit": 0.65,
+	"max_offset": 0.65,
+}
+
 var neck_preview_enabled: bool = false
 var neck_travel_ratio: float = 0.0
 var neck_gaze_max_degrees: float = DEFAULT_GAZE_MAX_DEGREES
 var ahoge_softness: float = 1.0
+var _neck_soft_tuning_applied: bool = false
 
 
 func head_display_diameter() -> float:
@@ -49,8 +75,17 @@ func set_ahoge_softness(value: float) -> bool:
 	return true
 
 
-func reset_ahoge_soft_follow() -> void:
+func _ensure_neck_soft_tuning() -> bool:
 	if not action_motion.configured:
+		return false
+	if _neck_soft_tuning_applied:
+		return true
+	_neck_soft_tuning_applied = action_motion.set_soft_tuning(NECK_SOFT_TUNING)
+	return _neck_soft_tuning_applied
+
+
+func reset_ahoge_soft_follow() -> void:
+	if not _ensure_neck_soft_tuning():
 		return
 	action_motion.reset_soft_follow(deg_to_rad(_head_rotation), _head_offset.x)
 
@@ -82,6 +117,7 @@ func clear_neck_preview() -> void:
 	_contact_frozen = false
 	_parry_blocks_old_contact = true
 	action_motion = ActionMotionScript.new()
+	_neck_soft_tuning_applied = false
 	_update_asset_pose()
 	queue_redraw()
 
@@ -122,9 +158,10 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 		_motion_node.transform = _neutral_transform()
 		if _mesh_node != null and _mesh_node.configured:
 			if not action_motion.configured:
-				action_motion.configure(_mesh_node.profile)
+				if action_motion.configure(_mesh_node.profile):
+					_neck_soft_tuning_applied = false
 			var idle_vertices: PackedVector2Array = _mesh_node.profile.rest_vertices
-			if action_motion.configured:
+			if action_motion.configured and _ensure_neck_soft_tuning():
 				if dynamic_delta > 0.0:
 					action_motion.advance(
 						StateScript.ActionState.IDLE,
