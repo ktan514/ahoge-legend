@@ -95,7 +95,7 @@ func _cycle(resolution: Vector2i, side: int, scenario: int) -> void:
 	# 頭部先行の時刻は既存BattleHeadMotion側で定義。ここでは姿勢と根元を検査する。
 	if session.contact_time > 0.0:
 		# 先頭から接触時刻へ戻して同じ本体の計算を通す。
-		await session.reset(view, scenario, 1.0, side, "SHORT_TEST", 60)
+		await session.reset(view, scenario, 1.0, 1.0, side, "SHORT_TEST", 60)
 		session.advance_to(session.contact_time)
 		_check(session.attacker.last_contact_error <= 2.0, "新素材でも接触: " + label)
 	records.append({"label": label, "max_root_error_px": max_root_error, "peak_head_move_px": peak_offset, "peak_head_angle_deg": rad_to_deg(peak_angle), "head_rig_rotation_difference_deg": rad_to_deg(max_lag), "minimum_safety_scale": min_safety, "frames": trace})
