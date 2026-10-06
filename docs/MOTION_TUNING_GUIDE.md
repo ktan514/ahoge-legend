@@ -181,7 +181,9 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_CONTROL_COUNT` | 9 | 毛束を代表する動的control数。根元側へ密配置 |
 | `SOFT_ROOT_HINGE_HZ` | 7.0 Hz | 根元直後の角度が頭へ追従する速さ |
 | `SOFT_ROOT_HINGE_DAMPING` | 0.44 | 根元ヒンジの減衰 |
-| `SOFT_ROOT_MAX_OFFSET` | 0.38 rad | 根元直後で許す動的角度差 |
+| `SOFT_ROOT_MAX_OFFSET` | 0.22 rad | 根元直後で許す動的角度差 |
+| `SOFT_ROOT_BLEND_END` | 0.12 | 根元ヒンジの曲げを分散する弧長範囲 |
+| `SOFT_MAX_OFFSET_STEP` | 0.055 rad | 隣接区間の動的offset差上限。根元の折れ・面反転を防ぐ |
 | `SOFT_CHAIN_HZ` | 8.5 Hz | control間で運動を伝える速さ |
 | `SOFT_ROOT_DAMPING` | 0.50 | 根元側controlの減衰 |
 | `SOFT_TIP_DAMPING` | 0.18 | 毛先側の減衰。低いほど振り遅れ・反動が残る |
