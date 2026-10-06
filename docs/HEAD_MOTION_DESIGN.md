@@ -189,7 +189,7 @@ Human Verificationでは、速度driveを使うと前へ移動している間ず
 - 頭部が前方へ加速した瞬間、進行方向と逆向きの短いdrive angleをcontrol 1へ与える。
 - 頭部が減速するとdrive符号が反転し、根元側が戻る一方で中央・毛先には直前の角速度が残る。これにより毛先の追い越しを作る。
 - 等速移動中はdriveをほぼ0とし、根元を曲げ続けない。
-- P1/P2ではCanvas X加速度の符号が自然に反転し、world angleの鏡映と一致する。
+- 通常Battleのworld-space chainではCanvas Xを扱うが、NeckRangePreviewの方向付き伸長targetはキャラクター前方基準のlocal chainとして扱う。NeckRange専用入力では前後位置を `_head_offset.x * facing`、取り付け角を `_head_rotation * facing` へ正規化し、P1/P2で同一の物理入力にする。左右反転そのものはRigのscale/rotationで描画する。
 - driveは根元/control1/control2へ45/35/20%で分配し、根元側30%全体からしなりを開始する。
 - control3以降へは結合を通して伝える。
 
