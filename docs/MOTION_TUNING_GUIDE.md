@@ -187,11 +187,11 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_MAX_OFFSET_STEP` | 0.045 rad | 隣接区間のoffset差上限 |
 | `SOFT_CHAIN_HZ` | 5.2 Hz | 全体の追従速度。根元〜中央も遅らせる |
 | `SOFT_ROOT_DAMPING` | 0.38 | 根元側controlの減衰 |
-| `SOFT_TIP_DAMPING` | 0.82 | 毛先側の絶対減衰。先端だけの振動を強く抑える |
+| `SOFT_TIP_DAMPING` | 0.90 | 毛先側の絶対減衰。中央より遅れて反転させる |
 | `SOFT_RELATIVE_DAMPING_ROOT` | 0.18 | 根元側の隣接区間相対速度減衰 |
-| `SOFT_RELATIVE_DAMPING_TIP` | 0.82 | 毛先側の隣接区間相対速度減衰 |
+| `SOFT_RELATIVE_DAMPING_TIP` | 0.90 | 毛先側の隣接区間相対速度減衰 |
 | `SOFT_SHAPE_RESTORE_RATIO` | 0.018 | 基準形状への直接復元 |
-| `SOFT_TIP_SPRING_GAIN` | 0.62 | 毛先ばね。先端増幅を抑える |
+| `SOFT_TIP_SPRING_GAIN` | 0.45 | 毛先ばね。30fpsでも中央より後に反転させる |
 | `SOFT_DYNAMIC_CURVE_RETENTION` | 0.12 | 方向target無しの高速移動時に残すC字曲率 |
 | `SOFT_DIRECTIONAL_CURVE_RETENTION` | 0.03 | 後方/前方伸長target中に残すC字曲率 |
 | `SOFT_DIRECTIONAL_ROOT_MAX_OFFSET` | 1.75 rad | 後方/前方へ根元接線を倒す許容量 |
