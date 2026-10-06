@@ -28,6 +28,9 @@ const SOFT_SHAPE_RESTORE_RATIO: float = 0.05
 const SOFT_RELATIVE_DAMPING_ROOT: float = 0.0
 const SOFT_RELATIVE_DAMPING_TIP: float = 0.0
 const SOFT_TIP_SPRING_GAIN: float = 1.75
+const SOFT_DYNAMIC_CURVE_RETENTION: float = 1.0
+const SOFT_CURVE_RELEASE_SPEED: float = 1500.0
+const SOFT_CURVE_RELEASE_ANGULAR_SPEED: float = 6.0
 const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000010
 const SOFT_DRIVE_LIMIT: float = 0.70
 const SOFT_MAX_OFFSET: float = 0.70
@@ -86,6 +89,9 @@ var soft_shape_restore_ratio: float = SOFT_SHAPE_RESTORE_RATIO
 var soft_relative_damping_root: float = SOFT_RELATIVE_DAMPING_ROOT
 var soft_relative_damping_tip: float = SOFT_RELATIVE_DAMPING_TIP
 var soft_tip_spring_gain: float = SOFT_TIP_SPRING_GAIN
+var soft_dynamic_curve_retention: float = SOFT_DYNAMIC_CURVE_RETENTION
+var soft_curve_release_speed: float = SOFT_CURVE_RELEASE_SPEED
+var soft_curve_release_angular_speed: float = SOFT_CURVE_RELEASE_ANGULAR_SPEED
 var soft_forward_accel_drive: float = SOFT_FORWARD_ACCEL_DRIVE
 var soft_drive_limit: float = SOFT_DRIVE_LIMIT
 var soft_max_offset: float = SOFT_MAX_OFFSET
@@ -113,7 +119,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"root_start_weight", "max_offset_step", "root_drive_ratio", "next_drive_ratio",
 		"third_drive_ratio", "chain_hz", "root_damping", "tip_damping",
 		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
-		"tip_spring_gain", "forward_accel_drive", "drive_limit", "max_offset"
+		"tip_spring_gain", "dynamic_curve_retention", "curve_release_speed",
+		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -138,6 +145,9 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_relative_damping_root = maxf(0.0, float(tuning.get("relative_damping_root", soft_relative_damping_root)))
 	soft_relative_damping_tip = maxf(0.0, float(tuning.get("relative_damping_tip", soft_relative_damping_tip)))
 	soft_tip_spring_gain = maxf(0.0, float(tuning.get("tip_spring_gain", soft_tip_spring_gain)))
+	soft_dynamic_curve_retention = clampf(float(tuning.get("dynamic_curve_retention", soft_dynamic_curve_retention)), 0.0, 1.0)
+	soft_curve_release_speed = maxf(1.0, float(tuning.get("curve_release_speed", soft_curve_release_speed)))
+	soft_curve_release_angular_speed = maxf(0.01, float(tuning.get("curve_release_angular_speed", soft_curve_release_angular_speed)))
 	soft_forward_accel_drive = maxf(0.0, float(tuning.get("forward_accel_drive", soft_forward_accel_drive)))
 	soft_drive_limit = maxf(0.0, float(tuning.get("drive_limit", soft_drive_limit)))
 	soft_max_offset = maxf(0.0, float(tuning.get("max_offset", soft_max_offset)))
@@ -165,6 +175,9 @@ func soft_tuning_snapshot() -> Dictionary:
 		"relative_damping_root": soft_relative_damping_root,
 		"relative_damping_tip": soft_relative_damping_tip,
 		"tip_spring_gain": soft_tip_spring_gain,
+		"dynamic_curve_retention": soft_dynamic_curve_retention,
+		"curve_release_speed": soft_curve_release_speed,
+		"curve_release_angular_speed": soft_curve_release_angular_speed,
 		"forward_accel_drive": soft_forward_accel_drive,
 		"drive_limit": soft_drive_limit,
 		"max_offset": soft_max_offset
@@ -492,6 +505,7 @@ func _advance_softness(
 
 	var safe_delta: float = maxf(delta, 0.000001)
 	var forward_velocity: float = (forward_px - _soft_previous_forward_px) / safe_delta
+	var angular_velocity: float = wrapf(angle - _soft_previous_angle, -PI, PI) / safe_delta
 	if bounded <= 0.000001:
 		_soft_previous_angle = angle
 		_soft_previous_forward_px = forward_px
@@ -504,6 +518,15 @@ func _advance_softness(
 	_soft_previous_forward_velocity = forward_velocity
 	_soft_previous_angle = angle
 	var drive: float = clampf(-forward_acceleration * soft_forward_accel_drive, -soft_drive_limit, soft_drive_limit)
+	var speed_activity: float = clampf(absf(forward_velocity) / soft_curve_release_speed, 0.0, 1.0)
+	var angular_activity: float = clampf(absf(angular_velocity) / soft_curve_release_angular_speed, 0.0, 1.0)
+	var drive_activity: float = clampf(absf(drive) / maxf(soft_drive_limit, 0.000001), 0.0, 1.0)
+	var motion_activity: float = maxf(speed_activity, maxf(angular_activity, drive_activity))
+	var dynamic_curve_retention: float = lerpf(
+		1.0,
+		soft_dynamic_curve_retention,
+		smoothstep(0.05, 1.0, motion_activity)
+	)
 	var remaining: float = delta
 	while remaining > 0.0000001:
 		var step: float = minf(remaining, SOFT_MAX_STEP)
@@ -526,6 +549,9 @@ func _advance_softness(
 			var index: int = _soft_control_indices[control]
 			var previous_index: int = _soft_control_indices[control - 1]
 			var desired_curve: float = wrapf(current_angles[index] - current_angles[previous_index], -PI, PI)
+			# 高速移動中は待機C字の局所曲率を弱め、毛束を根元〜中央からほどく。
+			# 停止時はdynamic_curve_retention=1へ戻るため、待機C字へ自然復元する。
+			desired_curve *= dynamic_curve_retention
 			var coupled_target: float = previous_world[control - 1] + desired_curve
 			if control == 1:
 				coupled_target += drive * soft_next_drive_ratio
