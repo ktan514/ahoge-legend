@@ -172,7 +172,7 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 
 旧4秒往復は廃止した。「攻撃速度テスト」は後端-0.4Dで保持した後、約0.15秒で前端+0.4Dへ切り返す。
 
-現在の調整対象はNeckRangePreviewだけ。頭部運動は変更しない。NeckRangePreview専用tuning profileで9 controlを0/2/5/10/18/30/45/65/100%へ配置する。さらに、頭部が高速移動している間だけ待機C字の局所曲率保持を弱め、根元〜中央からC字自体をほどく。停止時は曲率保持を100%へ戻し、元のC字へ復元する。共通defaultとMotionPreviewはこの実験値をまだ使わない。
+現在の調整対象はNeckRangePreviewだけ。頭部運動は変更しない。「攻撃速度テスト」中は専用の方向付き伸長targetを使う。後端保持では後方へほぼ直線、0.15秒の切り返しでtargetを反転、前端保持では前方へほぼ直線へ伸ばす。control chainがtargetへ遅れて追従するため、反転途中だけ中腹・毛先の遅れが見える。テスト停止時はtargetを解除し待機C字へ戻す。共通defaultとMotionPreviewはまだ変更しない。
 
 主な初期値:
 
@@ -192,7 +192,10 @@ godot --path . res://tools/motion_preview/NeckRangePreview.tscn
 | `SOFT_RELATIVE_DAMPING_TIP` | 0.82 | 毛先側の隣接区間相対速度減衰 |
 | `SOFT_SHAPE_RESTORE_RATIO` | 0.018 | 基準形状への直接復元 |
 | `SOFT_TIP_SPRING_GAIN` | 0.62 | 毛先ばね。先端増幅を抑える |
-| `SOFT_DYNAMIC_CURVE_RETENTION` | 0.12 | 高速移動時に残す待機C字の局所曲率比率 |
+| `SOFT_DYNAMIC_CURVE_RETENTION` | 0.12 | 方向target無しの高速移動時に残すC字曲率 |
+| `SOFT_DIRECTIONAL_CURVE_RETENTION` | 0.03 | 後方/前方伸長target中に残すC字曲率 |
+| `SOFT_DIRECTIONAL_ROOT_MAX_OFFSET` | 1.75 rad | 後方/前方へ根元接線を倒す許容量 |
+| `SOFT_DIRECTIONAL_MAX_OFFSET` | 2.40 rad | 方向付き伸長時の全体offset上限 |
 | `SOFT_CURVE_RELEASE_SPEED` | 1500 px/s | C字曲率をほどく前後速度基準 |
 | `SOFT_CURVE_RELEASE_ANGULAR_SPEED` | 6 rad/s | C字曲率をほどく角速度基準 |
 | `SOFT_FORWARD_ACCEL_DRIVE` | 0.000012 | 頭部Canvas X加速度drive |
@@ -212,7 +215,7 @@ NeckRangePreviewの「アホ毛柔らかさ」0.0ではchainを基準形状へ�
 6. 頭部停止後も中央・毛先が少し動き、その後基準形状へ収束。
 7. 実STRIKEでは接触2px、固定メッシュ、振り抜き契約を維持する。
 
-現在は先端速度ではなく根元〜中央の柔らかさを優先する。確認順は「根元位置固定 → 根元直後が遅れる → 高速移動中にC字そのものがほどける → 0〜30%から中央まで長い弧になる → 毛先だけが大振幅にならない → 停止するとC字へ戻る」。このゲートが合格するまでMotionPreviewの柔軟係数・STRIKE形状は変更しない。
+確認順は「根元位置固定 → 後端保持で後方へ伸びる → 前方切り返し直後は毛先が後方へ残る → 根元→中央→毛先の順で反転 → 前端保持で前方へ伸びる → C字を保持し続けない → テスト停止で待機C字へ戻る」。このゲートが合格するまでMotionPreviewの柔軟係数・STRIKE形状は変更しない。
 
 ## 9. 最小の反復手順
 
