@@ -32,6 +32,7 @@ var _parry_blocks_old_contact: bool = false
 var _contact_frozen: bool = false
 var _contact_anchor_canvas: Vector2 = Vector2.ZERO
 var _follow_end_canvas: Vector2 = Vector2.ZERO
+var _parry_entry_vertices: PackedVector2Array = PackedVector2Array()
 
 
 func _ready() -> void:
@@ -74,6 +75,8 @@ func _process(delta: float) -> void:
 			_entry_transform = _motion_node.transform
 		if next_state == CombatantStateScript.ActionState.PARRY:
 			_parry_blocks_old_contact = true
+			if _mesh_node != null and _mesh_node.configured:
+				_parry_entry_vertices = _mesh_node.current_vertices.duplicate()
 		if next_state in [CombatantStateScript.ActionState.CHARGING, CombatantStateScript.ActionState.WINDUP, CombatantStateScript.ActionState.STRIKE]:
 			_parry_blocks_old_contact = false
 			_force_contact = false
@@ -205,6 +208,17 @@ func confirm_contact() -> bool:
 	return true
 
 
+func _blend_vertices(a: PackedVector2Array, b: PackedVector2Array, weight: float) -> PackedVector2Array:
+	if a.size() != b.size():
+		return b.duplicate()
+	var result: PackedVector2Array = PackedVector2Array()
+	result.resize(a.size())
+	var t: float = clampf(weight, 0.0, 1.0)
+	for i in range(a.size()):
+		result[i] = a[i].lerp(b[i], t)
+	return result
+
+
 func _neutral_transform() -> Transform2D:
 	var base_scale: float = maxf(0.21, get_viewport_rect().size.x / 5200.0)
 	# 頭部の位置と傾きはroot anchorへ反映済み。全毛束を一体で回さない。
@@ -248,6 +262,11 @@ func present_toward(target_canvas: Vector2) -> void:
 	_force_contact = false
 	var pose_vertices: PackedVector2Array = action_motion.visual_vertices()
 	var active_q: float = 0.0
+	if _presentation_state == CombatantStateScript.ActionState.PARRY and not _parry_entry_vertices.is_empty():
+		var parry_join: float = smoothstep(0.0, ParryMotionScript.ENTRY_SECONDS, action_motion.elapsed)
+		pose_vertices = _blend_vertices(_parry_entry_vertices, pose_vertices, parry_join)
+		if parry_join >= 0.999:
+			_parry_entry_vertices = PackedVector2Array()
 	if _presentation_state == CombatantStateScript.ActionState.STRIKE and not confirmed:
 		var active_contact_seconds: float = action_motion.duration * action_motion.contact_ratio
 		active_q = action_motion.elapsed / maxf(active_contact_seconds, 0.001)
