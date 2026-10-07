@@ -469,6 +469,16 @@ Mac録画では、頭部の後退・前方切り返し・0.4D位置・仰角は�
 - この3領域gainはNeckRange専用tuningとし、共通defaultは従来の線形gainのままとする。
 - control間角度差0.32→0.18、総曲率2.20rad上限、Active tip mass 1.60、Active tip drive 1.75、弾性伸縮は維持する。
 
+3領域spring gain（middle=0.56）のCIでは後端曲率が0.266423radまで増えて0.25rad契約を破り、root/middleの速度ピーク時刻も改善しなかったため不採用とする。directional spring gainは従来のroot→tip線形補間へ戻す。
+
+次の原因はcontrol間折れ制限の参照時刻にある。現在はcontrol Nを更新するとき、同じ1/240秒substepですでに更新済みのcontrol N-1角度を基準にclampしている。このためspringで遅らせても、clampが新しいroot角度を同一substep内で後段へ押し流し、middle/tipの位相差を潰す。
+
+- NeckRange directional中だけ、control間clampの上流基準を**直前substepのcontrol N-1角度**へ切り替える。
+- control N自身のばね・速度更新は従来どおり行う。変更するのは折れ上限の参照時刻だけ。
+- これにより折れ制限はU字抑止として残る一方、rootの新角度は1 controlあたり少なくとも1 substep遅れて伝わる。
+- 1/240秒内部step・9 controlsでは、root→middle→tipへ数ms〜数十msの因果的な位相差を作り、30fpsでも別frameへ分離できる余地を持たせる。
+- 参照を遅らせても実描画総曲率2.20rad以下、後端/前端0.25rad以下の契約は維持する。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
