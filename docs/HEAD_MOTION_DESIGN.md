@@ -507,6 +507,22 @@ Human要望の「アホ毛自身が攻撃する」はPassive Flexの遅れ量で
 - 既存のActive tip mass / drive gain / 弾性伸長を併用し、wave解除時に毛先の速度ピークを最大化する。
 - Active waveの共通default weightは0。Human Verification合格まではNeckRange専用値だけを有効にする。
 
+tip wave weight=0.72のCIではtip速度が約55,480px/sまで上がった一方、総曲率が5.08〜5.70radへ増大した。絶対角度targetをrender角へ混ぜる方式は、攻撃力を作れてもU字禁止契約と両立しないため不採用とする。
+
+能動エネルギーの後段集中は**角度ではなくsegment lengthの弾性解放**で作る。
+
+- Passive Flexの角度生成・control clampは安定版へ完全に戻す。
+- 後端保持では遠位側segmentを最大3.5%圧縮して溜める。
+- 前方切り返しでは、各segmentの圧縮→伸長解放時刻を弧長sで連続的に遅らせる。
+- release center初期候補は `q = 0.42 + 0.46 * s`。弧長20%付近q≈0.51、middle q≈0.67、tip q≈0.86。
+- 各releaseはcenter±0.10のsmoothstepとし、離散的なsegment切替を避ける。
+- release前はpreload contraction=-0.035を維持し、release後は既存の時刻別elastic stretch target（最大+0.10）へ追従する。
+- 30fpsではroot側の解放をq≈0.6、middleをq≈0.8、tipをq≈1.0へ分け、伸長速度ピークをroot→middle→tipへ並べる。
+- 角度を変更しないため、総曲率2.20rad契約はPassive Flex安定版の値を維持する。
+- front holdではactive progress=1なので全segmentが解放済みとなり、+10%→+2%へ自然減衰する。
+- reset/停止では伸長0へ戻し、待機C字へ復帰する。
+- segment lengthの変化だけを使い、uniform scale・断面幅変更・根元移動は行わない。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
