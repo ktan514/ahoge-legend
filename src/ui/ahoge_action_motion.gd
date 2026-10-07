@@ -58,7 +58,7 @@ const SOFT_ACTIVE_ROOT_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
-const SOFT_DIRECTIONAL_MIDDLE_SPRING_GAIN: float = -1.0
+const SOFT_DIRECTIONAL_LAGGED_CLAMP: float = 0.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -135,7 +135,7 @@ var soft_active_root_direct_gain: float = SOFT_ACTIVE_ROOT_DIRECT_GAIN
 var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
-var soft_directional_middle_spring_gain: float = SOFT_DIRECTIONAL_MIDDLE_SPRING_GAIN
+var soft_directional_lagged_clamp: float = SOFT_DIRECTIONAL_LAGGED_CLAMP
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -164,7 +164,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "directional_control_step_tip", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
-		"active_tip_drive_gain", "active_tip_damping_ratio", "directional_middle_spring_gain"
+		"active_tip_drive_gain", "active_tip_damping_ratio", "directional_lagged_clamp"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -206,8 +206,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_direct_gain = clampf(float(tuning.get("active_tip_direct_gain", soft_active_tip_direct_gain)), 0.0, 1.0)
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
-	if tuning.has("directional_middle_spring_gain"):
-		soft_directional_middle_spring_gain = clampf(float(tuning["directional_middle_spring_gain"]), 0.05, 2.0)
+	soft_directional_lagged_clamp = clampf(float(tuning.get("directional_lagged_clamp", soft_directional_lagged_clamp)), 0.0, 1.0)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -249,7 +248,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_direct_gain": soft_active_tip_direct_gain,
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
-		"directional_middle_spring_gain": soft_directional_middle_spring_gain
+		"directional_lagged_clamp": soft_directional_lagged_clamp
 	}
 
 
@@ -715,24 +714,6 @@ func _advance_softness(
 			# directional chainでは中央から明確に遅らせる。通常のPassive Flexは従来のfraction²を維持する。
 			var spring_fraction: float = fraction if directional_weight > 0.000001 else fraction * fraction
 			var spring_gain: float = lerpf(1.0, soft_tip_spring_gain, spring_fraction)
-			if directional_weight > 0.000001 and soft_directional_middle_spring_gain >= 0.0:
-				# NeckRange専用ではroot→middle→tipを3領域に分ける。
-				# 根元側の初速伝達は強く残し、middleだけを線形補間より柔らかくして
-				# rootの速度ピークを同frameで複製しない。
-				if fraction <= 0.30:
-					spring_gain = lerpf(1.0, 0.88, smoothstep(0.08, 0.30, fraction))
-				elif fraction <= 0.55:
-					spring_gain = lerpf(
-						0.88,
-						soft_directional_middle_spring_gain,
-						smoothstep(0.30, 0.55, fraction)
-					)
-				else:
-					spring_gain = lerpf(
-						soft_directional_middle_spring_gain,
-						soft_tip_spring_gain,
-						smoothstep(0.55, 1.0, fraction)
-					)
 			var active_drive_gain: float = lerpf(
 				1.0,
 				lerpf(1.0, soft_active_tip_drive_gain, fraction),
@@ -750,7 +731,14 @@ func _advance_softness(
 			if directional_weight > 0.000001:
 				# 描画segmentではなく動的control同士の差を制限する。
 				# controlの速度状態は残すため、rootの変化を同一frameでtipまで書き換えない。
-				var upstream_world: float = _soft_world_angles[control - 1]
+				# NeckRange専用では同一substepで更新済みの上流角を使わない。
+				# 直前substepの角度を参照し、折れ制限そのものがrootの新角度を
+				# middle/tipへ即時伝播させることを防ぐ。
+				var upstream_world: float = (
+					previous_world[control - 1]
+					if soft_directional_lagged_clamp >= 0.5
+					else _soft_world_angles[control - 1]
+				)
 				var relative_angle: float = wrapf(world_angle - upstream_world, -PI, PI)
 				var control_step_limit: float = lerpf(
 					soft_directional_control_step,
