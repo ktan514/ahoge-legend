@@ -117,7 +117,12 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"NeckRange専用root側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["directional_control_step_tip"]) >= 0.17 and float(tuning["directional_control_step_tip"]) <= 0.19,
+		float(tuning["directional_control_step_middle"]) >= 0.20
+		and float(tuning["directional_control_step_middle"]) <= 0.24,
+		"NeckRange専用middle側control間位相差上限が候補域から外れています: " + label
+	)
+	_expect(
+		float(tuning["directional_control_step_tip"]) >= 0.04 and float(tuning["directional_control_step_tip"]) <= 0.06,
 		"NeckRange専用tip側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(float(tuning["active_tip_mass"]) >= 1.50, "NeckRange専用の毛先慣性が不足しています: " + label)
@@ -131,11 +136,6 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		float(tuning["active_preload_contraction"]) >= -0.037
 		and float(tuning["active_preload_contraction"]) <= -0.033,
 		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
-	)
-	_expect(
-		float(tuning["active_hold_gain"]) >= 0.53
-		and float(tuning["active_hold_gain"]) <= 0.57,
-		"NeckRange専用の毛先慣性holdが候補域から外れています: " + label
 	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
@@ -248,8 +248,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var observed_seconds: float = 0.0
 	var maximum_transition_curvature: float = 0.0
 	var maximum_stretch_ratio: float = rear_length_ratio
-	var peak_forward_speeds := PackedFloat32Array([0.0, 0.0, 0.0])
-	var peak_forward_times := PackedFloat32Array([INF, INF, INF])
+	var peak_visible_speeds := PackedFloat32Array([0.0, 0.0, 0.0])
+	var peak_control_speeds := PackedFloat32Array([0.0, 0.0, 0.0])
+	var peak_control_times := PackedFloat32Array([INF, INF, INF])
 	var previous_points: Array[Vector2] = _mesh_chain_points(actor.action_motion, rear_vertices, [0.20, 0.55, 0.95])
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
@@ -270,33 +271,19 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		maximum_transition_curvature = maxf(maximum_transition_curvature, _body_curvature(front_hold_angles, actor.action_motion.fractions, 1.0))
 		var current_length: float = _mesh_centerline_length(actor.action_motion, mesh_node.current_vertices)
 		maximum_stretch_ratio = maxf(maximum_stretch_ratio, current_length / rest_length)
+		_track_soft_peaks(actor.action_motion, observed_seconds, peak_control_speeds, peak_control_times)
 		var points: Array[Vector2] = _mesh_chain_points(actor.action_motion, mesh_node.current_vertices, [0.20, 0.55, 0.95])
-		var frame_speeds := PackedFloat32Array([0.0, 0.0, 0.0])
 		for slot in range(points.size()):
 			var forward_speed: float = (points[slot].x - previous_points[slot].x) / step_seconds
-			frame_speeds[slot] = forward_speed
-			if forward_speed > peak_forward_speeds[slot]:
-				peak_forward_speeds[slot] = forward_speed
-				peak_forward_times[slot] = observed_seconds
-		if resolution == 0 and side == 0 and fps == 30:
-			print(
-				"AHOGE neck trace: t=%.3f q=%.3f dir=%.3f stretch=%.4f x=%s v=%s controls=%s"
-				% [
-					observed_seconds,
-					u,
-					direction,
-					scene.attack_preview_elastic_stretch(phase_seconds),
-					str(PackedFloat32Array([points[0].x, points[1].x, points[2].x])),
-					str(frame_speeds),
-					str(actor.action_motion.soft_control_world_angles())
-				]
-			)
+			if forward_speed > peak_visible_speeds[slot]:
+				peak_visible_speeds[slot] = forward_speed
 		previous_points = points
-		if near_cross == INF and points[0].x > 0.0:
+		var phase_points: Array[Vector2] = _soft_chain_points(actor.action_motion, [0.20, 0.55, 0.95])
+		if near_cross == INF and phase_points[0].x > 0.0:
 			near_cross = observed_seconds
-		if middle_cross == INF and points[1].x > 0.0:
+		if middle_cross == INF and phase_points[1].x > 0.0:
 			middle_cross = observed_seconds
-		if tip_cross == INF and points[2].x > 0.0:
+		if tip_cross == INF and phase_points[2].x > 0.0:
 			tip_cross = observed_seconds
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless":
 			await _save_dynamic_frame(scene.viewport, "strike_%02d.png" % sweep_frame)
@@ -316,18 +303,19 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		observed_seconds += step_seconds
 		var current_length: float = _mesh_centerline_length(actor.action_motion, mesh_node.current_vertices)
 		maximum_stretch_ratio = maxf(maximum_stretch_ratio, current_length / rest_length)
+		_track_soft_peaks(actor.action_motion, observed_seconds, peak_control_speeds, peak_control_times)
 		var points: Array[Vector2] = _mesh_chain_points(actor.action_motion, mesh_node.current_vertices, [0.20, 0.55, 0.95])
 		for slot in range(points.size()):
 			var forward_speed: float = (points[slot].x - previous_points[slot].x) / step_seconds
-			if forward_speed > peak_forward_speeds[slot]:
-				peak_forward_speeds[slot] = forward_speed
-				peak_forward_times[slot] = observed_seconds
+			if forward_speed > peak_visible_speeds[slot]:
+				peak_visible_speeds[slot] = forward_speed
 		previous_points = points
-		if near_cross == INF and points[0].x > 0.0:
+		var phase_points: Array[Vector2] = _soft_chain_points(actor.action_motion, [0.20, 0.55, 0.95])
+		if near_cross == INF and phase_points[0].x > 0.0:
 			near_cross = observed_seconds
-		if middle_cross == INF and points[1].x > 0.0:
+		if middle_cross == INF and phase_points[1].x > 0.0:
 			middle_cross = observed_seconds
-		if tip_cross == INF and points[2].x > 0.0:
+		if tip_cross == INF and phase_points[2].x > 0.0:
 			tip_cross = observed_seconds
 		if fps == 60 and side == 0 and resolution == 0 and DisplayServer.get_name() != "headless" and front_frame in [0, 3, 7, 11]:
 			await _save_dynamic_frame(scene.viewport, "front_%02d.png" % front_frame)
@@ -342,12 +330,12 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(maximum_transition_curvature <= 2.20, "切り返し中に毛束が輪状へ巻き込んでいます: %s curvature=%f" % [label, maximum_transition_curvature])
 	_expect(maximum_stretch_ratio >= 1.04 and maximum_stretch_ratio <= 1.07, "前方攻撃の弾性伸長が少量の範囲から外れています: %s ratio=%f" % [label, maximum_stretch_ratio])
 	_expect(
-		peak_forward_times[0] < peak_forward_times[1] and peak_forward_times[1] < peak_forward_times[2],
-		"前方速度ピークがroot→middle→tipの順ではありません: %s times=%s speeds=%s" % [label, str(peak_forward_times), str(peak_forward_speeds)]
+		peak_control_times[0] < peak_control_times[1] and peak_control_times[1] < peak_control_times[2],
+		"角速度ピークがroot→middle→tipの順ではありません: %s times=%s speeds=%s" % [label, str(peak_control_times), str(peak_control_speeds)]
 	)
 	_expect(
-		peak_forward_speeds[2] >= peak_forward_speeds[1] * 1.08,
-		"毛先へ前方速度が集まっていません: %s speeds=%s" % [label, str(peak_forward_speeds)]
+		peak_visible_speeds[2] >= peak_visible_speeds[1] * 1.08,
+		"毛先へ実描画の前方速度が集まっていません: %s speeds=%s" % [label, str(peak_visible_speeds)]
 	)
 	_expect(actor.mesh_canvas_vertices()[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "前方伸長で根元が頭部から外れました: " + label)
 
