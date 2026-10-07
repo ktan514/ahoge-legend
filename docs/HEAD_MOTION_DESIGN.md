@@ -460,6 +460,15 @@ Mac録画では、頭部の後退・前方切り返し・0.4D位置・仰角は�
 - これによりroot→middle→tipの速度ピークと前方crossを30fpsでも別frameへ分離する。
 - 毛先のmass増加・後段drive gain・弾性伸長は維持し、得られたtip速度優位を失わせない。
 
+2回目CIでは、Active Driveの開始を後ろへ移しても30/60fpsのroot・middle速度ピーク時刻は変わらず、60fpsのtipピークだけが0.1167秒→0.1333秒へ遅れた。したがってmiddleの早すぎる追従はActive DriveではなくPassive Flexの結合ばねが支配している。
+
+- directional中の結合ばねgainを単純なroot→tip線形補間にしない。
+- 根元〜弧長30%は強い結合を維持し、頭部初速を受け取る。
+- 弧長55%のmiddleではgainを0.56まで落とし、rootの速度ピークを同frameでコピーしない。
+- middle→tipは0.56→既存tip gain 0.45へ緩やかに落とす。tipを極端に弱くして遅れ続けさせない。
+- この3領域gainはNeckRange専用tuningとし、共通defaultは従来の線形gainのままとする。
+- control間角度差0.32→0.18、総曲率2.20rad上限、Active tip mass 1.60、Active tip drive 1.75、弾性伸縮は維持する。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
