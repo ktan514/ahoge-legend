@@ -32,7 +32,7 @@ const NECK_SOFT_TUNING := {
 	"directional_root_hz": 20.0,
 	"directional_root_max_offset": 3.10,
 	"directional_max_offset": 3.10,
-	"directional_control_step": 0.27,
+	"directional_control_step": 0.40,
 	"curve_release_speed": 1500.0,
 	"curve_release_angular_speed": 6.0,
 	"forward_accel_drive": 0.000000,
