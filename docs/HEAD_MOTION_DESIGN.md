@@ -290,8 +290,9 @@ MacのNeckRangePreview「攻撃速度テスト」録画で、後端→前端の�
 - 切り返し中も隣接segmentの角度差を制限し、中心線が輪・フック状に巻き込む局所折れを禁止する。根元→中央→毛先の時間差は維持し、全区間を同時に剛体回転させて解決しない。
 - directional chainの折れ制限を**描画segment列へ同一frameで適用しない**。render時にrootからsegmentを順次clampすると、rootの新角度が同一frameでmiddle/tipへ伝わり、物理chainの位相差を消してしまう。
 - 代わりに9個の動的control間へ最大角度差を設ける。各controlは自身の角速度とばね応答を保持したまま、直前controlとの差だけを上限内へ制限する。描画はそのcontrol列を弧長補間するだけとし、root→middle→tipの時間差を保持する。
-- 0.27radのcontrol間上限ではroot→middleの4段でも約1.08radしか位相差を持てず、30fpsでrootとmiddleが同じframeに前方反転した。この値は狭すぎるため不採用とする。
-- NeckRange専用のdirectional control間最大角度差は0.40radを候補値とする。root→middleに約1.6radまでの遅れを許しつつ、実描画の総曲率は別契約の2.20rad以下で制限する。単一control上限だけでU字禁止を保証せず、録画由来の総曲率検査を最終ゲートとする。毛先→根元への逆伝播clampは禁止する。
+- 0.27radのcontrol間上限ではroot→middleの位相差が不足し、30fpsでrootとmiddleが同じframeに前方反転した。一方、全controlを0.40radへ広げると実描画総曲率が約3.14〜3.20radまで増え、録画と同じU字巻き込みが再発した。どちらの一律値も不採用とする。
+- NeckRange directional中のcontrol間角度差は**根元側を広く、毛先側ほど狭くする勾配上限**とする。候補値はroot側0.43rad→tip側0.05rad。根元〜中央には約90°の位相差を許して30fpsでもroot先行を見せ、中央以降は差を急速に絞って毛先がさらに巻き込むことを防ぐ。
+- 実描画の総曲率2.20rad以下、端点0.30秒内のほぼ直線収束、root < middle < tipの反転順序を同時に満たすことを採用条件とする。毛先→根元への逆伝播clampは禁止する。
 - 30fpsでもrootとmiddleが同一frameへ潰れないよう、directional chainのspring gainは弧長後半ほど弱くする。root側の応答速度は維持し、middle/tipだけを1frame以上遅らせる。端点0.30秒内の直線収束を壊さない範囲でNeckRange専用tip spring gainを下げる。
 - 端点の前後伸長量・斜め逃げ率は、待機C字の根元→毛先chord長ではなくprofile中心線の**基準弧長**を分母にする。C字のchord長を基準にして直線伸長を過大評価しない。
 - root/chainの減衰をNeckRange専用tuningで引き上げ、directional rootの周波数と並進加速度driveを必要以上に強くしない。端点0.30秒内で収束する一方、0.15秒の切り返し中はroot→middle→tipの順序を残す。
