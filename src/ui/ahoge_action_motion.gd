@@ -243,6 +243,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"directional_root_max_offset": soft_directional_root_max_offset,
 		"directional_max_offset": soft_directional_max_offset,
 		"directional_control_step": soft_directional_control_step,
+		"directional_control_step_middle": soft_directional_control_step_middle,
 		"directional_control_step_tip": soft_directional_control_step_tip,
 		"curve_release_speed": soft_curve_release_speed,
 		"curve_release_angular_speed": soft_curve_release_angular_speed,
@@ -254,8 +255,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_direct_gain": soft_active_tip_direct_gain,
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
-		"active_preload_contraction": soft_active_preload_contraction,
-		"active_hold_gain": soft_active_hold_gain
+		"active_preload_contraction": soft_active_preload_contraction
 	}
 
 
