@@ -271,11 +271,26 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		var current_length: float = _mesh_centerline_length(actor.action_motion, mesh_node.current_vertices)
 		maximum_stretch_ratio = maxf(maximum_stretch_ratio, current_length / rest_length)
 		var points: Array[Vector2] = _mesh_chain_points(actor.action_motion, mesh_node.current_vertices, [0.20, 0.55, 0.95])
+		var frame_speeds := PackedFloat32Array([0.0, 0.0, 0.0])
 		for slot in range(points.size()):
 			var forward_speed: float = (points[slot].x - previous_points[slot].x) / step_seconds
+			frame_speeds[slot] = forward_speed
 			if forward_speed > peak_forward_speeds[slot]:
 				peak_forward_speeds[slot] = forward_speed
 				peak_forward_times[slot] = observed_seconds
+		if resolution == 0 and side == 0 and fps == 30:
+			print(
+				"AHOGE neck trace: t=%.3f q=%.3f dir=%.3f stretch=%.4f x=%s v=%s controls=%s"
+				% [
+					observed_seconds,
+					u,
+					direction,
+					scene.attack_preview_elastic_stretch(phase_seconds),
+					str(PackedFloat32Array([points[0].x, points[1].x, points[2].x])),
+					str(frame_speeds),
+					str(actor.action_motion.soft_control_world_angles())
+				]
+			)
 		previous_points = points
 		if near_cross == INF and points[0].x > 0.0:
 			near_cross = observed_seconds
