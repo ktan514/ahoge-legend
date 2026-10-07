@@ -128,9 +128,9 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
 	_expect(
-		float(tuning["active_wave_weight"]) >= 0.70
-		and float(tuning["active_wave_weight"]) <= 0.74,
-		"NeckRange専用Active wave weightが候補域から外れています: " + label
+		float(tuning["active_preload_contraction"]) >= -0.037
+		and float(tuning["active_preload_contraction"]) <= -0.033,
+		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
 	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
