@@ -278,6 +278,19 @@ Human Verificationでは、速度driveを使うと前へ移動している間ず
 - driveは根元/control1/control2へ45/35/20%で分配し、根元側30%全体からしなりを開始する。
 - control3以降へは結合を通して伝える。
 
+#### 2026-10-07 Human Verification録画: directional chainの過大反動を不合格とする
+
+MacのNeckRangePreview「攻撃速度テスト」録画で、後端→前端の切り返し中に毛束が輪になるほど折れ込み、その反動で左右へ大きく振り返すことを確認した。前端・後端も「ほぼ直線」へ十分収束する前に次の反転へ入り、要求するムチ打ちではない。
+
+この録画を見た目の正本とし、従来の「待機C字曲率の55%以下なら端点合格」は廃止する。
+
+- 後端保持と前端保持では、根元〜弧長75%の総曲率を0.20rad以下とし、ほぼ直線と判定できること。
+- 後端ではlocal tip Xを基準弧長の-70%以上、前端では+70%以上まで伸ばす。local tip Yは基準弧長の15%以内に抑え、方向targetから大きく斜めへ逃げないこと。
+- directional amount=1の間は待機C字の基準曲率をtargetへ持ち込まず、端点ではdirectional curve retention=0を正とする。
+- 切り返し中も隣接segmentの角度差を制限し、中心線が輪・フック状に巻き込む局所折れを禁止する。根元→中央→毛先の時間差は維持し、全区間を同時に剛体回転させて解決しない。
+- root/chainの減衰をNeckRange専用tuningで引き上げ、directional rootの周波数と並進加速度driveを必要以上に強くしない。端点0.30秒内で収束する一方、0.15秒の切り返し中はroot→middle→tipの順序を残す。
+- このHuman Verificationが再合格するまで、NeckRange専用値をMotionPreview/Battle共通defaultへ昇格しない。
+
 #### 現在の調整ゲート：NeckRangePreviewの根元〜中央を柔らかくする
 
 2026-10-06 20時台のHuman Verificationで、頭の移動・仰角は合格だが、アホ毛は「根元〜中央が棒、毛先だけがびよよーん」と判定された。以後、**NeckRangePreviewで根元〜中央が十分しなるまで、MotionPreviewの攻撃形状そのものは変更しない。**
