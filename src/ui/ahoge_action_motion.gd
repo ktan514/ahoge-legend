@@ -302,11 +302,21 @@ func advance(
 	if not (changed and state == StateScript.ActionState.PARRY):
 		elapsed += delta
 	_compute_pose()
+	var effective_softness: float = softness
+	if (
+		state == StateScript.ActionState.COOLDOWN
+		and _continued_follow_seconds >= 0.0
+		and follow_seconds() >= 0.0
+		and follow_seconds() <= FOLLOW_SECONDS + 0.000001
+	):
+		# 接触後0.16秒はActive Strikeの振り抜き軌道を正とし、
+		# 頭部回復加速度によるPassive Flexの反動を重ねない。
+		effective_softness = 0.0
 	_advance_softness(
 		delta,
 		attachment_angle,
 		attachment_forward_px,
-		softness,
+		effective_softness,
 		state,
 		available,
 		clampf(directional_amount, 0.0, 1.0),
