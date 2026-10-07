@@ -59,6 +59,7 @@ const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
 const SOFT_ACTIVE_PRELOAD_CONTRACTION: float = 0.0
+const SOFT_ACTIVE_HOLD_GAIN: float = 0.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -136,6 +137,7 @@ var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
 var soft_active_preload_contraction: float = SOFT_ACTIVE_PRELOAD_CONTRACTION
+var soft_active_hold_gain: float = SOFT_ACTIVE_HOLD_GAIN
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -164,7 +166,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "directional_control_step_tip", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
-		"active_tip_drive_gain", "active_tip_damping_ratio", "active_preload_contraction"
+		"active_tip_drive_gain", "active_tip_damping_ratio",
+		"active_preload_contraction", "active_hold_gain"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -207,6 +210,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
 	soft_active_preload_contraction = clampf(float(tuning.get("active_preload_contraction", soft_active_preload_contraction)), -0.08, 0.0)
+	soft_active_hold_gain = clampf(float(tuning.get("active_hold_gain", soft_active_hold_gain)), 0.0, 1.0)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -248,7 +252,8 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_direct_gain": soft_active_tip_direct_gain,
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
-		"active_preload_contraction": soft_active_preload_contraction
+		"active_preload_contraction": soft_active_preload_contraction,
+		"active_hold_gain": soft_active_hold_gain
 	}
 
 
@@ -713,15 +718,32 @@ func _advance_softness(
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var active_section: float = 0.0
 			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
+				var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 				var active_start: float = 0.30 + 0.55 * smoothstep(0.0, 1.0, fraction)
 				var active_full: float = 0.50 + 0.50 * smoothstep(0.0, 1.0, fraction)
-				active_section = smoothstep(active_start, active_full, _soft_active_progress)
+				active_section = smoothstep(active_start, active_full, active_q)
+				# 重い遠位側はrelease前だけ旧方向へ残ろうとする。
+				# actual angleはこの後のcontrol差clampを必ず通るため、
+				# holdを強めてもU字上限を無効化しない。
+				var hold_time: float = (
+					smoothstep(0.08, 0.35, active_q)
+					* (1.0 - smoothstep(0.72, 0.96, active_q))
+				)
+				var hold_space: float = smoothstep(0.30, 1.0, fraction)
+				var hold_gain: float = (
+					soft_active_hold_gain
+					* hold_space
+					* hold_time
+					* (1.0 - active_section)
+				)
+				if hold_gain > 0.000001:
+					target = lerp_angle(target, angle - PI, hold_gain)
 				var direct_gain: float = lerpf(
 					soft_active_root_direct_gain,
 					soft_active_tip_direct_gain,
 					smoothstep(0.0, 1.0, fraction)
 				) * active_section
-				# キャラクター前方基準のlocal 0radへ自力で向く。
+				# hold解除後はキャラクター前方基準のlocal 0radへ自力で向く。
 				target = lerp_angle(target, angle, direct_gain)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			var mass: float = lerpf(1.0, soft_active_tip_mass, pow(fraction, 1.5))
