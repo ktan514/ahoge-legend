@@ -523,6 +523,20 @@ tip wave weight=0.72のCIではtip速度が約55,480px/sまで上がった一方
 - reset/停止では伸長0へ戻し、待機C字へ復帰する。
 - segment lengthの変化だけを使い、uniform scale・断面幅変更・根元移動は行わない。
 
+段階的なlength解放のCIでは曲率・端点・伸長量は合格したが、30/60fpsのcross時刻は0.09→0.12→0.12から変わらず、middle速度ピークもrootと同frameに残った。長さ方向の弾性だけではPassive Flexの角度伝播を押し返せない。
+
+次に、先端重量を**control物理内のinertial hold**として表現する。
+
+- render後処理ではなく、control 1〜8のtarget計算内で作用させる。
+- forward strike中、release前のcontrolは現在のcoupled targetへ加えて後方角-πへ戻ろうとする弱いhold torqueを受ける。
+- holdは弧長30%まではほぼ0、middleから増え、tip側で最大とする。
+- holdはq≈0.08→0.35で立ち上げ、q≈0.72→0.96で消す。
+- 各control固有のActive Driveが立ち上がるほど `1 - active_section` でholdを解除し、後方保持→前方自力加速へ連続的に移る。
+- 初期候補の最大hold gainは0.55。共通defaultは0。
+- hold後のactual world angleには既存のcontrol差0.32→0.18rad clampを必ず適用する。したがって「重い毛先」を理由にU字上限を無効化しない。
+- tip mass 1.60、tip drive 1.75、段階弾性解放を併用し、hold解除後の速度ピークをmiddle→tipへ順に作る。
+- 30fpsの目標はroot q≈0.6、middle q≈0.8、tip q≈1.0付近の順に最大前方速度/前方crossを分離する。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
