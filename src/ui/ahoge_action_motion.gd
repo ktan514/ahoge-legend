@@ -58,7 +58,8 @@ const SOFT_ACTIVE_ROOT_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
-const SOFT_DIRECTIONAL_LAGGED_CLAMP: float = 0.0
+const SOFT_DIRECTIONAL_CLAMP_CARRY_ROOT: float = 1.0
+const SOFT_DIRECTIONAL_CLAMP_CARRY_TIP: float = 1.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -135,7 +136,8 @@ var soft_active_root_direct_gain: float = SOFT_ACTIVE_ROOT_DIRECT_GAIN
 var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
-var soft_directional_lagged_clamp: float = SOFT_DIRECTIONAL_LAGGED_CLAMP
+var soft_directional_clamp_carry_root: float = SOFT_DIRECTIONAL_CLAMP_CARRY_ROOT
+var soft_directional_clamp_carry_tip: float = SOFT_DIRECTIONAL_CLAMP_CARRY_TIP
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -164,7 +166,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "directional_control_step_tip", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
-		"active_tip_drive_gain", "active_tip_damping_ratio", "directional_lagged_clamp"
+		"active_tip_drive_gain", "active_tip_damping_ratio",
+		"directional_clamp_carry_root", "directional_clamp_carry_tip"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -206,7 +209,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_direct_gain = clampf(float(tuning.get("active_tip_direct_gain", soft_active_tip_direct_gain)), 0.0, 1.0)
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
-	soft_directional_lagged_clamp = clampf(float(tuning.get("directional_lagged_clamp", soft_directional_lagged_clamp)), 0.0, 1.0)
+	soft_directional_clamp_carry_root = clampf(float(tuning.get("directional_clamp_carry_root", soft_directional_clamp_carry_root)), 0.0, 1.0)
+	soft_directional_clamp_carry_tip = clampf(float(tuning.get("directional_clamp_carry_tip", soft_directional_clamp_carry_tip)), 0.0, 1.0)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -248,7 +252,8 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_direct_gain": soft_active_tip_direct_gain,
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
-		"directional_lagged_clamp": soft_directional_lagged_clamp
+		"directional_clamp_carry_root": soft_directional_clamp_carry_root,
+		"directional_clamp_carry_tip": soft_directional_clamp_carry_tip
 	}
 
 
@@ -731,13 +736,17 @@ func _advance_softness(
 			if directional_weight > 0.000001:
 				# 描画segmentではなく動的control同士の差を制限する。
 				# controlの速度状態は残すため、rootの変化を同一frameでtipまで書き換えない。
-				# NeckRange専用では同一substepで更新済みの上流角を使わない。
-				# 直前substepの角度を参照し、折れ制限そのものがrootの新角度を
-				# middle/tipへ即時伝播させることを防ぐ。
-				var upstream_world: float = (
-					previous_world[control - 1]
-					if soft_directional_lagged_clamp >= 0.5
-					else _soft_world_angles[control - 1]
+				# NeckRange専用では、前substepと現substepの上流角を補間して
+				# 折れ抑止を維持したまま同一substep伝播だけを部分的に弱める。
+				var clamp_carry: float = lerpf(
+					soft_directional_clamp_carry_root,
+					soft_directional_clamp_carry_tip,
+					fraction
+				)
+				var upstream_world: float = lerp_angle(
+					previous_world[control - 1],
+					_soft_world_angles[control - 1],
+					clamp_carry
 				)
 				var relative_angle: float = wrapf(world_angle - upstream_world, -PI, PI)
 				var control_step_limit: float = lerpf(
