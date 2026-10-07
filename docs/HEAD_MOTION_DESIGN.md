@@ -288,6 +288,8 @@ MacのNeckRangePreview「攻撃速度テスト」録画で、後端→前端の�
 - 後端ではlocal tip Xを基準弧長の-70%以上、前端では+70%以上まで伸ばす。local tip Yは基準弧長の15%以内に抑え、方向targetから大きく斜めへ逃げないこと。
 - directional amount=1の間は待機C字の基準曲率をtargetへ持ち込まず、端点ではdirectional curve retention=0を正とする。
 - 切り返し中も隣接segmentの角度差を制限し、中心線が輪・フック状に巻き込む局所折れを禁止する。根元→中央→毛先の時間差は維持し、全区間を同時に剛体回転させて解決しない。
+- directional chainの隣接角度差制限は**根元→毛先の1方向だけ**とする。毛先の遅れを毛先→根元へ逆伝播させる後方向clampは禁止する。rootが先に反転し、middle、tipが後から追従する位相差を保持する。
+- 端点の前後伸長量・斜め逃げ率は、待機C字の根元→毛先chord長ではなくprofile中心線の**基準弧長**を分母にする。C字のchord長を基準にして直線伸長を過大評価しない。
 - root/chainの減衰をNeckRange専用tuningで引き上げ、directional rootの周波数と並進加速度driveを必要以上に強くしない。端点0.30秒内で収束する一方、0.15秒の切り返し中はroot→middle→tipの順序を残す。
 - このHuman Verificationが再合格するまで、NeckRange専用値をMotionPreview/Battle共通defaultへ昇格しない。
 
