@@ -491,6 +491,22 @@ Mac録画では、頭部の後退・前方切り返し・0.4D位置・仰角は�
 - 切り返し中だけ数msの追加位相差を作り、middle/tipの同frame反転を分離する。
 - carry調整で2.20radを超える場合はcarryを1.0側へ戻す。曲率閾値は変更しない。
 
+部分遅延carry=0.92→0.78のCIでも、30fps曲率2.224806rad、60fps 2.390293rad、120fps 2.459298radへ悪化し、30fpsのcrossは0.09→0.12→0.12のままだった。Passive Flex側の伝播遅延を増やしてHuman要件を満たす方向はここで不採用とし、clamp参照は従来carry=1.0へ戻す。
+
+Human要望の「アホ毛自身が攻撃する」はPassive Flexの遅れ量ではなく、独立したActive Strike層で作る。
+
+- Passive Flexは端点直線性・U字防止を満たす安定設定へ戻す。
+- Active Strike層は、現在のsoft chain角度へ**弧長連続の進行波target**を混ぜる。
+- wave targetは後方角-π→前方角0を滑らかに補間する。弧長sが大きいほどwave中心時刻を後ろへずらす。
+- root近傍にはほぼ掛けず、middleから徐々に強くし、tip側で最大weightにする。
+- middleは切り返し後半で自力加速し、tipはさらに後半まで後方慣性を残した後にスナップする。
+- phase centerとweightはいずれも弧長方向のsmoothstepで連続化し、区間ごとの離散的な「板倒し」にしない。
+- 初期候補はtip wave weight=0.72。phase centerはs≈0.25でq≈0.56、tipでq≈0.84へ連続的に遅らせ、時間幅±0.22で滑らかに遷移する。
+- q≈0.60ではtip targetを後方に残すが、最大weightを0.72へ抑えることでroot-tip角差を約2.2rad以内へ収める。
+- q→1ではwave target=0へ収束し、前端保持のほぼ直線形状を壊さない。
+- 既存のActive tip mass / drive gain / 弾性伸長を併用し、wave解除時に毛先の速度ピークを最大化する。
+- Active waveの共通default weightは0。Human Verification合格まではNeckRange専用値だけを有効にする。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
