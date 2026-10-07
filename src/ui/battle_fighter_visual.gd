@@ -637,6 +637,13 @@ func present_toward(target_canvas: Vector2) -> void:
 		and tail_seconds < ActionMotionScript.FOLLOW_SECONDS - 0.000001
 		and not _contact_pose_vertices.is_empty()
 	)
+	var monotonic_follow: bool = (
+		_contact_frozen
+		and not _capture_contact_transform
+		and tail_seconds >= 0.0
+		and tail_seconds <= ActionMotionScript.FOLLOW_SECONDS + 0.000001
+		and not _contact_pose_vertices.is_empty()
+	)
 	if constrained_follow:
 		last_safety_scale = 1.0
 		_motion_node.transform = base
@@ -646,7 +653,7 @@ func present_toward(target_canvas: Vector2) -> void:
 		_contact_motion_transform = _motion_node.transform
 		_contact_pose_vertices = _mesh_node.current_vertices.duplicate()
 		_capture_contact_transform = false
-	if constrained_follow:
+	if monotonic_follow:
 		var actual_tip: Vector2 = _mesh_node.to_global(source_tip)
 		if is_finite(_follow_last_tip_y) and actual_tip.y < _follow_last_tip_y - 0.000001:
 			var reference_tip: Vector2 = _motion_node.transform * source_tip
