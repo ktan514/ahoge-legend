@@ -497,16 +497,6 @@ func present_toward(target_canvas: Vector2) -> void:
 		if not final_active_vertices.is_empty() and final_active_vertices[-1].length() > 0.01:
 			active_reach_ratio = clampf(active_target_local.length() / final_active_vertices[-1].length(), 0.25, 3.0)
 			active_reach_axis = active_target_local.normalized()
-	var frozen_tail_seconds: float = action_motion.follow_seconds()
-	var use_frozen_follow_pose: bool = (
-		_contact_frozen
-		and not _capture_contact_transform
-		and frozen_tail_seconds >= 0.0
-		and frozen_tail_seconds < ActionMotionScript.FOLLOW_SECONDS - 0.000001
-		and not _contact_pose_vertices.is_empty()
-	)
-	if use_frozen_follow_pose:
-		pose_vertices = _contact_pose_vertices.duplicate()
 	_mesh_node.set_action_pose(pose_vertices, action_motion.straighten, action_motion.sweep)
 	last_presentation_weight = float(action_motion.straighten)
 	var vertices: PackedVector2Array = _mesh_node.current_vertices
