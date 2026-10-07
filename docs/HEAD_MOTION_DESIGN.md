@@ -537,6 +537,17 @@ tip wave weight=0.72のCIではtip速度が約55,480px/sまで上がった一方
 - tip mass 1.60、tip drive 1.75、段階弾性解放を併用し、hold解除後の速度ピークをmiddle→tipへ順に作る。
 - 30fpsの目標はroot q≈0.6、middle q≈0.8、tip q≈1.0付近の順に最大前方速度/前方crossを分離する。
 
+inertial hold gain=0.55のCIでもcross時刻は変わらず、30fpsでは速度ピークが0.09/0.09/0.09へ寄るcaseも発生した。これ以上hold/spring値を推測で変更しない。
+
+次調整の前に、canonical case（1280 / P1 / 30fps）で各sweep frameの以下を記録する。
+
+- q / direction / elastic stretch
+- root・middle・tipの実描画centerline X
+- root・middle・tipのframe間前方速度
+- soft control world angle
+
+このframe traceから、middleの0.09秒ピークを0.12秒へ移すために必要な後段能動量と、tipを0.12秒でX<=0に留め0.15秒で解放するために必要な変位量を算出する。閾値側は変更しない。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
