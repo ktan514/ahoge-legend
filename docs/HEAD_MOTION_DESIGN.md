@@ -90,6 +90,8 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
 - さらにTransform適用後の実描画毛先座標を最終postconditionとして検査する。実毛先Yが前frame実毛先Yを下回った場合は、その前frame Yまでだけ毛先を再投影し、427頂点がarena内に残る場合に補正Transformを採用する。単調性判定は中間計算値ではなく最終`AhogeDeformMesh.global_transform * source_tip`を正とする。
 - この画面内制約ではarena fitによるframeごとのuniform縮小を使わない。断面幅・根元固定・基準弧長を維持し、振り抜き中の`last_safety_scale`は1.0のままとする。
 - `follow_seconds == FOLLOW_SECONDS`では既存`final_follow_angles()`の終端形状と復帰処理へ切り替えるが、この境界frameも振り抜き区間に含める。終端形状へ切り替えた結果の実描画毛先Yにも前frame以上の単調性postconditionを適用し、`FOLLOW_SECONDS`直前→終端frameで上方向へ跳ね返らないこと。接触時の伸長メッシュをCOOLDOWN終端まで保持する方式は禁止する。
+- `0 <= follow_seconds <= FOLLOW_SECONDS` の振り抜き中は、Passive Flexの柔軟chainを一時的に0へ固定し、ActionMotionの基準follow形状 + FollowThrough軌道を正とする。頭部回復加速度による二次反動をこの0.16秒へ重ねない。
+- Passive Flexを0にしているframeではsoft chain内部状態を現在の基準形状へ同期する。振り抜き終了後にCOOLDOWNの柔軟追従を再開しても、古い角速度・offsetを持ち越して毛先を跳ね返さない。
 - Active Strike中にPARRYへキャンセルした場合、直前の実メッシュから中心線を保存する。PARRY entryでは中心点座標を直接lerpせず、各segmentの長さと角度を個別補間してrootから再積算する。これにより向きの違うsegment同士のショートカットで弧長が基準長より短くなることを防ぐ。
 - 断面はprofileの固定幅から毎frame再構築し、伸長中の弧長を滑らかに戻しながら断面幅を潰さない。
 - 特殊な中心線補間は、**直前表示stateがSTRIKE**で、かつPARRY開始直前の実中心線長がprofile基準長より0.5%以上伸びている場合だけ有効化する。
