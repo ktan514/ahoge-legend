@@ -686,18 +686,11 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 
 		# directional chainは時間差を残しつつ、局所的な折れ込みだけを制限する。
 		# 録画で確認された輪状の巻き込みは隣接segmentの角度差が大きくなった結果なので、
-		# 根元→毛先・毛先→根元の両方向から最小角度差へ丸める。
+		# 根元→毛先の1方向だけで最小角度差へ丸める。毛先の遅れを根元へ逆伝播させない。
 		for i in range(1, directional_result.size()):
 			var forward_delta: float = wrapf(directional_result[i] - directional_result[i - 1], -PI, PI)
 			directional_result[i] = directional_result[i - 1] + clampf(
 				forward_delta,
-				-soft_max_offset_step,
-				soft_max_offset_step
-			)
-		for i in range(directional_result.size() - 2, -1, -1):
-			var backward_delta: float = wrapf(directional_result[i] - directional_result[i + 1], -PI, PI)
-			directional_result[i] = directional_result[i + 1] + clampf(
-				backward_delta,
 				-soft_max_offset_step,
 				soft_max_offset_step
 			)
