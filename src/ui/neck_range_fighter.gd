@@ -26,7 +26,7 @@ const NECK_SOFT_TUNING := {
 	"shape_restore_ratio": 0.018,
 	"relative_damping_root": 0.40,
 	"relative_damping_tip": 0.70,
-	"tip_spring_gain": 0.75,
+	"tip_spring_gain": 0.25,
 	"dynamic_curve_retention": 0.12,
 	"directional_curve_retention": 0.00,
 	"directional_root_hz": 20.0,
