@@ -32,8 +32,13 @@ const NECK_SOFT_TUNING := {
 	"directional_root_hz": 20.0,
 	"directional_root_max_offset": 3.10,
 	"directional_max_offset": 3.10,
-	"directional_control_step": 0.43,
-	"directional_control_step_tip": 0.05,
+	"directional_control_step": 0.32,
+	"directional_control_step_tip": 0.18,
+	"active_tip_mass": 1.60,
+	"active_root_direct_gain": 0.18,
+	"active_tip_direct_gain": 0.82,
+	"active_tip_drive_gain": 1.75,
+	"active_tip_damping_ratio": 0.62,
 	"curve_release_speed": 1500.0,
 	"curve_release_angular_speed": 6.0,
 	"forward_accel_drive": 0.000000,
@@ -47,6 +52,8 @@ var neck_gaze_max_degrees: float = DEFAULT_GAZE_MAX_DEGREES
 var ahoge_softness: float = 1.0
 var ahoge_directional_amount: float = 0.0
 var ahoge_directional_direction: float = 0.0
+var ahoge_active_progress: float = -1.0
+var ahoge_elastic_stretch: float = 0.0
 var _neck_soft_tuning_applied: bool = false
 
 
@@ -103,6 +110,14 @@ func set_neck_ahoge_directional_extension(amount: float, direction: float) -> bo
 	return true
 
 
+func set_neck_ahoge_attack_profile(active_progress: float, elastic_stretch: float) -> bool:
+	if not is_finite(active_progress) or not is_finite(elastic_stretch):
+		return false
+	ahoge_active_progress = clampf(active_progress, -1.0, 1.0)
+	ahoge_elastic_stretch = clampf(elastic_stretch, -0.08, 0.14)
+	return true
+
+
 func _neck_soft_attachment_angle() -> float:
 	return deg_to_rad(_head_rotation * facing)
 
@@ -133,6 +148,8 @@ func clear_neck_preview() -> void:
 	neck_travel_ratio = 0.0
 	ahoge_directional_amount = 0.0
 	ahoge_directional_direction = 0.0
+	ahoge_active_progress = -1.0
+	ahoge_elastic_stretch = 0.0
 	_head_offset = Vector2.ZERO
 	_head_velocity = Vector2.ZERO
 	_head_acceleration = Vector2.ZERO
@@ -203,7 +220,9 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 						ahoge_softness,
 						_neck_soft_forward_px(),
 						ahoge_directional_amount,
-						ahoge_directional_direction
+						ahoge_directional_direction,
+						ahoge_active_progress,
+						ahoge_elastic_stretch
 					)
 					idle_vertices = action_motion.visual_vertices()
 				else:
