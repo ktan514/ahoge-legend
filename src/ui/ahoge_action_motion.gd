@@ -44,6 +44,7 @@ const SOFT_DIRECTIONAL_CURVE_RETENTION: float = 1.0
 const SOFT_DIRECTIONAL_ROOT_HZ: float = SOFT_ROOT_HINGE_HZ
 const SOFT_DIRECTIONAL_ROOT_MAX_OFFSET: float = SOFT_ROOT_MAX_OFFSET
 const SOFT_DIRECTIONAL_MAX_OFFSET: float = SOFT_MAX_OFFSET
+const SOFT_DIRECTIONAL_CONTROL_STEP: float = PI
 const SOFT_CURVE_RELEASE_SPEED: float = 1500.0
 const SOFT_CURVE_RELEASE_ANGULAR_SPEED: float = 6.0
 const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000010
@@ -111,6 +112,7 @@ var soft_directional_curve_retention: float = SOFT_DIRECTIONAL_CURVE_RETENTION
 var soft_directional_root_hz: float = SOFT_DIRECTIONAL_ROOT_HZ
 var soft_directional_root_max_offset: float = SOFT_DIRECTIONAL_ROOT_MAX_OFFSET
 var soft_directional_max_offset: float = SOFT_DIRECTIONAL_MAX_OFFSET
+var soft_directional_control_step: float = SOFT_DIRECTIONAL_CONTROL_STEP
 var soft_curve_release_speed: float = SOFT_CURVE_RELEASE_SPEED
 var soft_curve_release_angular_speed: float = SOFT_CURVE_RELEASE_ANGULAR_SPEED
 var soft_forward_accel_drive: float = SOFT_FORWARD_ACCEL_DRIVE
@@ -141,7 +143,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"third_drive_ratio", "chain_hz", "root_damping", "tip_damping",
 		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
 		"tip_spring_gain", "dynamic_curve_retention", "directional_curve_retention",
-		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "curve_release_speed",
+		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset"
 	]
 	for key in numeric_keys:
@@ -172,6 +174,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_directional_root_hz = maxf(0.01, float(tuning.get("directional_root_hz", soft_directional_root_hz)))
 	soft_directional_root_max_offset = maxf(0.0, float(tuning.get("directional_root_max_offset", soft_directional_root_max_offset)))
 	soft_directional_max_offset = maxf(0.0, float(tuning.get("directional_max_offset", soft_directional_max_offset)))
+	soft_directional_control_step = clampf(float(tuning.get("directional_control_step", soft_directional_control_step)), 0.001, PI)
 	soft_curve_release_speed = maxf(1.0, float(tuning.get("curve_release_speed", soft_curve_release_speed)))
 	soft_curve_release_angular_speed = maxf(0.01, float(tuning.get("curve_release_angular_speed", soft_curve_release_angular_speed)))
 	soft_forward_accel_drive = maxf(0.0, float(tuning.get("forward_accel_drive", soft_forward_accel_drive)))
@@ -206,6 +209,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"directional_root_hz": soft_directional_root_hz,
 		"directional_root_max_offset": soft_directional_root_max_offset,
 		"directional_max_offset": soft_directional_max_offset,
+		"directional_control_step": soft_directional_control_step,
 		"curve_release_speed": soft_curve_release_speed,
 		"curve_release_angular_speed": soft_curve_release_angular_speed,
 		"forward_accel_drive": soft_forward_accel_drive,
@@ -644,6 +648,19 @@ func _advance_softness(
 			)
 			var velocity: float = previous_velocity[control] + acceleration * step
 			var world_angle: float = previous_world[control] + velocity * step
+			if directional_weight > 0.000001:
+				# 描画segmentではなく動的control同士の差を制限する。
+				# controlの速度状態は残すため、rootの変化を同一frameでtipまで書き換えない。
+				var upstream_world: float = _soft_world_angles[control - 1]
+				var relative_angle: float = wrapf(world_angle - upstream_world, -PI, PI)
+				var limited_relative: float = clampf(
+					relative_angle,
+					-soft_directional_control_step,
+					soft_directional_control_step
+				)
+				if not is_equal_approx(relative_angle, limited_relative):
+					world_angle = upstream_world + limited_relative
+					velocity *= 0.35
 			_soft_velocities[control] = velocity
 			_soft_world_angles[control] = world_angle
 		remaining -= step
@@ -684,16 +701,6 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 			var chain_local: float = lerp_angle(left_local, right_local, weight)
 			directional_result[i] = lerp_angle(values[i], chain_local, _soft_directional_amount)
 
-		# directional chainは時間差を残しつつ、局所的な折れ込みだけを制限する。
-		# 録画で確認された輪状の巻き込みは隣接segmentの角度差が大きくなった結果なので、
-		# 根元→毛先の1方向だけで最小角度差へ丸める。毛先の遅れを根元へ逆伝播させない。
-		for i in range(1, directional_result.size()):
-			var forward_delta: float = wrapf(directional_result[i] - directional_result[i - 1], -PI, PI)
-			directional_result[i] = directional_result[i - 1] + clampf(
-				forward_delta,
-				-soft_max_offset_step,
-				soft_max_offset_step
-			)
 		return directional_result
 
 	var result: PackedFloat32Array = values.duplicate()
