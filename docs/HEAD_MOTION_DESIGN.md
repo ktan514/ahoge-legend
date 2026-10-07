@@ -548,6 +548,27 @@ inertial hold gain=0.55のCIでもcross時刻は変わらず、30fpsでは速度
 
 このframe traceから、middleの0.09秒ピークを0.12秒へ移すために必要な後段能動量と、tipを0.12秒でX<=0に留め0.15秒で解放するために必要な変位量を算出する。閾値側は変更しない。
 
+frame traceでは0.12秒時点の実描画Xがmiddle=+451px / tip=+520pxだった一方、tip側soft control角は約-68°でまだ明確に遅れていた。実描画pointの絶対Xは「上流区間の累積前進 + segment伸長」を含むため、局所的なroot→middle→tip角度伝播の時刻指標としては不適切である。
+
+検証軸を再分離する。
+
+- **角度伝播のcross時刻**: profile基準segment長を用いる `_soft_chain_points` で測る。elastic stretchを混ぜない。これは本チャット開始前の正本と同じ。
+- **角速度ピーク時刻**: soft controlのangular velocityをroot / middle / tip controlで測る。上流区間の累積並進を混ぜない。
+- **見た目の伸縮**: 実描画mesh centerlineの弧長ratioで別に測り、1.04〜1.07を維持する。
+- **毛先の実速度優位**: 実描画pointの最大前方速度 magnitude はtip >= middle * 1.08を維持するが、そのpeak時刻は局所角速度の位相判定へ使わない。
+- これは閾値緩和ではなく、角度・伸縮・累積位置という別物理量を混ぜないための測定修正である。
+
+また、inertial hold gain=0.55はcross改善がなく30fpsのtip速度peakを早めたため不採用とする。先端重量はactive_tip_mass=1.60で表現し、hold torqueは削除する。
+
+control間折れ上限は引き継ぎ時の候補どおり3領域化する。
+
+- root側: 0.32rad
+- middle（s=0.55）: 0.22rad
+- tip側: 0.05rad
+- root→middle、middle→tipをそれぞれsmoothstep補間する。
+- 旧0.43→0.05のtip遅延特性を残しつつ、root側を0.32へ絞って総曲率を2.20rad以下へ落とす。
+- 目標は30fpsでcross/角速度peakともroot < middle < tipを成立させること。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
