@@ -432,3 +432,32 @@ NeckRangePreviewを現在の最優先Human Verificationゲートとする。こ�
 - CHARGING/WINDUP/STRIKE/COOLDOWNでも全頂点有限、頂点数・UV・index・mesh RIDを維持する。
 - 既存の接触2px、振り抜き、画面内包含、三角形反転防止、オンライン回帰を維持する。
 - 自動試験合格だけでモーション品質合格とせず、Macの等倍再生でHuman Verificationする。
+
+
+#### 2026-10-07 19:42 Human Verification: Passive FlexだけでなくNeckRange専用Active Driveを加える
+
+Mac録画では、頭部の後退・前方切り返し・0.4D位置・仰角は意図どおりだが、アホ毛は頭部へ遅れて付いてくる受動chainの比率が高く、攻撃主体としての「溜め」と「打ち出し」が不足している。以後、頭部モーションは変更せず、NeckRangePreview専用にPassive Flexの上へActive Driveと弾性伸縮を重ねる。
+
+採用する見え方は次のとおり。
+
+- 後端保持では、後方targetへ伸びた状態を維持しつつ、毛束をわずかに圧縮して弾性エネルギーを溜める。待機C字へ戻したり、毛先だけを引き伸ばしたりしない。
+- 前方切り返しでは、頭部が先に動く既存0.15秒のHead Driveを維持する。アホ毛のroot→middle→tipの位相差も維持する。
+- Passive Flexだけに任せず、切り返し進行に応じた**能動target**をcontrolへ順次開く。root側から開始し、中央、毛先の順に前方targetへ自力で加速する。
+- 能動targetを全controlへ同時適用して剛体回転させない。各controlのactive開始時刻は弧長方向に遅らせる。
+- 毛先側ほど**慣性係数（mass）を大きくする**。これにより切り返し直後は毛先が旧方向へ残り、遅れて運動量を持つ。
+- 毛先側はactive開始後の駆動gainも増やす。重いだけで遅れ続けるのではなく、中央より後に大きな速度ピークを作る。
+- 前方へ振り出す間は毛束長を弧長方向に最大約10%伸ばす。伸長量はroot≈1.00からtip側へ滑らかに増やし、断面幅と根元固定を維持する。
+- 前端保持では最大伸長を短時間保持した後、約2%程度の残留伸長へ減衰させる。停止/resetでは伸長を0へ戻し、待機C字へ自然復帰する。
+- 伸縮はメッシュ全体のuniform scaleで行わず、segment lengthだけを弧長方向に変化させる。
+- directional control間の折れ上限は、前候補0.43→0.05ではなくroot 0.32rad→tip 0.18radへ再配分する。Active Driveを加えても切り返し総曲率2.20rad以下を維持する。
+- Human Verification合格前は、このActive Drive・mass・伸縮値をMotionPreview/Battle共通defaultへ昇格しない。既存BattleのActive Strike、PARRY、FollowThroughは変更しない。
+
+自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
+
+- 前方切り返し中のcenterline弧長が基準より増え、最大伸長が1.08〜1.12倍の範囲に入る。
+- root/middle/tipの前方速度ピークはroot→middle→tipの順となる。
+- tipの最大前方速度はmiddleより明確に大きくなり、毛先へ力が集まる。
+- 後端の溜めでは過伸長せず、前方攻撃時だけ最大伸長へ移る。
+- 停止後は伸長0・待機C字へ戻る。
+
+この層の目的は、**「頭に運ばれる紐」から「頭で初速を得て、自分でも加速し、先端へ運動量を集めて叩く毛束」へ見え方を変えること**である。
