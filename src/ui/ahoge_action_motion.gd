@@ -638,7 +638,9 @@ func _advance_softness(
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var damping: float = lerpf(soft_root_damping, soft_tip_damping, fraction)
 			var relative_damping: float = lerpf(soft_relative_damping_root, soft_relative_damping_tip, fraction)
-			var spring_gain: float = lerpf(1.0, soft_tip_spring_gain, fraction * fraction)
+			# directional chainでは中央から明確に遅らせる。通常のPassive Flexは従来のfraction²を維持する。
+			var spring_fraction: float = fraction if directional_weight > 0.000001 else fraction * fraction
+			var spring_gain: float = lerpf(1.0, soft_tip_spring_gain, spring_fraction)
 			var omega: float = TAU * soft_chain_hz
 			var relative_velocity: float = previous_velocity[control] - previous_velocity[control - 1]
 			var acceleration: float = (
