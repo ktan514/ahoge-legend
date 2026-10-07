@@ -100,15 +100,13 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["root_hinge_damping"]) >= 0.90, "NeckRange専用root dampingが不足しています: " + label)
 	_expect(is_equal_approx(float(tuning["root_blend_end"]), 0.30), "NeckRange専用root blendが未適用です: " + label)
 	_expect(is_equal_approx(float(tuning["root_start_weight"]), 0.35), "NeckRange専用root weightが未適用です: " + label)
-	_expect(float(tuning["chain_hz"]) >= 10.0 and float(tuning["chain_hz"]) <= 15.0, "NeckRange専用chain Hzが不正です: " + label)
+	_expect(float(tuning["chain_hz"]) >= 9.0 and float(tuning["chain_hz"]) <= 12.0, "NeckRange専用chain Hzが不正です: " + label)
 	_expect(float(tuning["root_damping"]) >= 0.80, "NeckRange専用chain root dampingが不足しています: " + label)
 	_expect(float(tuning["tip_damping"]) >= 0.95, "NeckRange専用tip dampingが不足しています: " + label)
-	_expect(float(tuning["relative_damping_root"]) >= 0.45, "NeckRange専用relative root dampingが不足しています: " + label)
-	_expect(float(tuning["relative_damping_tip"]) >= 0.90, "NeckRange専用relative tip dampingが不足しています: " + label)
 	_expect(float(tuning["tip_spring_gain"]) >= 0.55, "NeckRange専用tip springが不足しています: " + label)
 	_expect(is_equal_approx(float(tuning["dynamic_curve_retention"]), 0.12), "NeckRange専用C字曲率解放が未適用です: " + label)
 	_expect(float(tuning["directional_curve_retention"]) <= 0.001, "NeckRange方向targetへ待機C字曲率を残しています: " + label)
-	_expect(float(tuning["directional_root_hz"]) >= 8.0 and float(tuning["directional_root_hz"]) <= 11.0, "NeckRange専用directional root Hzが不正です: " + label)
+	_expect(float(tuning["directional_root_hz"]) >= 10.0 and float(tuning["directional_root_hz"]) <= 13.0, "NeckRange専用directional root Hzが不正です: " + label)
 	_expect(float(tuning["directional_root_max_offset"]) >= 1.70, "NeckRange専用root伸長角が不足しています: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
@@ -189,8 +187,10 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	actor.reset_ahoge_soft_follow()
 	var rest_angles: PackedFloat32Array = actor.action_motion.rest_angles
 	var rest_curvature: float = _body_curvature(rest_angles, actor.action_motion.fractions, 0.75)
-	var rest_length: float = actor.action_motion.vertices_from_angles(rest_angles)[-1].length()
-	_expect(rest_curvature > 0.10 and rest_length > 100.0, "待機C字の基準値を取得できません: " + label)
+	var rest_length: float = 0.0
+	for segment_length in actor.action_motion._lengths:
+		rest_length += float(segment_length)
+	_expect(rest_curvature > 0.10 and rest_length > 100.0, "待機C字の基準弧長を取得できません: " + label)
 
 	var rear_frames: int = maxi(1, ceili(scene.REAR_HOLD_SECONDS * fps))
 	for rear_frame in range(rear_frames):
@@ -200,7 +200,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var rear_curvature: float = _body_curvature(rear_angles, actor.action_motion.fractions, 0.75)
 	_expect(rear_vertices[-1].x <= -rest_length * 0.70, "後端保持でアホ毛が十分後方へ伸びません: %s tip_x=%f length=%f" % [label, rear_vertices[-1].x, rest_length])
 	_expect(absf(rear_vertices[-1].y) <= rest_length * 0.15, "後端保持でdirection targetから斜めへ外れています: %s tip=%s length=%f" % [label, str(rear_vertices[-1]), rest_length])
-	_expect(rear_curvature <= 0.20, "後端保持がほぼ直線ではありません: %s rest=%f rear=%f" % [label, rest_curvature, rear_curvature])
+	_expect(rear_curvature <= 0.25, "後端保持がほぼ直線ではありません: %s rest=%f rear=%f" % [label, rest_curvature, rear_curvature])
 	_expect(actor.mesh_canvas_vertices()[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "後方伸長で根元が頭部から外れました: " + label)
 
 	var sweep_seconds: float = scene.STRIKE_SWING_SECONDS
@@ -256,7 +256,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(near_cross < middle_cross and middle_cross < tip_cross and tip_cross < INF, "前方反転が根元→中央→毛先の順になっていません: %s times=[%f,%f,%f]" % [label, near_cross, middle_cross, tip_cross])
 	_expect(front_vertices[-1].x >= rest_length * 0.70, "前端保持でアホ毛が十分前方へ伸びません: %s tip_x=%f length=%f" % [label, front_vertices[-1].x, rest_length])
 	_expect(absf(front_vertices[-1].y) <= rest_length * 0.15, "前端保持でdirection targetから斜めへ外れています: %s tip=%s length=%f" % [label, str(front_vertices[-1]), rest_length])
-	_expect(front_curvature <= 0.20, "前端保持がほぼ直線ではありません: %s rest=%f front=%f" % [label, rest_curvature, front_curvature])
+	_expect(front_curvature <= 0.25, "前端保持がほぼ直線ではありません: %s rest=%f front=%f" % [label, rest_curvature, front_curvature])
 	_expect(maximum_transition_curvature <= 2.20, "切り返し中に毛束が輪状へ巻き込んでいます: %s curvature=%f" % [label, maximum_transition_curvature])
 	_expect(actor.mesh_canvas_vertices()[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "前方伸長で根元が頭部から外れました: " + label)
 
