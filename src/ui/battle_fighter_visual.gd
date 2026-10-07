@@ -389,6 +389,16 @@ func _vertices_inside_arena_actual(candidate: Transform2D, vertices: PackedVecto
 	return inside
 
 
+func _tip_canvas_for_transform(candidate: Transform2D, source_tip: Vector2) -> Vector2:
+	if _motion_node == null or _mesh_node == null:
+		return Vector2.ZERO
+	var previous: Transform2D = _motion_node.transform
+	_motion_node.transform = candidate
+	var result: Vector2 = _mesh_node.to_global(source_tip)
+	_motion_node.transform = previous
+	return result
+
+
 func _follow_transform_inside_arena(
 	vertices: PackedVector2Array,
 	source_tip: Vector2,
@@ -396,11 +406,51 @@ func _follow_transform_inside_arena(
 ) -> Transform2D:
 	if _contact_pose_vertices.is_empty() or source_tip.length() <= 0.01:
 		return _contact_motion_transform
+
+	# Active Strikeの長い接触形状から基準弧長follow形状へ切り替わるため、
+	# 接触時Transformそのものを始点にし、接触点への完全投影は画面内までに制限する。
+	var safe_start: Transform2D = _contact_motion_transform
+	if not _vertices_inside_arena_actual(safe_start, vertices):
+		var neutral: Transform2D = _neutral_transform()
+		var safe_ratio: float = 0.0
+		var unsafe_ratio: float = 1.0
+		for _iteration in range(14):
+			var ratio: float = (safe_ratio + unsafe_ratio) * 0.5
+			var candidate: Transform2D = neutral.interpolate_with(_contact_motion_transform, ratio)
+			if _vertices_inside_arena_actual(candidate, vertices):
+				safe_ratio = ratio
+			else:
+				unsafe_ratio = ratio
+		safe_start = neutral.interpolate_with(_contact_motion_transform, safe_ratio)
+
+	var start_reference_tip: Vector2 = safe_start * source_tip
+	var contact_candidate: Transform2D = _project_tip(
+		safe_start,
+		start_reference_tip,
+		_contact_anchor_canvas,
+		1.0,
+		1.0
+	)
+	if _vertices_inside_arena_actual(contact_candidate, vertices):
+		safe_start = contact_candidate
+	else:
+		var safe_contact_ratio: float = 0.0
+		var unsafe_contact_ratio: float = 1.0
+		for _iteration in range(14):
+			var ratio: float = (safe_contact_ratio + unsafe_contact_ratio) * 0.5
+			var candidate: Transform2D = safe_start.interpolate_with(contact_candidate, ratio)
+			if _vertices_inside_arena_actual(candidate, vertices):
+				safe_contact_ratio = ratio
+			else:
+				unsafe_contact_ratio = ratio
+		safe_start = safe_start.interpolate_with(contact_candidate, safe_contact_ratio)
+
 	var desired_progress: float = clampf(progress, 0.0, 1.0)
-	var desired_aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, desired_progress)
-	var reference_tip: Vector2 = _contact_motion_transform * source_tip
+	var start_tip_canvas: Vector2 = _tip_canvas_for_transform(safe_start, source_tip)
+	var desired_aim: Vector2 = start_tip_canvas.lerp(_follow_end_canvas, desired_progress)
+	var reference_tip: Vector2 = safe_start * source_tip
 	var desired: Transform2D = _project_tip(
-		_contact_motion_transform,
+		safe_start,
 		reference_tip,
 		desired_aim,
 		1.0,
@@ -413,9 +463,9 @@ func _follow_transform_inside_arena(
 	var high: float = desired_progress
 	for _iteration in range(14):
 		var middle: float = (low + high) * 0.5
-		var aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, middle)
+		var aim: Vector2 = start_tip_canvas.lerp(_follow_end_canvas, middle)
 		var candidate: Transform2D = _project_tip(
-			_contact_motion_transform,
+			safe_start,
 			reference_tip,
 			aim,
 			1.0,
@@ -425,9 +475,9 @@ func _follow_transform_inside_arena(
 			low = middle
 		else:
 			high = middle
-	var limited_aim: Vector2 = _contact_anchor_canvas.lerp(_follow_end_canvas, low)
+	var limited_aim: Vector2 = start_tip_canvas.lerp(_follow_end_canvas, low)
 	return _project_tip(
-		_contact_motion_transform,
+		safe_start,
 		reference_tip,
 		limited_aim,
 		1.0,
