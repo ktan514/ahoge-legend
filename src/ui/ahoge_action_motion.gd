@@ -683,6 +683,24 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 			var right_local: float = _soft_world_angles[directional_control + 1] - attachment_angle
 			var chain_local: float = lerp_angle(left_local, right_local, weight)
 			directional_result[i] = lerp_angle(values[i], chain_local, _soft_directional_amount)
+
+		# directional chainは時間差を残しつつ、局所的な折れ込みだけを制限する。
+		# 録画で確認された輪状の巻き込みは隣接segmentの角度差が大きくなった結果なので、
+		# 根元→毛先・毛先→根元の両方向から最小角度差へ丸める。
+		for i in range(1, directional_result.size()):
+			var forward_delta: float = wrapf(directional_result[i] - directional_result[i - 1], -PI, PI)
+			directional_result[i] = directional_result[i - 1] + clampf(
+				forward_delta,
+				-soft_max_offset_step,
+				soft_max_offset_step
+			)
+		for i in range(directional_result.size() - 2, -1, -1):
+			var backward_delta: float = wrapf(directional_result[i] - directional_result[i + 1], -PI, PI)
+			directional_result[i] = directional_result[i + 1] + clampf(
+				backward_delta,
+				-soft_max_offset_step,
+				soft_max_offset_step
+			)
 		return directional_result
 
 	var result: PackedFloat32Array = values.duplicate()
