@@ -469,7 +469,6 @@ func _follow_transform_inside_arena(
 		1.0
 	)
 	if _vertices_inside_arena_actual(desired, vertices):
-		_follow_last_tip_y = maxf(_follow_last_tip_y, _tip_canvas_for_transform(desired, source_tip).y)
 		return desired
 
 	var low: float = minimum_progress
@@ -485,7 +484,6 @@ func _follow_transform_inside_arena(
 	if not _vertices_inside_arena_actual(low_candidate, vertices):
 		# Y単調性を満たす最小位置まで進めない場合は、現在frameの安全始点を採用する。
 		# arena外へ出すより安全側を優先し、次frameで再度現在形状から解決する。
-		_follow_last_tip_y = maxf(_follow_last_tip_y, start_tip_canvas.y)
 		return safe_start
 
 	for _iteration in range(14):
@@ -510,7 +508,6 @@ func _follow_transform_inside_arena(
 		1.0,
 		1.0
 	)
-	_follow_last_tip_y = maxf(_follow_last_tip_y, _tip_canvas_for_transform(limited, source_tip).y)
 	return limited
 
 func _fixed_axis_reach(base: Transform2D, axis_value: Vector2, ratio_value: float) -> Transform2D:
@@ -649,6 +646,35 @@ func present_toward(target_canvas: Vector2) -> void:
 		_contact_motion_transform = _motion_node.transform
 		_contact_pose_vertices = _mesh_node.current_vertices.duplicate()
 		_capture_contact_transform = false
+	if constrained_follow:
+		var actual_tip: Vector2 = _mesh_node.to_global(source_tip)
+		if is_finite(_follow_last_tip_y) and actual_tip.y < _follow_last_tip_y - 0.000001:
+			var reference_tip: Vector2 = _motion_node.transform * source_tip
+			var monotonic_target: Vector2 = Vector2(actual_tip.x, _follow_last_tip_y)
+			var monotonic_transform: Transform2D = _project_tip(
+				_motion_node.transform,
+				reference_tip,
+				monotonic_target,
+				1.0,
+				1.0
+			)
+			if _vertices_inside_arena_actual(monotonic_transform, vertices):
+				_motion_node.transform = monotonic_transform
+				actual_tip = _mesh_node.to_global(source_tip)
+			else:
+				# 真下補正が横端条件で入らない場合は、終点Xへ寄せて同じYを維持する。
+				var side_target: Vector2 = Vector2(_follow_end_canvas.x, _follow_last_tip_y)
+				var side_transform: Transform2D = _project_tip(
+					_motion_node.transform,
+					reference_tip,
+					side_target,
+					1.0,
+					1.0
+				)
+				if _vertices_inside_arena_actual(side_transform, vertices):
+					_motion_node.transform = side_transform
+					actual_tip = _mesh_node.to_global(source_tip)
+		_follow_last_tip_y = maxf(_follow_last_tip_y, actual_tip.y)
 	if confirmed:
 		_entry_transform = _motion_node.transform
 	last_contact_error = _mesh_node.to_global(source_tip).distance_to(target_canvas)
