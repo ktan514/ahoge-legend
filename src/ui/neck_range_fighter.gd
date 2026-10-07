@@ -39,6 +39,7 @@ const NECK_SOFT_TUNING := {
 	"active_tip_direct_gain": 0.82,
 	"active_tip_drive_gain": 1.75,
 	"active_tip_damping_ratio": 0.62,
+	"directional_middle_spring_gain": 0.56,
 	"curve_release_speed": 1500.0,
 	"curve_release_angular_speed": 6.0,
 	"forward_accel_drive": 0.000000,
