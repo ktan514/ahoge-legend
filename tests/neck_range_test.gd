@@ -113,13 +113,20 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["directional_root_max_offset"]) >= 2.80, "NeckRange専用root伸長角が前方targetへ不足しています: " + label)
 	_expect(float(tuning["directional_max_offset"]) >= 2.80, "NeckRange専用chain伸長角が前方targetへ不足しています: " + label)
 	_expect(
-		float(tuning["directional_control_step"]) >= 0.42 and float(tuning["directional_control_step"]) <= 0.44,
+		float(tuning["directional_control_step"]) >= 0.31 and float(tuning["directional_control_step"]) <= 0.33,
 		"NeckRange専用root側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["directional_control_step_tip"]) >= 0.04 and float(tuning["directional_control_step_tip"]) <= 0.06,
+		float(tuning["directional_control_step_tip"]) >= 0.17 and float(tuning["directional_control_step_tip"]) <= 0.19,
 		"NeckRange専用tip側control間位相差上限が候補域から外れています: " + label
 	)
+	_expect(float(tuning["active_tip_mass"]) >= 1.50, "NeckRange専用の毛先慣性が不足しています: " + label)
+	_expect(
+		float(tuning["active_root_direct_gain"]) < float(tuning["active_tip_direct_gain"]),
+		"NeckRange専用Active Driveが毛先側ほど強くなっていません: " + label
+	)
+	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
+	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
@@ -206,8 +213,16 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 
 	var rear_frames: int = maxi(1, ceili(scene.REAR_HOLD_SECONDS * fps))
 	for rear_frame in range(rear_frames):
+		var rear_seconds: float = scene.REAR_HOLD_SECONDS * float(rear_frame + 1) / float(rear_frames)
+		actor.set_neck_ahoge_attack_profile(
+			scene.attack_preview_active_progress(rear_seconds),
+			scene.attack_preview_elastic_stretch(rear_seconds)
+		)
 		actor.advance_neck_preview(1.0 / fps)
 	var rear_vertices: PackedVector2Array = mesh_node.current_vertices.duplicate()
+	var rear_length: float = _mesh_centerline_length(actor.action_motion, rear_vertices)
+	var rear_length_ratio: float = rear_length / rest_length
+	_expect(rear_length_ratio >= 0.96 and rear_length_ratio < 1.0, "後端の溜めで適度な弾性圧縮になっていません: %s ratio=%f" % [label, rear_length_ratio])
 	var rear_angles: PackedFloat32Array = actor.action_motion._softened_angles(rest_angles)
 	var rear_curvature: float = _body_curvature(rear_angles, actor.action_motion.fractions, 0.75)
 	_expect(rear_vertices[-1].x <= -rest_length * 0.70, "後端保持でアホ毛が十分後方へ伸びません: %s tip_x=%f length=%f" % [label, rear_vertices[-1].x, rest_length])
@@ -222,12 +237,20 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var tip_cross: float = INF
 	var observed_seconds: float = 0.0
 	var maximum_transition_curvature: float = 0.0
+	var maximum_stretch_ratio: float = rear_length_ratio
+	var peak_forward_speeds := PackedFloat32Array([0.0, 0.0, 0.0])
+	var peak_forward_times := PackedFloat32Array([INF, INF, INF])
+	var previous_points: Array[Vector2] = _mesh_chain_points(actor.action_motion, rear_vertices, [0.20, 0.55, 0.95])
 	for sweep_frame in range(sweep_frames):
 		var u: float = float(sweep_frame + 1) / float(sweep_frames)
 		var step_seconds: float = sweep_seconds / float(sweep_frames)
 		var phase_seconds: float = scene.REAR_HOLD_SECONDS + sweep_seconds * u
 		var direction: float = scene.attack_preview_direction(phase_seconds)
 		actor.set_neck_ahoge_directional_extension(1.0, direction)
+		actor.set_neck_ahoge_attack_profile(
+			scene.attack_preview_active_progress(phase_seconds),
+			scene.attack_preview_elastic_stretch(phase_seconds)
+		)
 		actor.set_neck_travel_ratio(lerpf(-0.4, 0.4, smoothstep(0.0, 1.0, u)))
 		actor.advance_neck_preview(step_seconds)
 		observed_seconds += step_seconds
@@ -235,7 +258,15 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		maximum_transition_curvature = maxf(maximum_transition_curvature, _body_curvature(sweep_angles, actor.action_motion.fractions, 1.0))
 		var front_hold_angles: PackedFloat32Array = actor.action_motion._softened_angles(rest_angles)
 		maximum_transition_curvature = maxf(maximum_transition_curvature, _body_curvature(front_hold_angles, actor.action_motion.fractions, 1.0))
-		var points: Array[Vector2] = _soft_chain_points(actor.action_motion, [0.20, 0.55, 0.95])
+		var current_length: float = _mesh_centerline_length(actor.action_motion, mesh_node.current_vertices)
+		maximum_stretch_ratio = maxf(maximum_stretch_ratio, current_length / rest_length)
+		var points: Array[Vector2] = _mesh_chain_points(actor.action_motion, mesh_node.current_vertices, [0.20, 0.55, 0.95])
+		for slot in range(points.size()):
+			var forward_speed: float = (points[slot].x - previous_points[slot].x) / step_seconds
+			if forward_speed > peak_forward_speeds[slot]:
+				peak_forward_speeds[slot] = forward_speed
+				peak_forward_times[slot] = observed_seconds
+		previous_points = points
 		if near_cross == INF and points[0].x > 0.0:
 			near_cross = observed_seconds
 		if middle_cross == INF and points[1].x > 0.0:
@@ -250,9 +281,23 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	actor.set_neck_travel_ratio(0.4)
 	var front_frames: int = maxi(1, ceili(scene.FRONT_HOLD_SECONDS * fps))
 	for front_frame in range(front_frames):
-		actor.advance_neck_preview(1.0 / fps)
-		observed_seconds += 1.0 / fps
-		var points: Array[Vector2] = _soft_chain_points(actor.action_motion, [0.20, 0.55, 0.95])
+		var step_seconds: float = 1.0 / fps
+		var phase_seconds: float = scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS + step_seconds * float(front_frame + 1)
+		actor.set_neck_ahoge_attack_profile(
+			scene.attack_preview_active_progress(phase_seconds),
+			scene.attack_preview_elastic_stretch(phase_seconds)
+		)
+		actor.advance_neck_preview(step_seconds)
+		observed_seconds += step_seconds
+		var current_length: float = _mesh_centerline_length(actor.action_motion, mesh_node.current_vertices)
+		maximum_stretch_ratio = maxf(maximum_stretch_ratio, current_length / rest_length)
+		var points: Array[Vector2] = _mesh_chain_points(actor.action_motion, mesh_node.current_vertices, [0.20, 0.55, 0.95])
+		for slot in range(points.size()):
+			var forward_speed: float = (points[slot].x - previous_points[slot].x) / step_seconds
+			if forward_speed > peak_forward_speeds[slot]:
+				peak_forward_speeds[slot] = forward_speed
+				peak_forward_times[slot] = observed_seconds
+		previous_points = points
 		if near_cross == INF and points[0].x > 0.0:
 			near_cross = observed_seconds
 		if middle_cross == INF and points[1].x > 0.0:
@@ -270,10 +315,20 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(absf(front_vertices[-1].y) <= rest_length * 0.15, "前端保持でdirection targetから斜めへ外れています: %s tip=%s length=%f" % [label, str(front_vertices[-1]), rest_length])
 	_expect(front_curvature <= 0.25, "前端保持がほぼ直線ではありません: %s rest=%f front=%f" % [label, rest_curvature, front_curvature])
 	_expect(maximum_transition_curvature <= 2.20, "切り返し中に毛束が輪状へ巻き込んでいます: %s curvature=%f" % [label, maximum_transition_curvature])
+	_expect(maximum_stretch_ratio >= 1.04 and maximum_stretch_ratio <= 1.07, "前方攻撃の弾性伸長が少量の範囲から外れています: %s ratio=%f" % [label, maximum_stretch_ratio])
+	_expect(
+		peak_forward_times[0] < peak_forward_times[1] and peak_forward_times[1] < peak_forward_times[2],
+		"前方速度ピークがroot→middle→tipの順ではありません: %s times=%s speeds=%s" % [label, str(peak_forward_times), str(peak_forward_speeds)]
+	)
+	_expect(
+		peak_forward_speeds[2] >= peak_forward_speeds[1] * 1.08,
+		"毛先へ前方速度が集まっていません: %s speeds=%s" % [label, str(peak_forward_speeds)]
+	)
 	_expect(actor.mesh_canvas_vertices()[0].distance_to(actor.ahoge_head_anchor_canvas_position()) < 0.01, "前方伸長で根元が頭部から外れました: " + label)
 
 	# 方向targetを解除して停止すると待機C字へ戻る。
 	actor.set_neck_ahoge_directional_extension(0.0, 0.0)
+	actor.set_neck_ahoge_attack_profile(-1.0, 0.0)
 	var settle_seconds: float = 1.20
 	for settle_frame in range(maxi(1, ceili(settle_seconds * fps))):
 		actor.advance_neck_preview(1.0 / fps)
@@ -327,6 +382,46 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_ratio(0.0)
 	scene.set_process(true)
 	cases.append({"label": label, "diameter_px": d, "range_each_side_px": 0.4 * d, "span_px": absf(forward.x - backward.x), "gaze_max_degrees": 30.0, "asset": mesh_node.texture.resource_path})
+
+func _mesh_centerline(action_motion, vertices: PackedVector2Array) -> PackedVector2Array:
+	var result := PackedVector2Array()
+	if vertices.size() < 3:
+		return result
+	var width: int = int(action_motion._profile.WIDTH_POINTS)
+	if width <= 0 or (vertices.size() - 2) % width != 0:
+		return result
+	result.append(vertices[0])
+	var rows: int = (vertices.size() - 2) / width
+	for row in range(rows):
+		var center := Vector2.ZERO
+		var base: int = 1 + row * width
+		for column in range(width):
+			center += vertices[base + column]
+		result.append(center / float(width))
+	result.append(vertices[-1])
+	return result
+
+
+func _mesh_centerline_length(action_motion, vertices: PackedVector2Array) -> float:
+	var centers: PackedVector2Array = _mesh_centerline(action_motion, vertices)
+	var total: float = 0.0
+	for i in range(1, centers.size()):
+		total += centers[i].distance_to(centers[i - 1])
+	return total
+
+
+func _mesh_chain_points(action_motion, vertices: PackedVector2Array, targets: Array[float]) -> Array[Vector2]:
+	var centers: PackedVector2Array = _mesh_centerline(action_motion, vertices)
+	var result: Array[Vector2] = []
+	if centers.size() != action_motion.fractions.size() + 1:
+		for _target in targets:
+			result.append(Vector2.ZERO)
+		return result
+	for target in targets:
+		var segment_index: int = _nearest_fraction(action_motion.fractions, target)
+		result.append(centers[clampi(segment_index + 1, 0, centers.size() - 1)])
+	return result
+
 
 func _soft_chain_points(action_motion, targets: Array[float]) -> Array[Vector2]:
 	var angles: PackedFloat32Array = action_motion._softened_angles(action_motion.rest_angles)
