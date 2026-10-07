@@ -764,18 +764,20 @@ func _advance_softness(
 					fraction
 				)
 				if soft_directional_control_step_middle >= 0.0:
-					if fraction <= 0.55:
+					if fraction <= 0.45:
 						control_step_limit = lerpf(
 							soft_directional_control_step,
 							soft_directional_control_step_middle,
-							smoothstep(0.0, 0.55, fraction)
+							smoothstep(0.0, 0.45, fraction)
 						)
-					else:
+					elif fraction < 0.75:
 						control_step_limit = lerpf(
 							soft_directional_control_step_middle,
 							soft_directional_control_step_tip,
-							smoothstep(0.55, 1.0, fraction)
+							smoothstep(0.45, 0.75, fraction)
 						)
+					else:
+						control_step_limit = soft_directional_control_step_tip
 				var limited_relative: float = clampf(
 					relative_angle,
 					-control_step_limit,
