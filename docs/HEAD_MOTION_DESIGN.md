@@ -291,6 +291,8 @@ MacのNeckRangePreview「攻撃速度テスト」録画で、後端→前端の�
 - directional chainの隣接角度差制限は**根元→毛先の1方向だけ**とする。毛先の遅れを毛先→根元へ逆伝播させる後方向clampは禁止する。rootが先に反転し、middle、tipが後から追従する位相差を保持する。
 - 端点の前後伸長量・斜め逃げ率は、待機C字の根元→毛先chord長ではなくprofile中心線の**基準弧長**を分母にする。C字のchord長を基準にして直線伸長を過大評価しない。
 - root/chainの減衰をNeckRange専用tuningで引き上げ、directional rootの周波数と並進加速度driveを必要以上に強くしない。端点0.30秒内で収束する一方、0.15秒の切り返し中はroot→middle→tipの順序を残す。
+- 承認済みidle C字では根元第1区間が約-150°を向くため、前方0°targetまで約2.6radの回転自由度が必要になる。従来のdirectional root最大offset=1.75radでは前方targetへ物理的に到達できず、約-50°で飽和していた。NeckRange directional中はroot/controlとも最大offsetをπ近くまで許可し、前後どちらのtargetにも対称に到達できることを必須とする。
+- directional最大offsetの拡大はNeckRange専用tuningだけに適用し、通常Battleの共通defaultへはHuman Verification合格まで反映しない。
 - このHuman Verificationが再合格するまで、NeckRange専用値をMotionPreview/Battle共通defaultへ昇格しない。
 
 #### 現在の調整ゲート：NeckRangePreviewの根元〜中央を柔らかくする
