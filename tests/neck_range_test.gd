@@ -127,6 +127,11 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	)
 	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
+	_expect(
+		float(tuning["directional_middle_spring_gain"]) >= 0.54
+		and float(tuning["directional_middle_spring_gain"]) <= 0.58,
+		"NeckRange専用middle spring gainが候補域から外れています: " + label
+	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
