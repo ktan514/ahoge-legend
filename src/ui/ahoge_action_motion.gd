@@ -692,8 +692,8 @@ func _advance_softness(
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var active_section: float = 0.0
 			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
-				var active_start: float = lerpf(0.28, 0.70, smoothstep(0.0, 1.0, fraction))
-				var active_full: float = lerpf(0.52, 0.96, smoothstep(0.0, 1.0, fraction))
+				var active_start: float = 0.30 + 0.55 * smoothstep(0.0, 1.0, fraction)
+				var active_full: float = 0.50 + 0.50 * smoothstep(0.0, 1.0, fraction)
 				active_section = smoothstep(active_start, active_full, _soft_active_progress)
 				var direct_gain: float = lerpf(
 					soft_active_root_direct_gain,
