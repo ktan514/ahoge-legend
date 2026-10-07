@@ -107,7 +107,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(is_equal_approx(float(tuning["dynamic_curve_retention"]), 0.12), "NeckRange専用C字曲率解放が未適用です: " + label)
 	_expect(float(tuning["directional_curve_retention"]) <= 0.001, "NeckRange方向targetへ待機C字曲率を残しています: " + label)
 	_expect(float(tuning["directional_root_hz"]) >= 10.0 and float(tuning["directional_root_hz"]) <= 13.0, "NeckRange専用directional root Hzが不正です: " + label)
-	_expect(float(tuning["directional_root_max_offset"]) >= 1.70, "NeckRange専用root伸長角が不足しています: " + label)
+	_expect(float(tuning["directional_root_max_offset"]) >= 2.80, "NeckRange専用root伸長角が前方targetへ不足しています: " + label)
+	_expect(float(tuning["directional_max_offset"]) >= 2.80, "NeckRange専用chain伸長角が前方targetへ不足しています: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
