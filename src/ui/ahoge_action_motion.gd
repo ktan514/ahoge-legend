@@ -58,8 +58,7 @@ const SOFT_ACTIVE_ROOT_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
-const SOFT_DIRECTIONAL_CLAMP_CARRY_ROOT: float = 1.0
-const SOFT_DIRECTIONAL_CLAMP_CARRY_TIP: float = 1.0
+const SOFT_ACTIVE_WAVE_WEIGHT: float = 0.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -136,8 +135,7 @@ var soft_active_root_direct_gain: float = SOFT_ACTIVE_ROOT_DIRECT_GAIN
 var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
-var soft_directional_clamp_carry_root: float = SOFT_DIRECTIONAL_CLAMP_CARRY_ROOT
-var soft_directional_clamp_carry_tip: float = SOFT_DIRECTIONAL_CLAMP_CARRY_TIP
+var soft_active_wave_weight: float = SOFT_ACTIVE_WAVE_WEIGHT
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -166,8 +164,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "directional_control_step_tip", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
-		"active_tip_drive_gain", "active_tip_damping_ratio",
-		"directional_clamp_carry_root", "directional_clamp_carry_tip"
+		"active_tip_drive_gain", "active_tip_damping_ratio", "active_wave_weight"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -209,8 +206,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_direct_gain = clampf(float(tuning.get("active_tip_direct_gain", soft_active_tip_direct_gain)), 0.0, 1.0)
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
-	soft_directional_clamp_carry_root = clampf(float(tuning.get("directional_clamp_carry_root", soft_directional_clamp_carry_root)), 0.0, 1.0)
-	soft_directional_clamp_carry_tip = clampf(float(tuning.get("directional_clamp_carry_tip", soft_directional_clamp_carry_tip)), 0.0, 1.0)
+	soft_active_wave_weight = clampf(float(tuning.get("active_wave_weight", soft_active_wave_weight)), 0.0, 1.0)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -252,8 +248,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_direct_gain": soft_active_tip_direct_gain,
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
-		"directional_clamp_carry_root": soft_directional_clamp_carry_root,
-		"directional_clamp_carry_tip": soft_directional_clamp_carry_tip
+		"active_wave_weight": soft_active_wave_weight
 	}
 
 
@@ -736,18 +731,7 @@ func _advance_softness(
 			if directional_weight > 0.000001:
 				# 描画segmentではなく動的control同士の差を制限する。
 				# controlの速度状態は残すため、rootの変化を同一frameでtipまで書き換えない。
-				# NeckRange専用では、前substepと現substepの上流角を補間して
-				# 折れ抑止を維持したまま同一substep伝播だけを部分的に弱める。
-				var clamp_carry: float = lerpf(
-					soft_directional_clamp_carry_root,
-					soft_directional_clamp_carry_tip,
-					fraction
-				)
-				var upstream_world: float = lerp_angle(
-					previous_world[control - 1],
-					_soft_world_angles[control - 1],
-					clamp_carry
-				)
+				var upstream_world: float = _soft_world_angles[control - 1]
 				var relative_angle: float = wrapf(world_angle - upstream_world, -PI, PI)
 				var control_step_limit: float = lerpf(
 					soft_directional_control_step,
@@ -801,6 +785,26 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 			var right_local: float = _soft_world_angles[directional_control + 1] - attachment_angle
 			var chain_local: float = lerp_angle(left_local, right_local, weight)
 			directional_result[i] = lerp_angle(values[i], chain_local, _soft_directional_amount)
+
+		if _soft_active_progress >= 0.0 and soft_active_wave_weight > 0.000001:
+			var q: float = clampf(_soft_active_progress, 0.0, 1.0)
+			for i in range(directional_result.size()):
+				var s: float = clampf(fractions[i], 0.0, 1.0)
+				var phase_space: float = smoothstep(0.25, 1.0, s)
+				var phase_center: float = lerpf(0.56, 0.84, phase_space)
+				var phase_progress: float = smoothstep(
+					phase_center - 0.22,
+					phase_center + 0.22,
+					q
+				)
+				var wave_target: float = lerp_angle(-PI, 0.0, phase_progress)
+				var wave_space: float = smoothstep(0.20, 1.0, s)
+				var wave_weight: float = soft_active_wave_weight * wave_space
+				directional_result[i] = lerp_angle(
+					directional_result[i],
+					wave_target,
+					wave_weight
+				)
 
 		return directional_result
 
