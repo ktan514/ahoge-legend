@@ -11,6 +11,9 @@ const REAR_HOLD_SECONDS: float = 0.30
 const STRIKE_SWING_SECONDS: float = 0.15
 const FRONT_HOLD_SECONDS: float = 0.30
 const RESET_SECONDS: float = 0.30
+const PRELOAD_CONTRACTION: float = -0.035
+const STRIKE_STRETCH: float = 0.10
+const FRONT_RESIDUAL_STRETCH: float = 0.02
 const ATTACK_PREVIEW_SECONDS: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS + RESET_SECONDS
 
 var fighter
@@ -250,6 +253,7 @@ func toggle_oscillation() -> void:
 		_apply_ratio(-0.4)
 		if is_instance_valid(fighter):
 			fighter.set_neck_ahoge_directional_extension(1.0, -1.0)
+			fighter.set_neck_ahoge_attack_profile(0.0, 0.0)
 			fighter.reset_ahoge_soft_follow()
 		oscillating = true
 		_auto_button.text = "テスト停止"
@@ -259,6 +263,7 @@ func stop_oscillation() -> void:
 	oscillating = false
 	if ready_for_input and is_instance_valid(fighter):
 		fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
+		fighter.set_neck_ahoge_attack_profile(-1.0, 0.0)
 	if _auto_button != null:
 		_auto_button.text = "攻撃速度テスト"
 
@@ -285,6 +290,37 @@ static func attack_preview_direction(seconds: float) -> float:
 	return lerpf(1.0, -1.0, back)
 
 
+static func attack_preview_active_progress(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), ATTACK_PREVIEW_SECONDS)
+	if t < REAR_HOLD_SECONDS:
+		return 0.0
+	t -= REAR_HOLD_SECONDS
+	if t < STRIKE_SWING_SECONDS:
+		return clampf(t / STRIKE_SWING_SECONDS, 0.0, 1.0)
+	t -= STRIKE_SWING_SECONDS
+	if t < FRONT_HOLD_SECONDS:
+		return 1.0
+	return -1.0
+
+
+static func attack_preview_elastic_stretch(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), ATTACK_PREVIEW_SECONDS)
+	if t < REAR_HOLD_SECONDS:
+		var rear_u: float = clampf(t / REAR_HOLD_SECONDS, 0.0, 1.0)
+		return lerpf(0.0, PRELOAD_CONTRACTION, smoothstep(0.0, 0.70, rear_u))
+	t -= REAR_HOLD_SECONDS
+	if t < STRIKE_SWING_SECONDS:
+		var strike_u: float = clampf(t / STRIKE_SWING_SECONDS, 0.0, 1.0)
+		return lerpf(PRELOAD_CONTRACTION, STRIKE_STRETCH, smoothstep(0.05, 0.90, strike_u))
+	t -= STRIKE_SWING_SECONDS
+	if t < FRONT_HOLD_SECONDS:
+		var front_u: float = clampf(t / FRONT_HOLD_SECONDS, 0.0, 1.0)
+		return lerpf(STRIKE_STRETCH, FRONT_RESIDUAL_STRETCH, smoothstep(0.20, 0.80, front_u))
+	t -= FRONT_HOLD_SECONDS
+	var reset_u: float = clampf(t / RESET_SECONDS, 0.0, 1.0)
+	return lerpf(FRONT_RESIDUAL_STRETCH, 0.0, smoothstep(0.0, 0.65, reset_u))
+
+
 static func attack_preview_ratio(seconds: float) -> float:
 	var t: float = fposmod(maxf(seconds, 0.0), ATTACK_PREVIEW_SECONDS)
 	if t < REAR_HOLD_SECONDS:
@@ -305,6 +341,10 @@ func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
 		_phase = fposmod(_phase + delta, ATTACK_PREVIEW_SECONDS)
 		fighter.set_neck_ahoge_directional_extension(1.0, attack_preview_direction(_phase))
+		fighter.set_neck_ahoge_attack_profile(
+			attack_preview_active_progress(_phase),
+			attack_preview_elastic_stretch(_phase)
+		)
 		_apply_ratio(attack_preview_ratio(_phase), delta)
 
 
