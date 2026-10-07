@@ -81,10 +81,11 @@ STRIKEの24%までに駆動姿勢へ移り、接触付近までは保持し、�
    - chargedほど最大伸長量と能動turnを増やす。
    - 接触直前の全体Transform投影は残差補正だけに縮小する。
 - 接触確定後はActive Strikeのtargetも接触時Canvas座標へfreezeし、相手のその後の移動を追尾しない。振り抜きは固定接触点からFollowThrough終点へ進む。
-- 接触frameの最終表示後に、実427頂点と実`AhogeMotionRoot` Transformを保存する。`0 <= follow_seconds < FOLLOW_SECONDS`ではこの接触時メッシュを基準形状として保持し、Active Strikeや相手現在位置から形状を再計算しない。
-- 振り抜き中のTransformは保存した接触Transformを開始点とし、固定接触点→FollowThrough終点の希望進行率まで進める。ただし希望Transformで427頂点のいずれかがarena安全領域外へ出る場合は、実`AhogeDeformMesh.global_transform`で全頂点をCanvas座標へ変換して包含判定し、二分探索で画面内に収まる最大進行率へ制限する。
-- この画面内制約では毛束全体をuniform scaleしない。断面幅・根元固定・接触時形状を維持し、振り抜き中の`last_safety_scale`は1.0のままとする。
-- `follow_seconds == FOLLOW_SECONDS`では接触時メッシュ保持を終了し、既存`final_follow_angles()`の終端形状と復帰処理へ切り替える。終端frameまで接触メッシュを保持してTransformだけ終端用へ変える1frame不一致は禁止する。
+- 接触frameの最終表示後に、実427頂点と実`AhogeMotionRoot` Transformを保存する。ただし保存した427頂点は接触開始位置の記録専用とし、COOLDOWN中の描画形状として再利用しない。
+- `0 <= follow_seconds < FOLLOW_SECONDS`では、ActionMotionが生成する基準弧長のfollow形状を使う。Active Strikeで伸びた局所弧長はSTRIKE終了と同時に持ち越さず、STRIKE以外の弧長固定契約を維持する。
+- 振り抜き中のTransformは保存した接触Transformを開始基準とし、現在の基準弧長follow形状の毛先を固定接触点→FollowThrough終点の希望進行率へ投影する。ただし希望Transformで427頂点のいずれかがarena安全領域外へ出る場合は、実`AhogeDeformMesh.global_transform`で全頂点をCanvas座標へ変換して包含判定し、二分探索で画面内に収まる最大進行率へ制限する。
+- この画面内制約ではarena fitによるframeごとのuniform縮小を使わない。断面幅・根元固定・基準弧長を維持し、振り抜き中の`last_safety_scale`は1.0のままとする。
+- `follow_seconds == FOLLOW_SECONDS`では既存`final_follow_angles()`の終端形状と復帰処理へ切り替える。接触時の伸長メッシュをCOOLDOWN終端まで保持する方式は禁止する。
 - Active Strike中にPARRYへキャンセルした場合、直前の実メッシュから中心線を保存する。PARRY entryでは中心点座標を直接lerpせず、各segmentの長さと角度を個別補間してrootから再積算する。これにより向きの違うsegment同士のショートカットで弧長が基準長より短くなることを防ぐ。
 - 断面はprofileの固定幅から毎frame再構築し、伸長中の弧長を滑らかに戻しながら断面幅を潰さない。
 - 特殊な中心線補間は、**直前表示stateがSTRIKE**で、かつPARRY開始直前の実中心線長がprofile基準長より0.5%以上伸びている場合だけ有効化する。
