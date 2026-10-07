@@ -452,6 +452,14 @@ Mac録画では、頭部の後退・前方切り返し・0.4D位置・仰角は�
 - directional control間の折れ上限は、前候補0.43→0.05ではなくroot 0.32rad→tip 0.18radへ再配分する。Active Driveを加えても切り返し総曲率2.20rad以下を維持する。
 - Human Verification合格前は、このActive Drive・mass・伸縮値をMotionPreview/Battle共通defaultへ昇格しない。既存BattleのActive Strike、PARRY、FollowThroughは変更しない。
 
+初回Active Drive CIでは毛先の前方速度は中央を十分上回った一方、30/60fpsでrootとmiddleの速度ピークが同frame、middleとtipの前方crossも同frameになった。駆動力不足ではなくactive開始時刻が中央側で早すぎるため、gainや速度上限を下げず、active waveの時刻だけを再配分する。
+
+- control 1〜8のactive開始は進行qに対し `0.30 + 0.55 * s` を基準とする。
+- active fully drivenは `0.50 + 0.50 * s` を基準とする。
+- root近傍は既存Head Drive直後に動ける一方、中央はq≈0.60以降、毛先はq≈0.82以降まで直接駆動を待つ。
+- これによりroot→middle→tipの速度ピークと前方crossを30fpsでも別frameへ分離する。
+- 毛先のmass増加・後段drive gain・弾性伸長は維持し、得られたtip速度優位を失わせない。
+
 自動検証は、既存の「後方/前方ほぼ直線」「root < middle < tip」「切り返し総曲率<=2.20rad」に加えて次を確認する。
 
 - 前方切り返し中のcenterline弧長が基準より増え、全長では1.04〜1.07倍、最遠位segmentでは最大約1.10倍の範囲に入る。
