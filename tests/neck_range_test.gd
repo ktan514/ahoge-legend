@@ -113,8 +113,12 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["directional_root_max_offset"]) >= 2.80, "NeckRange専用root伸長角が前方targetへ不足しています: " + label)
 	_expect(float(tuning["directional_max_offset"]) >= 2.80, "NeckRange専用chain伸長角が前方targetへ不足しています: " + label)
 	_expect(
-		float(tuning["directional_control_step"]) >= 0.38 and float(tuning["directional_control_step"]) <= 0.42,
-		"NeckRange専用control間位相差上限が候補域から外れています: " + label
+		float(tuning["directional_control_step"]) >= 0.42 and float(tuning["directional_control_step"]) <= 0.44,
+		"NeckRange専用root側control間位相差上限が候補域から外れています: " + label
+	)
+	_expect(
+		float(tuning["directional_control_step_tip"]) >= 0.04 and float(tuning["directional_control_step_tip"]) <= 0.06,
+		"NeckRange専用tip側control間位相差上限が候補域から外れています: " + label
 	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
