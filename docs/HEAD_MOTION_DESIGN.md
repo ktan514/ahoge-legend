@@ -288,7 +288,9 @@ MacのNeckRangePreview「攻撃速度テスト」録画で、後端→前端の�
 - 後端ではlocal tip Xを基準弧長の-70%以上、前端では+70%以上まで伸ばす。local tip Yは基準弧長の15%以内に抑え、方向targetから大きく斜めへ逃げないこと。
 - directional amount=1の間は待機C字の基準曲率をtargetへ持ち込まず、端点ではdirectional curve retention=0を正とする。
 - 切り返し中も隣接segmentの角度差を制限し、中心線が輪・フック状に巻き込む局所折れを禁止する。根元→中央→毛先の時間差は維持し、全区間を同時に剛体回転させて解決しない。
-- directional chainの隣接角度差制限は**根元→毛先の1方向だけ**とする。毛先の遅れを毛先→根元へ逆伝播させる後方向clampは禁止する。rootが先に反転し、middle、tipが後から追従する位相差を保持する。
+- directional chainの折れ制限を**描画segment列へ同一frameで適用しない**。render時にrootからsegmentを順次clampすると、rootの新角度が同一frameでmiddle/tipへ伝わり、物理chainの位相差を消してしまう。
+- 代わりに9個の動的control間へ最大角度差を設ける。各controlは自身の角速度とばね応答を保持したまま、直前controlとの差だけを上限内へ制限する。描画はそのcontrol列を弧長補間するだけとし、root→middle→tipの時間差を保持する。
+- NeckRange専用のdirectional control間最大角度差は約0.27radを初期値とし、8区間すべてが上限へ張り付いてもroot→tip総差が約2.2radを超えないようにする。毛先→根元への逆伝播clampは禁止する。
 - 端点の前後伸長量・斜め逃げ率は、待機C字の根元→毛先chord長ではなくprofile中心線の**基準弧長**を分母にする。C字のchord長を基準にして直線伸長を過大評価しない。
 - root/chainの減衰をNeckRange専用tuningで引き上げ、directional rootの周波数と並進加速度driveを必要以上に強くしない。端点0.30秒内で収束する一方、0.15秒の切り返し中はroot→middle→tipの順序を残す。
 - 承認済みidle C字では根元第1区間が約-150°を向くため、前方0°targetまで約2.6radの回転自由度が必要になる。従来のdirectional root最大offset=1.75radでは前方targetへ物理的に到達できず、約-50°で飽和していた。NeckRange directional中はroot/controlとも最大offsetをπ近くまで許可し、前後どちらのtargetにも対称に到達できることを必須とする。
