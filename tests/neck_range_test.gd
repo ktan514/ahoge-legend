@@ -100,7 +100,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["root_hinge_damping"]) >= 0.90, "NeckRange専用root dampingが不足しています: " + label)
 	_expect(is_equal_approx(float(tuning["root_blend_end"]), 0.30), "NeckRange専用root blendが未適用です: " + label)
 	_expect(is_equal_approx(float(tuning["root_start_weight"]), 0.35), "NeckRange専用root weightが未適用です: " + label)
-	_expect(float(tuning["chain_hz"]) >= 5.5 and float(tuning["chain_hz"]) <= 7.5, "NeckRange専用chain Hzが不正です: " + label)
+	_expect(float(tuning["chain_hz"]) >= 10.0 and float(tuning["chain_hz"]) <= 15.0, "NeckRange専用chain Hzが不正です: " + label)
 	_expect(float(tuning["root_damping"]) >= 0.80, "NeckRange専用chain root dampingが不足しています: " + label)
 	_expect(float(tuning["tip_damping"]) >= 0.95, "NeckRange専用tip dampingが不足しています: " + label)
 	_expect(float(tuning["relative_damping_root"]) >= 0.45, "NeckRange専用relative root dampingが不足しています: " + label)
@@ -108,7 +108,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["tip_spring_gain"]) >= 0.55, "NeckRange専用tip springが不足しています: " + label)
 	_expect(is_equal_approx(float(tuning["dynamic_curve_retention"]), 0.12), "NeckRange専用C字曲率解放が未適用です: " + label)
 	_expect(float(tuning["directional_curve_retention"]) <= 0.001, "NeckRange方向targetへ待機C字曲率を残しています: " + label)
-	_expect(float(tuning["directional_root_hz"]) >= 7.0 and float(tuning["directional_root_hz"]) <= 9.0, "NeckRange専用directional root Hzが不正です: " + label)
+	_expect(float(tuning["directional_root_hz"]) >= 8.0 and float(tuning["directional_root_hz"]) <= 11.0, "NeckRange専用directional root Hzが不正です: " + label)
 	_expect(float(tuning["directional_root_max_offset"]) >= 1.70, "NeckRange専用root伸長角が不足しています: " + label)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
