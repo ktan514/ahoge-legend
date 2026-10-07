@@ -45,6 +45,7 @@ const SOFT_DIRECTIONAL_ROOT_HZ: float = SOFT_ROOT_HINGE_HZ
 const SOFT_DIRECTIONAL_ROOT_MAX_OFFSET: float = SOFT_ROOT_MAX_OFFSET
 const SOFT_DIRECTIONAL_MAX_OFFSET: float = SOFT_MAX_OFFSET
 const SOFT_DIRECTIONAL_CONTROL_STEP: float = PI
+const SOFT_DIRECTIONAL_CONTROL_STEP_MIDDLE: float = -1.0
 const SOFT_DIRECTIONAL_CONTROL_STEP_TIP: float = PI
 const SOFT_CURVE_RELEASE_SPEED: float = 1500.0
 const SOFT_CURVE_RELEASE_ANGULAR_SPEED: float = 6.0
@@ -59,7 +60,6 @@ const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
 const SOFT_ACTIVE_PRELOAD_CONTRACTION: float = 0.0
-const SOFT_ACTIVE_HOLD_GAIN: float = 0.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -125,6 +125,7 @@ var soft_directional_root_hz: float = SOFT_DIRECTIONAL_ROOT_HZ
 var soft_directional_root_max_offset: float = SOFT_DIRECTIONAL_ROOT_MAX_OFFSET
 var soft_directional_max_offset: float = SOFT_DIRECTIONAL_MAX_OFFSET
 var soft_directional_control_step: float = SOFT_DIRECTIONAL_CONTROL_STEP
+var soft_directional_control_step_middle: float = SOFT_DIRECTIONAL_CONTROL_STEP_MIDDLE
 var soft_directional_control_step_tip: float = SOFT_DIRECTIONAL_CONTROL_STEP_TIP
 var soft_curve_release_speed: float = SOFT_CURVE_RELEASE_SPEED
 var soft_curve_release_angular_speed: float = SOFT_CURVE_RELEASE_ANGULAR_SPEED
@@ -137,7 +138,6 @@ var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
 var soft_active_preload_contraction: float = SOFT_ACTIVE_PRELOAD_CONTRACTION
-var soft_active_hold_gain: float = SOFT_ACTIVE_HOLD_GAIN
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -163,11 +163,12 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"third_drive_ratio", "chain_hz", "root_damping", "tip_damping",
 		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
 		"tip_spring_gain", "dynamic_curve_retention", "directional_curve_retention",
-		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "directional_control_step_tip", "curve_release_speed",
+		"directional_root_hz", "directional_root_max_offset", "directional_max_offset",
+		"directional_control_step", "directional_control_step_middle", "directional_control_step_tip", "curve_release_speed",
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
 		"active_tip_drive_gain", "active_tip_damping_ratio",
-		"active_preload_contraction", "active_hold_gain"
+		"active_preload_contraction"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -198,6 +199,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_directional_root_max_offset = maxf(0.0, float(tuning.get("directional_root_max_offset", soft_directional_root_max_offset)))
 	soft_directional_max_offset = maxf(0.0, float(tuning.get("directional_max_offset", soft_directional_max_offset)))
 	soft_directional_control_step = clampf(float(tuning.get("directional_control_step", soft_directional_control_step)), 0.001, PI)
+	if tuning.has("directional_control_step_middle"):
+		soft_directional_control_step_middle = clampf(float(tuning["directional_control_step_middle"]), 0.001, PI)
 	soft_directional_control_step_tip = clampf(float(tuning.get("directional_control_step_tip", soft_directional_control_step_tip)), 0.001, PI)
 	soft_curve_release_speed = maxf(1.0, float(tuning.get("curve_release_speed", soft_curve_release_speed)))
 	soft_curve_release_angular_speed = maxf(0.01, float(tuning.get("curve_release_angular_speed", soft_curve_release_angular_speed)))
@@ -210,7 +213,6 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
 	soft_active_preload_contraction = clampf(float(tuning.get("active_preload_contraction", soft_active_preload_contraction)), -0.08, 0.0)
-	soft_active_hold_gain = clampf(float(tuning.get("active_hold_gain", soft_active_hold_gain)), 0.0, 1.0)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -722,22 +724,6 @@ func _advance_softness(
 				var active_start: float = 0.30 + 0.55 * smoothstep(0.0, 1.0, fraction)
 				var active_full: float = 0.50 + 0.50 * smoothstep(0.0, 1.0, fraction)
 				active_section = smoothstep(active_start, active_full, active_q)
-				# 重い遠位側はrelease前だけ旧方向へ残ろうとする。
-				# actual angleはこの後のcontrol差clampを必ず通るため、
-				# holdを強めてもU字上限を無効化しない。
-				var hold_time: float = (
-					smoothstep(0.08, 0.35, active_q)
-					* (1.0 - smoothstep(0.72, 0.96, active_q))
-				)
-				var hold_space: float = smoothstep(0.30, 1.0, fraction)
-				var hold_gain: float = (
-					soft_active_hold_gain
-					* hold_space
-					* hold_time
-					* (1.0 - active_section)
-				)
-				if hold_gain > 0.000001:
-					target = lerp_angle(target, angle - PI, hold_gain)
 				var direct_gain: float = lerpf(
 					soft_active_root_direct_gain,
 					soft_active_tip_direct_gain,
@@ -777,6 +763,19 @@ func _advance_softness(
 					soft_directional_control_step_tip,
 					fraction
 				)
+				if soft_directional_control_step_middle >= 0.0:
+					if fraction <= 0.55:
+						control_step_limit = lerpf(
+							soft_directional_control_step,
+							soft_directional_control_step_middle,
+							smoothstep(0.0, 0.55, fraction)
+						)
+					else:
+						control_step_limit = lerpf(
+							soft_directional_control_step_middle,
+							soft_directional_control_step_tip,
+							smoothstep(0.55, 1.0, fraction)
+						)
 				var limited_relative: float = clampf(
 					relative_angle,
 					-control_step_limit,
