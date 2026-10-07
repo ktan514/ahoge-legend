@@ -51,6 +51,13 @@ const SOFT_CURVE_RELEASE_ANGULAR_SPEED: float = 6.0
 const SOFT_FORWARD_ACCEL_DRIVE: float = 0.000010
 const SOFT_DRIVE_LIMIT: float = 0.70
 const SOFT_MAX_OFFSET: float = 0.70
+# 通常Battleでは無効の中立値。NeckRangePreviewのHuman Verification用Active Driveだけ
+# set_soft_tuning()で上書きする。
+const SOFT_ACTIVE_TIP_MASS: float = 1.0
+const SOFT_ACTIVE_ROOT_DIRECT_GAIN: float = 0.0
+const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
+const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
+const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -90,6 +97,8 @@ var _soft_previous_angle: float = 0.0
 var _soft_motion_initialized: bool = false
 var _soft_directional_amount: float = 0.0
 var _soft_directional_direction: float = 0.0
+var _soft_active_progress: float = -1.0
+var _soft_elastic_stretch: float = 0.0
 
 var soft_control_targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
 var soft_root_hinge_hz: float = SOFT_ROOT_HINGE_HZ
@@ -120,6 +129,11 @@ var soft_curve_release_angular_speed: float = SOFT_CURVE_RELEASE_ANGULAR_SPEED
 var soft_forward_accel_drive: float = SOFT_FORWARD_ACCEL_DRIVE
 var soft_drive_limit: float = SOFT_DRIVE_LIMIT
 var soft_max_offset: float = SOFT_MAX_OFFSET
+var soft_active_tip_mass: float = SOFT_ACTIVE_TIP_MASS
+var soft_active_root_direct_gain: float = SOFT_ACTIVE_ROOT_DIRECT_GAIN
+var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
+var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
+var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -146,7 +160,9 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"shape_restore_ratio", "relative_damping_root", "relative_damping_tip",
 		"tip_spring_gain", "dynamic_curve_retention", "directional_curve_retention",
 		"directional_root_hz", "directional_root_max_offset", "directional_max_offset", "directional_control_step", "directional_control_step_tip", "curve_release_speed",
-		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset"
+		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
+		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
+		"active_tip_drive_gain", "active_tip_damping_ratio"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -183,6 +199,11 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_forward_accel_drive = maxf(0.0, float(tuning.get("forward_accel_drive", soft_forward_accel_drive)))
 	soft_drive_limit = maxf(0.0, float(tuning.get("drive_limit", soft_drive_limit)))
 	soft_max_offset = maxf(0.0, float(tuning.get("max_offset", soft_max_offset)))
+	soft_active_tip_mass = maxf(1.0, float(tuning.get("active_tip_mass", soft_active_tip_mass)))
+	soft_active_root_direct_gain = clampf(float(tuning.get("active_root_direct_gain", soft_active_root_direct_gain)), 0.0, 1.0)
+	soft_active_tip_direct_gain = clampf(float(tuning.get("active_tip_direct_gain", soft_active_tip_direct_gain)), 0.0, 1.0)
+	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
+	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -218,7 +239,12 @@ func soft_tuning_snapshot() -> Dictionary:
 		"curve_release_angular_speed": soft_curve_release_angular_speed,
 		"forward_accel_drive": soft_forward_accel_drive,
 		"drive_limit": soft_drive_limit,
-		"max_offset": soft_max_offset
+		"max_offset": soft_max_offset,
+		"active_tip_mass": soft_active_tip_mass,
+		"active_root_direct_gain": soft_active_root_direct_gain,
+		"active_tip_direct_gain": soft_active_tip_direct_gain,
+		"active_tip_drive_gain": soft_active_tip_drive_gain,
+		"active_tip_damping_ratio": soft_active_tip_damping_ratio
 	}
 
 
@@ -270,11 +296,21 @@ func advance(
 	softness_amount: float = 1.0,
 	attachment_forward_px: float = 0.0,
 	directional_amount: float = 0.0,
-	directional_direction: float = 0.0
+	directional_direction: float = 0.0,
+	active_progress: float = -1.0,
+	elastic_stretch: float = 0.0
 ) -> void:
 	if not configured or delta <= 0.0 or not is_finite(delta):
 		return
-	if not is_finite(attachment_angle_radians) or not is_finite(softness_amount) or not is_finite(attachment_forward_px) or not is_finite(directional_amount) or not is_finite(directional_direction):
+	if (
+		not is_finite(attachment_angle_radians)
+		or not is_finite(softness_amount)
+		or not is_finite(attachment_forward_px)
+		or not is_finite(directional_amount)
+		or not is_finite(directional_direction)
+		or not is_finite(active_progress)
+		or not is_finite(elastic_stretch)
+	):
 		return
 	attachment_angle = attachment_angle_radians
 	softness = clampf(softness_amount, 0.0, 1.0)
@@ -328,7 +364,9 @@ func advance(
 		state,
 		available,
 		clampf(directional_amount, 0.0, 1.0),
-		clampf(directional_direction, -1.0, 1.0)
+		clampf(directional_direction, -1.0, 1.0),
+		clampf(active_progress, -1.0, 1.0),
+		clampf(elastic_stretch, -0.08, 0.14)
 	)
 
 
@@ -486,7 +524,16 @@ func visual_vertices() -> PackedVector2Array:
 
 
 func visual_vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Array:
-	return vertices_from_angles(_softened_angles(values))
+	var softened: PackedFloat32Array = _softened_angles(values)
+	if absf(_soft_elastic_stretch) <= 0.000001 or _soft_directional_amount <= 0.000001:
+		return vertices_from_angles(softened)
+	var length_scales: PackedFloat32Array = PackedFloat32Array()
+	length_scales.resize(softened.size())
+	for i in range(length_scales.size()):
+		# 根元固定を守り、弧長方向にだけ伸縮を増やす。
+		var weight: float = smoothstep(0.08, 1.0, fractions[i])
+		length_scales[i] = 1.0 + _soft_elastic_stretch * weight
+	return vertices_from_angles_scaled(softened, length_scales)
 
 
 func soft_idle_vertices(attachment_angle_radians: float, softness_amount: float = 1.0) -> PackedVector2Array:
@@ -549,12 +596,16 @@ func _advance_softness(
 	action_state: int,
 	available: bool,
 	directional_amount: float,
-	directional_direction: float
+	directional_direction: float,
+	active_progress: float,
+	elastic_stretch: float
 ) -> void:
 	var bounded: float = clampf(amount, 0.0, 1.0)
 	softness = bounded
 	_soft_directional_amount = clampf(directional_amount, 0.0, 1.0) * bounded
 	_soft_directional_direction = clampf(directional_direction, -1.0, 1.0)
+	_soft_active_progress = clampf(active_progress, -1.0, 1.0)
+	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.14) * bounded
 	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
 		_reset_soft_motion()
 		return
@@ -633,22 +684,41 @@ func _advance_softness(
 			elif control == 2:
 				coupled_target += drive * soft_third_drive_ratio
 			var absolute_target: float = angle + current_angles[index]
-			# 方向付き伸長中はrootだけが絶対方向targetを直接受ける。
-			# control 1〜8は直前controlからの結合だけで方向を受け取り、
-			# chainを飛び越えて中央・毛先が同時反転しないようにする。
+			# 通常の方向付き伸長ではrootだけが絶対方向targetを直接受ける。
+			# NeckRange専用Active Driveが有効なときだけ、弧長方向に開始時刻を遅らせて
+			# control 1〜8へ前方targetを順番に開く。全control同時の剛体回転にはしない。
 			var absolute_restore: float = soft_shape_restore_ratio * (1.0 - directional_weight)
 			var target: float = lerp_angle(coupled_target, absolute_target, absolute_restore)
-			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
+			var active_section: float = 0.0
+			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
+				var active_start: float = lerpf(0.28, 0.70, smoothstep(0.0, 1.0, fraction))
+				var active_full: float = lerpf(0.52, 0.96, smoothstep(0.0, 1.0, fraction))
+				active_section = smoothstep(active_start, active_full, _soft_active_progress)
+				var direct_gain: float = lerpf(
+					soft_active_root_direct_gain,
+					soft_active_tip_direct_gain,
+					smoothstep(0.0, 1.0, fraction)
+				) * active_section
+				# キャラクター前方基準のlocal 0radへ自力で向く。
+				target = lerp_angle(target, angle, direct_gain)
+			var error: float = wrapf(target - previous_world[control], -PI, PI)
+			var mass: float = lerpf(1.0, soft_active_tip_mass, pow(fraction, 1.5))
 			var damping: float = lerpf(soft_root_damping, soft_tip_damping, fraction)
+			damping *= lerpf(1.0, soft_active_tip_damping_ratio, active_section * fraction)
 			var relative_damping: float = lerpf(soft_relative_damping_root, soft_relative_damping_tip, fraction)
 			# directional chainでは中央から明確に遅らせる。通常のPassive Flexは従来のfraction²を維持する。
 			var spring_fraction: float = fraction if directional_weight > 0.000001 else fraction * fraction
 			var spring_gain: float = lerpf(1.0, soft_tip_spring_gain, spring_fraction)
+			var active_drive_gain: float = lerpf(
+				1.0,
+				lerpf(1.0, soft_active_tip_drive_gain, fraction),
+				active_section
+			)
 			var omega: float = TAU * soft_chain_hz
 			var relative_velocity: float = previous_velocity[control] - previous_velocity[control - 1]
 			var acceleration: float = (
-				omega * omega * spring_gain * error
+				omega * omega * spring_gain * active_drive_gain * error / mass
 				- 2.0 * damping * omega * previous_velocity[control]
 				- 2.0 * relative_damping * omega * relative_velocity
 			)
@@ -775,6 +845,8 @@ func _reset_soft_motion() -> void:
 	_soft_motion_initialized = false
 	_soft_directional_amount = 0.0
 	_soft_directional_direction = 0.0
+	_soft_active_progress = -1.0
+	_soft_elastic_stretch = 0.0
 
 
 func active_strike_vertices(target_local: Vector2, contact_progress: float, charge_ratio: float) -> PackedVector2Array:
