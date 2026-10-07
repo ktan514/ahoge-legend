@@ -128,8 +128,14 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
 	_expect(
-		float(tuning["directional_lagged_clamp"]) >= 0.99,
-		"NeckRange専用の1substep遅延clampが未適用です: " + label
+		float(tuning["directional_clamp_carry_root"]) >= 0.90
+		and float(tuning["directional_clamp_carry_root"]) <= 0.94,
+		"NeckRange専用root clamp carryが候補域から外れています: " + label
+	)
+	_expect(
+		float(tuning["directional_clamp_carry_tip"]) >= 0.76
+		and float(tuning["directional_clamp_carry_tip"]) <= 0.80,
+		"NeckRange専用tip clamp carryが候補域から外れています: " + label
 	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
