@@ -132,6 +132,11 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		and float(tuning["active_preload_contraction"]) <= -0.033,
 		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
 	)
+	_expect(
+		float(tuning["active_hold_gain"]) >= 0.53
+		and float(tuning["active_hold_gain"]) <= 0.57,
+		"NeckRange専用の毛先慣性holdが候補域から外れています: " + label
+	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
 	var neutral_root: Vector2 = rig.global_position
