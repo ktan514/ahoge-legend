@@ -1066,3 +1066,40 @@ Human Verification候補:
 - RETURN完了後、directional amount=0 / elastic stretch=0になったIDLE区間で初めて `active_progress=-1` へ戻す。
 - チャージ攻撃も同じ境界規則へ揃える。攻撃本体の値は変更しない。
 - これによりFRONT_HOLD→RETURNとRETURN→IDLEの両境界で、目視できるshape jumpを作らない。
+
+
+## 待機アホ毛形状の再定義: 短い潰れC字
+
+2026-10-08 Human Verificationで、現在の待機アホ毛は長すぎ・縦に大きすぎることを確認した。基準イメージは、頭頂付近へ収まる**短く潰れたC字**であり、現在の約半分の中心線長を目標とする。
+
+現行LONG_TESTの `idle_pose_vertices` 実測:
+
+- centerline arc length: 約1765.20 source px
+- centerline bounds width: 約681.53 px
+- centerline bounds height: 約968.54 px
+
+初期候補:
+
+- centerline X scale: **0.75**
+- centerline Y scale: **0.34**
+- 変換後centerline arc length: 約50.5%
+- 変換後centerline bounds width: 約75%
+- 変換後centerline bounds height: 約34%
+
+この変換は**中心線だけ**へ適用する。断面幅・UV・texture bind・mesh topologyは縮小しない。
+
+実装要件:
+
+- 承認済み `ahoge_straight.png`、`section_left_px/right_px`、bind vertices、UVは変更しない。
+- `idle_pose_vertices` を基準にcenterlineだけをroot基準で異方性scaleする。
+- 各断面は元の幅を維持し、旧centerline tangent→新centerline tangentの回転だけを適用する。
+- 根元vertexはVector2.ZERO固定。
+- tipは変換後centerline終点へ移動する。
+- straight shape / attack stretchは、新しい短いrest poseから生成する。
+- 共通profile scriptのdefault scaleはVector2.ONEとし、LONG_TEST straight profileだけ `Vector2(0.75, 0.34)` を指定する。
+- 待機時の中心線長は旧idleの0.48〜0.53倍を自動検証する。
+- 高さは旧idleの0.32〜0.36倍を自動検証する。
+- 断面幅は旧idleとの差を2%以内に維持する。
+- Human Verification合格前はこの待機形状を完成扱いしない。
+
+この変更はモーション数値の微調整より先に行う。通常攻撃・チャージ攻撃・パリィは、短い潰れC字を新しいneutral poseとして再評価する。
