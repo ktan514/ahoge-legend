@@ -625,3 +625,18 @@ NeckRange専用active tip massを1.60→1.90へ増やしても、30fpsの前方c
 - 通常Battle/MotionPreviewの共通defaultは変更しないため、この挙動はtuning flagでNeckRange専用に有効化する。
 - 既に合格しているtip速度優位、active drive、伸長、端点形状、総曲率上限は維持する。
 - 採用条件は30/60/120fpsすべてでroot < middle < tipを維持し、端点0.30秒内に前後ほぼ直線へ収束すること。
+
+
+#### 2026-10-08 同一step伝播抑制の結果と部分伝播
+
+前substepの上流角を100% clamp基準にした試行では、30/60/120fpsすべてでroot < middle < tipの前方cross順序が合格し、速度ピーク順序・毛先速度優位・伸長条件も維持した。一方、切り返し最大総曲率が3.48〜3.60radへ増え、2.20rad契約を大幅に超えた。
+
+これは「更新済み上流角を100%使うと位相差が不足」「前substep上流角を100%使うと位相差が過大」という両端が確認できたことを意味する。
+
+次候補はclamp基準上流角を、前substep角→現在substep角の途中へ置く。
+
+- 共通defaultは現在substep角100%（blend=1.0）のまま。
+- NeckRange専用候補は `directional_clamp_upstream_blend=0.60`。
+- `upstream_for_clamp = lerp_angle(previous_world[control - 1], _soft_world_angles[control - 1], blend)` とする。
+- blendを0へ寄せるほど位相差が増え、1へ寄せるほど折れが減る。テスト閾値は変更しない。
+- 採用条件は、root < middle < tip と最大総曲率<=2.20radを同時に満たすこと。速度ピーク・伸長・端点形状も従来条件を維持する。
