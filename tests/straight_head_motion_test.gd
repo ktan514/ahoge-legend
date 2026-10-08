@@ -28,6 +28,41 @@ func _run() -> void:
 	_check(profile.bind_vertices.size() == 427, "基準頂点数")
 	_check(profile.rest_vertices[0] == Vector2.ZERO, "待機根元")
 	_check(profile.bind_vertices[-1].distance_to(profile.rest_vertices[-1]) > 300.0, "画像基準とC字姿勢を分離")
+	_check(profile.idle_centerline_scale.is_equal_approx(Vector2(0.75, 0.34)), "待機C字の圧縮率")
+	var source_idle_centers: PackedVector2Array = ParryScript.centers_of(
+		profile.idle_pose_vertices,
+		profile.WIDTH_POINTS
+	)
+	var compact_idle_centers: PackedVector2Array = ParryScript.centers_of(
+		profile.rest_vertices,
+		profile.WIDTH_POINTS
+	)
+	var source_idle_length: float = _centerline_length(source_idle_centers)
+	var compact_idle_length: float = _centerline_length(compact_idle_centers)
+	var idle_length_ratio: float = compact_idle_length / maxf(source_idle_length, 0.001)
+	_check(
+		idle_length_ratio >= 0.48 and idle_length_ratio <= 0.53,
+		"待機C字の中心線長が約半分ではありません: ratio=%f" % idle_length_ratio
+	)
+	var source_idle_bounds: Rect2 = _point_bounds(source_idle_centers)
+	var compact_idle_bounds: Rect2 = _point_bounds(compact_idle_centers)
+	var idle_height_ratio: float = compact_idle_bounds.size.y / maxf(source_idle_bounds.size.y, 0.001)
+	_check(
+		idle_height_ratio >= 0.32 and idle_height_ratio <= 0.36,
+		"待機C字が十分に潰れていません: ratio=%f" % idle_height_ratio
+	)
+	var max_idle_width_error: float = 0.0
+	for row in range(85):
+		var first: int = 1 + row * profile.WIDTH_POINTS
+		var last: int = first + profile.WIDTH_POINTS - 1
+		max_idle_width_error = maxf(
+			max_idle_width_error,
+			absf(
+				profile.idle_pose_vertices[first].distance_to(profile.idle_pose_vertices[last])
+				- profile.rest_vertices[first].distance_to(profile.rest_vertices[last])
+			)
+		)
+	_check(max_idle_width_error < 0.02, "待機C字の短縮で断面幅を潰しました: %f" % max_idle_width_error)
 	for i in range(profile.uvs.size()):
 		_check((profile.uvs[i] * Vector2(profile.source_size) - profile.root_anchor_px).distance_to(profile.bind_vertices[i]) < 0.005, "UVは素材の基準座標に固定")
 	for k in range(65):
@@ -100,6 +135,22 @@ func _cycle(resolution: Vector2i, side: int, scenario: int) -> void:
 		_check(session.attacker.last_contact_error <= 2.0, "新素材でも接触: " + label)
 	records.append({"label": label, "max_root_error_px": max_root_error, "peak_head_move_px": peak_offset, "peak_head_angle_deg": rad_to_deg(peak_angle), "head_rig_rotation_difference_deg": rad_to_deg(max_lag), "minimum_safety_scale": min_safety, "frames": trace})
 	view.free()
+
+func _centerline_length(points: PackedVector2Array) -> float:
+	var total: float = 0.0
+	for i in range(1, points.size()):
+		total += points[i].distance_to(points[i - 1])
+	return total
+
+
+func _point_bounds(points: PackedVector2Array) -> Rect2:
+	if points.is_empty():
+		return Rect2()
+	var result: Rect2 = Rect2(points[0], Vector2.ZERO)
+	for point in points:
+		result = result.expand(point)
+	return result
+
 
 func _geometry(profile, points: PackedVector2Array) -> void:
 	for i in range(0, profile.indices.size(), 3):
