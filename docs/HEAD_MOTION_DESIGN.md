@@ -809,3 +809,22 @@ Mac Human Verificationで現在のActive Drive / Passive Flexは「だいぶ良�
 - peakはswing終端〜前端到達直後のみ。
 - 前端保持0.12秒後には残留2%相当へ戻る。
 - width、root固定、角度chain、U字禁止条件を維持する。
+
+
+#### 2026-10-08 1.25倍伸長が反映されなかった原因
+
+`STRIKE_STRETCH` を0.30→0.63へ変更しても実描画centerline最大ratioが1.118448から全く変化しなかったため、伸長値の受け渡し経路をread-backした。
+
+原因は `AhogeActionMotion.advance()` の `_advance_softness()` 呼び出し直前に残っていた `clampf(elastic_stretch, -0.08, 0.14)` である。
+
+- NeckRangePreviewは0.30/0.63を生成していた。
+- NeckRangeFighterも0.70まで受け取れていた。
+- `_advance_softness()` 自体も0.70まで受け取れるよう修正済みだった。
+- しかし `advance()` の中間clampだけ0.14のままで、実際の描画には常に最大+0.14しか届いていなかった。
+- そのため0.30と0.63の両候補が同じ1.118448倍になった。
+
+修正:
+- `advance()` のelastic stretch clamp上限も0.70へ統一する。
+- 過剰補正していた `STRIKE_STRETCH=0.63` は不採用とし、元の0.30へ戻す。
+- 実測では0.14入力で全長1.118448倍なので、0.30入力では線形近似で約1.254倍となり、目標1.22〜1.28の中央付近になる見込み。
+- 伸長分布、0.12秒での急速復帰、根元固定、角度chainは変更しない。
