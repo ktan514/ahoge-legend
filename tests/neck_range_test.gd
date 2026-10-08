@@ -134,8 +134,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
 	_expect(float(tuning["active_wave_hold"]) >= 0.99, "NeckRange専用Active wave holdが未適用です: " + label)
 	_expect(
-		float(tuning["active_directional_control_step_tip"]) >= 0.23
-		and float(tuning["active_directional_control_step_tip"]) <= 0.25,
+		float(tuning["active_directional_control_step_tip"]) >= 0.17
+		and float(tuning["active_directional_control_step_tip"]) <= 0.19,
 		"NeckRange専用の攻撃中distal位相上限が候補域から外れています: " + label
 	)
 	_expect(
