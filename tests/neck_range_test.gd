@@ -2,6 +2,7 @@ extends SceneTree
 
 const PreviewScene := preload("res://tools/motion_preview/NeckRangePreview.tscn")
 const StateScript := preload("res://src/domain/combatant_state.gd")
+const ConfigScript := preload("res://src/config/combat_config.gd")
 const OUT: String = "res://artifacts/neck-range/"
 var failures: Array[String] = []
 var cases: Array = []
