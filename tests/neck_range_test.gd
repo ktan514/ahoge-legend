@@ -59,12 +59,51 @@ func _run() -> void:
 		scene._normal_directional_amount(scene.NORMAL_IDLE_BEFORE_SECONDS + scene.NORMAL_HEAD_LEAD_SECONDS * 0.5) <= 0.0001,
 		"通常攻撃の頭部先行前にアホ毛targetが動いています"
 	)
+	_expect(
+		scene._normal_directional_amount(
+			scene.NORMAL_IDLE_BEFORE_SECONDS + scene.NORMAL_PREP_SECONDS - 0.0001
+		) <= scene.NORMAL_PREP_DIRECTIONAL_MAX + 0.001,
+		"通常攻撃PREP中に方向付き伸長を強くしすぎています"
+	)
+	_expect(
+		scene.NORMAL_PREP_DIRECTIONAL_MAX <= 0.20 + 0.0001,
+		"通常攻撃PREPの直線化上限がtip hook抑止値を超えています"
+	)
+	var normal_strike_q35: float = (
+		scene.NORMAL_IDLE_BEFORE_SECONDS
+		+ scene.NORMAL_PREP_SECONDS
+		+ ConfigScript.new().normal_strike_seconds * scene.NORMAL_STRIKE_DIRECTIONAL_FULL_Q
+	)
+	_expect(
+		scene._normal_directional_amount(normal_strike_q35) >= 0.99,
+		"通常攻撃のdirectional targetがSTRIKE中に十分立ち上がりません"
+	)
 	var normal_idle_probe: float = scene.preview_cycle_seconds() - scene.NORMAL_IDLE_HOLD_SECONDS * 0.5
 	_expect(scene._normal_is_idle_hold(normal_idle_probe), "通常攻撃後の待機区間を判定できません")
 	_expect(absf(scene._normal_ratio(normal_idle_probe)) < 0.0001, "通常攻撃後に頭部が0Dへ戻りません")
 	_expect(scene._normal_directional_amount(normal_idle_probe) <= 0.0001, "通常攻撃後に方向付き伸長が残っています")
 	_expect(scene._normal_active_progress(normal_idle_probe) < 0.0, "通常攻撃後にActive Driveが残っています")
 	_expect(absf(scene._normal_elastic_stretch(normal_idle_probe)) < 0.0001, "通常攻撃後に弾性伸長が残っています")
+
+	# 終了後IDLEから次周期の開始前IDLEへ、ActionMotionを再生成せず連続する。
+	var normal_mesh = scene.fighter.find_child("AhogeDeformMesh", true, false)
+	scene.fighter.reset_neck_preview_action()
+	scene.fighter.reset_ahoge_soft_follow()
+	var normal_step: float = 1.0 / 60.0
+	var normal_time: float = 0.0
+	var normal_before_wrap: float = scene.preview_cycle_seconds() - normal_step
+	while normal_time < normal_before_wrap - 0.000001:
+		var next_normal_time: float = minf(normal_time + normal_step, normal_before_wrap)
+		scene._apply_preview_frame(next_normal_time, next_normal_time - normal_time)
+		normal_time = next_normal_time
+	var normal_before_vertices: PackedVector2Array = normal_mesh.current_vertices.duplicate()
+	scene._apply_preview_frame(scene.preview_cycle_seconds() + normal_step, normal_step)
+	var normal_after_vertices: PackedVector2Array = normal_mesh.current_vertices.duplicate()
+	_expect(
+		_difference(normal_before_vertices, normal_after_vertices) <= 12.0,
+		"通常攻撃ループ境界でアホ毛形状が1frame跳ねます"
+	)
+
 	scene.toggle_oscillation()
 	_expect(scene.oscillating, "通常攻撃の動作テストが開始しません")
 	scene.stop_oscillation()
