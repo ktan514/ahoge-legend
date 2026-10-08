@@ -42,7 +42,7 @@ const NECK_SOFT_TUNING := {
 	"active_tip_damping_ratio": 0.62,
 	"active_preload_contraction": -0.035,
 	"active_wave_hold": 1.00,
-	"active_directional_control_step_tip": 0.18,
+	"active_directional_control_step_tip": 0.24,
 	"directional_clamp_upstream_blend": 1.00,
 	"curve_release_speed": 1500.0,
 	"curve_release_angular_speed": 6.0,
