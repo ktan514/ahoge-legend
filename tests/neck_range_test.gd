@@ -122,7 +122,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"NeckRange専用middle側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["directional_control_step_tip"]) >= 0.17 and float(tuning["directional_control_step_tip"]) <= 0.19,
+		float(tuning["directional_control_step_tip"]) >= 0.04 and float(tuning["directional_control_step_tip"]) <= 0.06,
 		"NeckRange専用tip側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(float(tuning["active_tip_mass"]) >= 1.50, "NeckRange専用の毛先慣性が不足しています: " + label)
@@ -141,6 +141,14 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		float(tuning["active_preload_contraction"]) >= -0.037
 		and float(tuning["active_preload_contraction"]) <= -0.033,
 		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
+	)
+	_expect(
+		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS * 0.60) <= -0.03,
+		"STRIKE中盤より前に弾性溜めを解放しています: " + label
+	)
+	_expect(
+		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS * 0.92) > 0.04,
+		"STRIKE終盤で弾性伸長が立ち上がっていません: " + label
 	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
