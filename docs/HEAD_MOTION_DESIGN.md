@@ -609,3 +609,5 @@ Active Driveの位相再配分後、direction target自体を22%→62%反転か�
 このためdirection targetの前倒しは不採用とし、従来の「頭部が先行し、アホ毛は序盤22%を後方保持、22%→62%で反転」を維持する。Active Driveの弧長別開始時刻だけで速度ピークをroot→middle→tipへ分離する。
 
 direction targetの開始を早めてcross時刻を合わせる方法は禁止する。cross順序はPassive chainの伝播と毛先側慣性で作る。
+
+direction targetを従来時刻へ戻した上で、middle→tipが同frameに残る場合は毛先側慣性だけを微増する。NeckRange専用active tip massは1.60→1.90を次候補とし、active tip drive gain=1.75は維持する。これにより毛先は前半でさらに1frame遅れ、後半では既存の能動driveにより中央を上回る速度で前方へ抜ける。
