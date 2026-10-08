@@ -654,3 +654,16 @@ clamp上流角blend=0.60では、60/120fpsのroot < middle < tipは分離した�
 - distalだけ0.09radまで旧方向へ残る自由度を与え、毛先自身のmass=1.90と後段Active Driveで次frameに前方へ抜けさせる。
 - 全chainの上流角を遅らせないため、U字を作る大域的な位相差は増やさない。
 - 採用条件は従来どおり最大総曲率<=2.20rad、root < middle < tip、速度ピーク順序、tip速度優位、伸長・端点条件の同時合格とする。
+
+
+#### 2026-10-08 distal 0.09rad試行と0.18rad候補
+
+clamp上流blend=1.0へ戻し、tip側control差上限を0.05→0.09radへ広げた試行では、最大総曲率・速度ピーク・伸長条件は合格したが、cross時刻は30fps 0.09/0.12/0.12、60fps 0.10/0.1167/0.1167のまま変化しなかった。0.09radではdistal controlがまだ上流へclamp吸着している。
+
+次候補はtip側0.18radとする。
+
+- root 0.32rad → middle 0.22rad → tip 0.18radの3段階分布とする。
+- 9 control間8差の上限総和は概ね2.1rad以下に収まり、描画総曲率2.20rad契約と整合する設計範囲である。
+- 全chainの伝播時刻は遅らせず、distalだけ旧方向へ残れる角度幅を増やす。
+- tip mass=1.90、tip Active Drive=1.75を維持し、遅れた毛先が次frameで中央より高速に前方へ抜けることを狙う。
+- テスト閾値は変更しない。
