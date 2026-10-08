@@ -40,6 +40,29 @@ func _run() -> void:
 			await scene.rebuild()
 			for fps in [30, 60, 120]:
 				await _case(scene, fps, resolution, side)
+	# 同一画面でチャージ攻撃・通常攻撃・パリィを切り替えられる。
+	_expect(scene._mode != null and scene._mode.item_count == 3, "3モード切り替え部品がありません")
+	_expect(scene._mode.get_item_text(0) == "チャージ攻撃", "チャージ攻撃モード名が不正です")
+	_expect(scene._mode.get_item_text(1) == "通常攻撃", "通常攻撃モード名が不正です")
+	_expect(scene._mode.get_item_text(2) == "パリィ", "パリィモード名が不正です")
+	_expect(scene.preview_cycle_seconds() > 0.0, "チャージ攻撃の再生周期が不正です")
+	scene.set_preview_mode(scene.PreviewMode.NORMAL_ATTACK)
+	_expect(scene._mode.selected == scene.PreviewMode.NORMAL_ATTACK, "通常攻撃モードへ切り替えられません")
+	_expect(scene.preview_cycle_seconds() > 0.0, "通常攻撃の再生周期が不正です")
+	_expect(absf(scene._normal_ratio(0.0)) < 0.0001, "通常攻撃が中立位置から開始しません")
+	scene.toggle_oscillation()
+	_expect(scene.oscillating, "通常攻撃の動作テストが開始しません")
+	scene.stop_oscillation()
+	scene.set_preview_mode(scene.PreviewMode.PARRY)
+	_expect(scene._mode.selected == scene.PreviewMode.PARRY, "パリィモードへ切り替えられません")
+	_expect(scene.preview_cycle_seconds() > 0.0, "パリィの再生周期が不正です")
+	scene.toggle_oscillation()
+	scene._apply_preview_frame(0.01, 1.0 / 60.0)
+	_expect(scene.fighter.ahoge_preview_action_state == StateScript.ActionState.PARRY, "パリィモードが実PARRY stateへ接続されていません")
+	scene.stop_oscillation()
+	scene.set_preview_mode(scene.PreviewMode.CHARGED_ATTACK)
+	_expect(scene._mode.selected == scene.PreviewMode.CHARGED_ATTACK, "チャージ攻撃モードへ戻せません")
+
 	# UIから直接操作したときに数値・実際の表示・攻撃速度テスト状態が一致する。
 	scene.set_ratio(0.0)
 	scene._slider.value = 0.20
@@ -53,7 +76,7 @@ func _run() -> void:
 	_expect(is_equal_approx(scene.fighter.ahoge_softness, 0.35), "柔らかさ入力がアホ毛へ反映されません")
 	scene._softness.value = 1.0
 	scene.toggle_oscillation()
-	_expect(scene.oscillating, "攻撃速度テストが開始しません")
+	_expect(scene.oscillating, "チャージ攻撃の動作テストが開始しません")
 	scene.set_ratio(0.1)
 	_expect(not scene.oscillating, "手動指定で攻撃速度テストが停止しません")
 	for text in ["後端 -0.4D", "基準 0", "前端 +0.4D"]:
