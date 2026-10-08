@@ -1248,3 +1248,48 @@ Bezier候補P1/P2/P3はこの時点で不採用。今後のHuman Verificationは
 - controlの実座標は新しい手描きcenterline上で再計算されるため、bone自体は新形状へ追従する。
 - wave holdの0.42rad拡張は削除し、従来clampへ戻す。
 - これにより「形状正本の変更」と「Human Verification済みの伝播特性」を分離する。
+
+
+## 検証画面のキャラクター選択
+
+今後は複数キャラクターを順次実装する。1人目の正式キャラクターは **さくらみこ** とする。NeckRangePreviewは特定キャラクターをhard-codeせず、CharacterCatalogからキャラクターを選択できる共通検証画面へ変更する。
+
+### UI
+
+画面上部の選択順序を次で固定する。
+
+1. **キャラクター**
+2. **モード**（チャージ攻撃 / 通常攻撃 / パリィ）
+3. 向き / 解像度 / 首位置 / 柔らかさ等の共通調整
+
+キャラクターOptionButtonはCharacterCatalogの定義順で生成する。
+
+- 正式キャラクターはdisplay_nameをそのまま表示する。
+- prototypeは表示名に「prototype」を付け、正式キャラクターと区別する。
+- head / ahogeの実素材がまだ揃っていないキャラクターも一覧には残すが、選択不可として「素材準備中」と表示する。
+- 選択可能判定はCharacterDefinitionの実asset pathがResourceLoaderで解決できることを条件とする。
+- さくらみこの実素材が揃った時点でコード変更なしに選択可能になる構造にする。
+
+### 選択変更
+
+キャラクター変更時は次を行う。
+
+- 再生中の動作を停止。
+- ActionMotion / Passive Flex / directional / elastic状態を持ち越さない。
+- 同じSubViewport上のfighterを選択キャラクターで再構築。
+- 現在選択中の動作モード・向き・解像度・柔らかさは維持する。
+- root/head anchor/profile/tuningは新キャラクター側の定義から再取得する。
+
+### CharacterCatalog
+
+正式キャラクター `SAKURAMIKO` をCatalogへ登録する。
+
+- character_id: `SAKURAMIKO`
+- display_name: `さくらみこ`
+- ahoge type: LONG
+- attack type: SWING
+- ahoge asset: `res://assets/characters/sakuramiko/ahoge.png`
+- head assetは正式素材登録まで未設定。
+- prototype `LONG_TEST` / `SHORT_TEST` は回帰試験用として残す。
+
+検証画面はCatalog全体を読むが、実assetが不足する項目を勝手にprototype素材へ置換しない。正式キャラクターとprototypeを混同しない。
