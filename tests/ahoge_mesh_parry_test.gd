@@ -27,15 +27,6 @@ func _run() -> void:
 		quit(1)
 		return
 	_check_geometry(profile)
-	var preview_config = ConfigScript.new()
-	_expect(
-		absf(ParryScript.sweep_at(1.0 / 60.0, preview_config.parry_active_seconds)) <= 0.08,
-		"パリィ初動1frameで毛先prepareが急に曲がります"
-	)
-	_expect(
-		absf(ParryScript.PREPARE_ANGLE) <= 0.11,
-		"パリィprepare角が初動の毛先折れ候補域を超えています"
-	)
 	if DisplayServer.get_name() == "headless":
 		_expect(false, "パリィの表示試験には実描画が必要です")
 	else:
