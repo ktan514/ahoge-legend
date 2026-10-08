@@ -153,8 +153,18 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"STRIKE中盤より前に弾性溜めを解放しています: " + label
 	)
 	_expect(
-		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS * 0.92) > 0.04,
-		"STRIKE終盤で弾性伸長が立ち上がっていません: " + label
+		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS * 0.92) > 0.15,
+		"STRIKE終盤で弾性伸長が十分に立ち上がっていません: " + label
+	)
+	_expect(
+		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS) >= 0.29,
+		"振り抜き終端で1.25倍候補の伸長ピークへ到達していません: " + label
+	)
+	_expect(
+		scene.attack_preview_elastic_stretch(
+			scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS + 0.12
+		) <= 0.025,
+		"1.25倍伸長を前端保持で長く残しています: " + label
 	)
 	var d: float = actor.head_display_diameter()
 	var neutral: Vector2 = head.global_position
@@ -340,6 +350,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 			await _save_dynamic_frame(scene.viewport, "front_%02d.png" % front_frame)
 
 	var front_vertices: PackedVector2Array = mesh_node.current_vertices.duplicate()
+	var front_length_ratio: float = _mesh_centerline_length(actor.action_motion, front_vertices) / rest_length
 	var front_angles: PackedFloat32Array = actor.action_motion._softened_angles(rest_angles)
 	var front_curvature: float = _body_curvature(front_angles, actor.action_motion.fractions, 0.75)
 	_expect(near_cross < middle_cross and middle_cross < tip_cross and tip_cross < INF, "前方反転が根元→中央→毛先の順になっていません: %s times=[%f,%f,%f]" % [label, near_cross, middle_cross, tip_cross])
@@ -347,7 +358,14 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(absf(front_vertices[-1].y) <= rest_length * 0.15, "前端保持でdirection targetから斜めへ外れています: %s tip=%s length=%f" % [label, str(front_vertices[-1]), rest_length])
 	_expect(front_curvature <= 0.25, "前端保持がほぼ直線ではありません: %s rest=%f front=%f" % [label, rest_curvature, front_curvature])
 	_expect(maximum_transition_curvature <= 2.20, "切り返し中に毛束が輪状へ巻き込んでいます: %s curvature=%f" % [label, maximum_transition_curvature])
-	_expect(maximum_stretch_ratio >= 1.04 and maximum_stretch_ratio <= 1.07, "前方攻撃の弾性伸長が少量の範囲から外れています: %s ratio=%f" % [label, maximum_stretch_ratio])
+	_expect(
+		maximum_stretch_ratio >= 1.22 and maximum_stretch_ratio <= 1.28,
+		"振り抜き時の最大伸長が約1.25倍ではありません: %s ratio=%f" % [label, maximum_stretch_ratio]
+	)
+	_expect(
+		front_length_ratio <= 1.04,
+		"1.25倍伸長を前端保持の終盤まで残しています: %s ratio=%f" % [label, front_length_ratio]
+	)
 	_expect(
 		peak_control_times[0] < peak_control_times[1] and peak_control_times[1] < peak_control_times[2],
 		"角速度ピークがroot→middle→tipの順ではありません: %s times=%s speeds=%s" % [label, str(peak_control_times), str(peak_control_speeds)]
