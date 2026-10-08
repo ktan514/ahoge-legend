@@ -7,6 +7,22 @@ const StateScript := preload("res://src/domain/combatant_state.gd")
 const CatalogScript := preload("res://src/domain/character_catalog.gd")
 const OverlayScript := preload("res://tools/motion_preview/neck_range_overlay.gd")
 const SCENE: String = "res://tools/motion_preview/NeckRangePreview.tscn"
+
+enum PreviewMode {
+	CHARGED_ATTACK,
+	NORMAL_ATTACK,
+	PARRY,
+}
+
+const PREVIEW_MODE_NAMES: Array[String] = ["チャージ攻撃", "通常攻撃", "パリィ"]
+const NORMAL_PREP_SECONDS: float = 0.10
+const NORMAL_FRONT_HOLD_SECONDS: float = 0.12
+const NORMAL_RESET_SECONDS: float = 0.24
+const NORMAL_PRELOAD_CONTRACTION: float = -0.015
+const NORMAL_STRIKE_STRETCH: float = 0.14
+const NORMAL_RESIDUAL_STRETCH: float = 0.01
+const PARRY_RESET_SECONDS: float = 0.30
+
 const REAR_HOLD_SECONDS: float = 0.30
 const STRIKE_SWING_SECONDS: float = 0.15
 const FRONT_HOLD_SECONDS: float = 0.30
@@ -24,6 +40,7 @@ var travel_ratio: float = 0.0
 var _phase: float = 0.0
 var _slider: HSlider
 var _number: SpinBox
+var _mode: OptionButton
 var _side: OptionButton
 var _resolution: OptionButton
 var _status: Label
@@ -37,7 +54,7 @@ var _pending: bool = false
 
 
 func _ready() -> void:
-	get_window().title = "AHOGE LEGEND / 首の前後調整"
+	get_window().title = "AHOGE LEGEND / ロングアホ毛 動作調整"
 	if not OS.get_cmdline_user_args().has("--neck-test"):
 		get_window().size = Vector2i(1440, 960)
 	_build_ui()
@@ -73,15 +90,26 @@ func _build_ui() -> void:
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 10)
 	margin.add_child(stack)
-	_text(stack, "STEP 4  ロングアホ毛の柔軟追従  |  後ろ0.4D ← 基準 → 前0.4D").add_theme_font_size_override("font_size", 24)
-	_text(stack, "D = 頭部の表示直径。攻撃速度テストでは後端保持→0.15秒の前方切り返し→前端保持で、根元→中央→毛先の時間差を確認します。")
+	_text(stack, "STEP 4  ロングアホ毛 動作調整  |  チャージ攻撃 / 通常攻撃 / パリィ").add_theme_font_size_override("font_size", 24)
+	_text(stack, "同じ画面・同じLONG_TEST素材で3動作を切り替え、Human Verificationしながら個別に調整します。")
+	var mode_row := HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation", 10)
+	stack.add_child(mode_row)
+	_text(mode_row, "モード")
+	_mode = OptionButton.new()
+	for mode_name in PREVIEW_MODE_NAMES:
+		_mode.add_item(mode_name)
+	_mode.selected = PreviewMode.CHARGED_ATTACK
+	_mode.item_selected.connect(set_preview_mode)
+	mode_row.add_child(_mode)
+	_text(mode_row, "選択中の動作だけを「動作テスト」でループ再生します。")
 	var controls := HBoxContainer.new()
 	controls.add_theme_constant_override("separation", 10)
 	stack.add_child(controls)
 	_button(controls, "後端 -0.4D", func(): set_ratio(-0.4))
 	_button(controls, "基準 0", func(): set_ratio(0.0))
 	_button(controls, "前端 +0.4D", func(): set_ratio(0.4))
-	_auto_button = _button(controls, "攻撃速度テスト", toggle_oscillation)
+	_auto_button = _button(controls, "動作テスト", toggle_oscillation)
 	_text(controls, "向き")
 	_side = OptionButton.new()
 	_side.add_item("P1 / 右向き")
@@ -137,7 +165,7 @@ func _build_ui() -> void:
 	stack.add_child(actions)
 	_button(actions, "PNG保存", save_capture)
 	_button(actions, "モーション調整へ戻る", func(): get_tree().change_scene_to_file("res://tools/motion_preview/MotionPreview.tscn"))
-	_notice = _text(actions, "「攻撃速度テスト」では後端で後方へ伸び、切り返し後は前方へ伸びます。C字のまま前後移動するのはNGです。")
+	_notice = _text(actions, "チャージ攻撃を調整中。モードを切り替えると通常攻撃・パリィも同じ画面で確認できます。")
 	_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_notice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var display := TextureRect.new()
@@ -199,6 +227,26 @@ func rebuild() -> void:
 		await rebuild()
 
 
+func set_preview_mode(index: int) -> void:
+	if _mode == null:
+		return
+	var selected: int = clampi(index, 0, PREVIEW_MODE_NAMES.size() - 1)
+	_mode.select(selected)
+	stop_oscillation()
+	if ready_for_input and is_instance_valid(fighter):
+		fighter.reset_neck_preview_action()
+		fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
+		fighter.set_neck_ahoge_attack_profile(-1.0, 0.0)
+	_apply_ratio(0.0)
+	match selected:
+		PreviewMode.CHARGED_ATTACK:
+			_notice.text = "チャージ攻撃: 現在の承認候補。後方で溜め、振り抜き時に一時約1.25倍へ伸びます。"
+		PreviewMode.NORMAL_ATTACK:
+			_notice.text = "通常攻撃: 未承認の初期候補。チャージ攻撃より短く軽い動作としてここから調整します。"
+		PreviewMode.PARRY:
+			_notice.text = "パリィ: 既存PARRY変形を同じ画面で再生します。ここから払い・反動・戻りを調整します。"
+
+
 func set_ratio(value: float) -> void:
 	if not is_finite(value):
 		return
@@ -250,11 +298,10 @@ func toggle_oscillation() -> void:
 		stop_oscillation()
 	else:
 		_phase = 0.0
-		_apply_ratio(-0.4)
 		if is_instance_valid(fighter):
-			fighter.set_neck_ahoge_directional_extension(1.0, -1.0)
-			fighter.set_neck_ahoge_attack_profile(0.0, 0.0)
+			fighter.reset_neck_preview_action()
 			fighter.reset_ahoge_soft_follow()
+		_apply_preview_frame(0.0, 0.0)
 		oscillating = true
 		_auto_button.text = "テスト停止"
 
@@ -264,8 +311,9 @@ func stop_oscillation() -> void:
 	if ready_for_input and is_instance_valid(fighter):
 		fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
 		fighter.set_neck_ahoge_attack_profile(-1.0, 0.0)
+		fighter.set_neck_preview_action(StateScript.ActionState.IDLE, 1.0)
 	if _auto_button != null:
-		_auto_button.text = "攻撃速度テスト"
+		_auto_button.text = "動作テスト"
 
 
 static func attack_preview_direction(seconds: float) -> float:
@@ -339,15 +387,156 @@ static func attack_preview_ratio(seconds: float) -> float:
 	return lerpf(0.4, -0.4, back)
 
 
+func _normal_cycle_seconds() -> float:
+	var config = ConfigScript.new()
+	return NORMAL_PREP_SECONDS + config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS + NORMAL_RESET_SECONDS
+
+
+func _parry_cycle_seconds() -> float:
+	var config = ConfigScript.new()
+	return config.parry_active_seconds + PARRY_RESET_SECONDS
+
+
+func preview_cycle_seconds() -> float:
+	match _mode.selected:
+		PreviewMode.NORMAL_ATTACK:
+			return _normal_cycle_seconds()
+		PreviewMode.PARRY:
+			return _parry_cycle_seconds()
+		_:
+			return ATTACK_PREVIEW_SECONDS
+
+
+func _normal_ratio(seconds: float) -> float:
+	var config = ConfigScript.new()
+	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	if t < NORMAL_PREP_SECONDS:
+		return lerpf(0.0, -0.18, smoothstep(0.0, NORMAL_PREP_SECONDS, t))
+	t -= NORMAL_PREP_SECONDS
+	if t < config.normal_strike_seconds:
+		return lerpf(-0.18, 0.30, smoothstep(0.0, config.normal_strike_seconds, t))
+	t -= config.normal_strike_seconds
+	if t < NORMAL_FRONT_HOLD_SECONDS:
+		return 0.30
+	t -= NORMAL_FRONT_HOLD_SECONDS
+	return lerpf(0.30, 0.0, smoothstep(0.0, NORMAL_RESET_SECONDS, t))
+
+
+func _normal_direction(seconds: float) -> float:
+	var config = ConfigScript.new()
+	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	if t < NORMAL_PREP_SECONDS:
+		return -1.0
+	t -= NORMAL_PREP_SECONDS
+	if t < config.normal_strike_seconds:
+		var q: float = clampf(t / config.normal_strike_seconds, 0.0, 1.0)
+		if q <= 0.15:
+			return -1.0
+		if q >= 0.55:
+			return 1.0
+		return lerpf(-1.0, 1.0, smoothstep(0.15, 0.55, q))
+	return 1.0
+
+
+func _normal_directional_amount(seconds: float) -> float:
+	var config = ConfigScript.new()
+	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	if t < NORMAL_PREP_SECONDS:
+		return smoothstep(0.0, NORMAL_PREP_SECONDS, t)
+	t -= NORMAL_PREP_SECONDS + config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS
+	if t <= 0.0:
+		return 1.0
+	return lerpf(1.0, 0.0, smoothstep(0.0, NORMAL_RESET_SECONDS, t))
+
+
+func _normal_active_progress(seconds: float) -> float:
+	var config = ConfigScript.new()
+	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	if t < NORMAL_PREP_SECONDS:
+		return 0.0
+	t -= NORMAL_PREP_SECONDS
+	if t < config.normal_strike_seconds:
+		return clampf(t / config.normal_strike_seconds, 0.0, 1.0)
+	t -= config.normal_strike_seconds
+	if t < NORMAL_FRONT_HOLD_SECONDS:
+		return 1.0
+	return -1.0
+
+
+func _normal_elastic_stretch(seconds: float) -> float:
+	var config = ConfigScript.new()
+	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	if t < NORMAL_PREP_SECONDS:
+		return lerpf(0.0, NORMAL_PRELOAD_CONTRACTION, smoothstep(0.0, NORMAL_PREP_SECONDS, t))
+	t -= NORMAL_PREP_SECONDS
+	if t < config.normal_strike_seconds:
+		var q: float = clampf(t / config.normal_strike_seconds, 0.0, 1.0)
+		return lerpf(NORMAL_PRELOAD_CONTRACTION, NORMAL_STRIKE_STRETCH, smoothstep(0.65, 1.0, q))
+	t -= config.normal_strike_seconds
+	if t < NORMAL_FRONT_HOLD_SECONDS:
+		return lerpf(NORMAL_STRIKE_STRETCH, NORMAL_RESIDUAL_STRETCH, smoothstep(0.0, 1.0, t / NORMAL_FRONT_HOLD_SECONDS))
+	t -= NORMAL_FRONT_HOLD_SECONDS
+	return lerpf(NORMAL_RESIDUAL_STRETCH, 0.0, smoothstep(0.0, NORMAL_RESET_SECONDS, t))
+
+
+func _parry_ratio(seconds: float) -> float:
+	var config = ConfigScript.new()
+	var t: float = fposmod(maxf(seconds, 0.0), _parry_cycle_seconds())
+	if t < config.parry_active_seconds:
+		var q: float = clampf(t / config.parry_active_seconds, 0.0, 1.0)
+		if q < 0.16:
+			return lerpf(0.0, -0.10, smoothstep(0.0, 0.16, q))
+		if q < 0.40:
+			return lerpf(-0.10, 0.18, smoothstep(0.16, 0.40, q))
+		if q < 0.72:
+			return lerpf(0.18, 0.06, smoothstep(0.40, 0.72, q))
+		return lerpf(0.06, 0.0, smoothstep(0.72, 1.0, q))
+	t -= config.parry_active_seconds
+	return lerpf(0.0, 0.0, smoothstep(0.0, PARRY_RESET_SECONDS, t))
+
+
+func _apply_preview_frame(seconds: float, delta: float) -> void:
+	match _mode.selected:
+		PreviewMode.NORMAL_ATTACK:
+			fighter.set_neck_preview_action(StateScript.ActionState.IDLE, 1.0)
+			fighter.set_neck_ahoge_directional_extension(
+				_normal_directional_amount(seconds),
+				_normal_direction(seconds)
+			)
+			fighter.set_neck_ahoge_attack_profile(
+				_normal_active_progress(seconds),
+				_normal_elastic_stretch(seconds)
+			)
+			_apply_ratio(_normal_ratio(seconds), delta)
+		PreviewMode.PARRY:
+			var config = ConfigScript.new()
+			var t: float = fposmod(maxf(seconds, 0.0), _parry_cycle_seconds())
+			fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
+			fighter.set_neck_ahoge_attack_profile(-1.0, 0.0)
+			fighter.set_neck_preview_action(
+				StateScript.ActionState.PARRY if t < config.parry_active_seconds else StateScript.ActionState.IDLE,
+				config.parry_active_seconds
+			)
+			_apply_ratio(_parry_ratio(seconds), delta)
+		_:
+			fighter.set_neck_preview_action(StateScript.ActionState.IDLE, 1.0)
+			fighter.set_neck_ahoge_directional_extension(1.0, attack_preview_direction(seconds))
+			fighter.set_neck_ahoge_attack_profile(
+				attack_preview_active_progress(seconds),
+				attack_preview_elastic_stretch(seconds)
+			)
+			_apply_ratio(attack_preview_ratio(seconds), delta)
+
+
 func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
-		_phase = fposmod(_phase + delta, ATTACK_PREVIEW_SECONDS)
-		fighter.set_neck_ahoge_directional_extension(1.0, attack_preview_direction(_phase))
-		fighter.set_neck_ahoge_attack_profile(
-			attack_preview_active_progress(_phase),
-			attack_preview_elastic_stretch(_phase)
-		)
-		_apply_ratio(attack_preview_ratio(_phase), delta)
+		var cycle: float = preview_cycle_seconds()
+		var previous_phase: float = _phase
+		_phase = fposmod(_phase + delta, cycle)
+		if _phase < previous_phase and is_instance_valid(fighter):
+			fighter.reset_neck_preview_action()
+			fighter.reset_ahoge_soft_follow()
+		_apply_preview_frame(_phase, delta)
 
 
 func save_capture() -> void:
