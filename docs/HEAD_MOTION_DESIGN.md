@@ -984,3 +984,43 @@ Human Verification候補:
 - directional amount、elastic stretch、Active DriveはRETURN_TO_IDLE中に連続的に0へ戻す。
 - PARRY終了後はActionMotionの既存 `_recover_from_entry()` を0.35秒以上進めてからIDLE_HOLDへ入る。
 - ループ境界の `reset_neck_preview_action()` は、既に待機C字へ収束した後にだけ実行されるため、目視できるjumpを作らない。
+
+
+### 2026-10-08 録画再確認: 通常攻撃のtip hookとループ境界jump
+
+追加録画2本をframe単位で再確認した結果、前回の原因解釈を修正する。
+
+#### 1本目: 通常攻撃初動の毛先hook
+
+対象はパリィではなく通常攻撃。待機C字から頭部が後方へ動き始めた約0.08〜0.14秒の区間で、根元〜中央が左へ倒れ始める一方、毛先側だけ待機C字の右向き曲率が残り、短時間だけhook状に折れている。
+
+原因はPREP中の `_normal_directional_amount()` が、頭部先行0.04秒の後に残り0.12秒で0→1まで上がっていたこと。待機C字から後方直線targetへ途中で強く混ぜるため、上流が先に直線化され、distalのC字だけが残る。
+
+修正:
+- `NORMAL_PREP_DIRECTIONAL_MAX = 0.20` を追加。
+- PREP中はdirectional amountを0→0.20までに制限し、待機C字を大きく崩さない。
+- STRIKEへ入った後、q=0→0.35で0.20→1.00へ滑らかに立ち上げる。
+- 頭部の0.04秒先行、通常攻撃のhead ratio、preload量は維持する。
+- forward strike中のActive Drive / tip mass / tip driveは維持する。
+
+#### 2本目: 復帰後の1frame jump
+
+標準位置0Dへ戻った後、1frameだけ別のC字へスナップし、次frameで元のC字へ戻る。これは復帰補間ではなく、Previewループ境界で `reset_neck_preview_action()` と `reset_ahoge_soft_follow()` を実行し、ActionMotion/soft chainを作り直していたため。
+
+修正:
+- 再生ループ境界ではActionMotion/soft chainをresetしない。
+- 終了後IDLE_HOLDで自然収束した内部状態を、そのまま次周期の開始前IDLE_HOLDへ持ち越す。
+- resetはモード変更・手動再生開始など、画面上で連続再生していない境界だけに限定する。
+- 通常攻撃、チャージ攻撃、パリィの全モードで同じルールとする。
+
+#### パリィ変更の訂正
+
+前回、録画の初動hookをパリィprepareと誤認して `PREPARE_ANGLE=0.10` 等へ変更したが、この2本の録画は通常攻撃を示していた。よってパリィ固有の角度/時間配分は従来値へ戻す。
+
+- PREPARE_ANGLE=0.24
+- prepare 0.00→0.12
+- sweep 0.12→0.52
+- recoil 0.52→0.76
+- return 0.76→1.00
+
+パリィの開始前0.45秒・復帰0.35秒・終了後1.20秒の確認間隔は維持する。
