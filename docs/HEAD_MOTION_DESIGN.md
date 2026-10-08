@@ -667,3 +667,23 @@ clamp上流blend=1.0へ戻し、tip側control差上限を0.05→0.09radへ広げ
 - 全chainの伝播時刻は遅らせず、distalだけ旧方向へ残れる角度幅を増やす。
 - tip mass=1.90、tip Active Drive=1.75を維持し、遅れた毛先が次frameで中央より高速に前方へ抜けることを狙う。
 - テスト閾値は変更しない。
+
+
+#### 2026-10-08 distal角度拡張の棄却と伸長タイミングの後段化
+
+tip側control差上限を0.18radまで広げても、30/60fpsのcross時刻は0.09/0.12/0.12、0.10/0.1167/0.1167のまま変化しなかった。さらに後端保持曲率が0.262radとなり0.25rad契約を超えたため、distal角度上限の拡張は不採用とし0.05radへ戻す。
+
+残る位置crossの同frame化は、切り返し中の弾性伸長タイミングを見直す。
+
+現状はSTRIKE swingのほぼ全域でpreload -3.5%からstretch +10%へ解放しており、middleが前方へcrossする時点で遠位segmentが既に伸び、tip位置を同frameで前方へ押し出している。
+
+新しい弾性解放:
+
+- 後端保持では-3.5%のpreload contractionを維持する。
+- swing前半〜中盤は収縮を保持し、頭部→root→middleの角度伝播を先に行う。
+- stretch解放はswing進行q≈0.68から開始し、q=1.0で+10%へ到達する。
+- これによりmiddleが先に向きを変え、distalは短いまま旧方向へ残る。
+- swing後半でdistalが前方へ向き始めたところから一気に伸び、Active Driveと合成してtipの最終速度ピークを作る。
+- 前端保持では+10%から+2%へ減衰し、resetで0へ戻す。
+- 角度chainのroot 0.32 / middle 0.22 / tip 0.05、clamp upstream blend=1.0へ戻す。
+- 最大伸長量・速度ピーク・総曲率・端点条件のテスト閾値は変更しない。
