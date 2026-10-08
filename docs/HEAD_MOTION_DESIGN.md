@@ -747,3 +747,25 @@ cross判定が純粋な角度波伝播であることを確認したため、Nec
 - `active_wave_hold=1.00`、tip mass=1.90、tip drive=1.75は維持する。
 - 採用条件は閾値を変えず、30/60/120fpsすべてでroot < middle < tip、最大総曲率<=2.20rad、端点ほぼ直線、角速度peak順、tip実速度優位、伸長条件を同時に満たすこと。
 - この候補でも不成立なら、数値だけの追加追い込みを停止し、Human Verificationで見た目を再評価する。
+
+
+#### 2026-10-08 distal 0.24rad候補の棄却とHuman Verification復帰
+
+攻撃中distal上限を0.18→0.24radへ広げても、30/60fpsのcross時刻は変化しなかった。
+
+- 30fps: root/middle/tip = 0.09 / 0.12 / 0.12
+- 60fps: root/middle/tip = 0.100 / 0.1167 / 0.1167
+- 120fpsを含むその他の速度ピーク順序、tip実速度優位、弾性伸長、端点形状、総曲率2.20rad契約には新規failureなし。
+
+したがって0.24rad候補は不採用とし、攻撃中distal上限は0.18radへ戻す。これ以上cross時刻だけを目的にmass / spring / clamp / preloadを数値追い込みしない。
+
+現在の実装では以下が成立している。
+
+- 頭部Head Driveは既存仕様のまま。
+- 後端で弾性preloadを持つ。
+- Passive Flexに加え、弧長ごとに遅延したActive Driveを持つ。
+- 毛先側massとdrive gainを増やし、tipの実描画速度をmiddleより高くする。
+- swing後半で弾性伸長し、front hold後に残留伸長へ減衰する。
+- root固定、端点ほぼ直線、U字禁止、停止後C字復帰を維持する。
+
+ここからは自動testのcross 1frame差だけを完成判定にせず、MacのNeckRangePreviewで「頭が先行し、アホ毛自身が後方で溜め、根元→中央→毛先へ波が走り、最後に毛先が加速して前方へ伸びる」見た目をHuman Verificationする。見た目が未達なら、その録画を次の設計入力とする。
