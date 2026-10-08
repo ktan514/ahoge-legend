@@ -19,6 +19,8 @@ extends Resource
 @export var idle_curve_control_2: Vector2 = Vector2.ZERO
 @export var idle_curve_end: Vector2 = Vector2.ZERO
 @export_range(0.05, 2.0, 0.01) var idle_width_scale: float = 1.0
+@export var idle_reference_curve: PackedVector2Array = PackedVector2Array()
+@export var idle_reference_widths: PackedFloat32Array = PackedFloat32Array()
 @export_range(0.5, 4.0, 0.01) var attack_length_scale: float = 1.0
 var bind_vertices: PackedVector2Array = PackedVector2Array()
 
@@ -80,7 +82,70 @@ func prepare() -> bool:
 			centers.append((rest_vertices[first] + rest_vertices[first + WIDTH_POINTS - 1]) * 0.5 + root_anchor_px)
 		centers.append(rest_vertices[-1] + root_anchor_px)
 
-		if idle_curve_enabled:
+		if not idle_reference_curve.is_empty():
+			if (
+				idle_reference_curve.size() < 4
+				or idle_reference_widths.size() != idle_reference_curve.size()
+				or not idle_reference_curve[0].is_equal_approx(Vector2.ZERO)
+			):
+				return false
+			for point in idle_reference_curve:
+				if not point.is_finite():
+					return false
+			for width_value in idle_reference_widths:
+				if not is_finite(width_value) or width_value <= 0.0:
+					return false
+
+			var source_centers: PackedVector2Array = centers.duplicate()
+			var arc: PackedFloat32Array = PackedFloat32Array([0.0])
+			var total_arc: float = 0.0
+			for i in range(1, source_centers.size()):
+				total_arc += source_centers[i].distance_to(source_centers[i - 1])
+				arc.append(total_arc)
+			if total_arc <= 0.001:
+				return false
+
+			var posed_centers: PackedVector2Array = PackedVector2Array()
+			for i in range(source_centers.size()):
+				var t: float = arc[i] / total_arc
+				posed_centers.append(root_anchor_px + _sample_reference_point(t))
+
+			var reference_vertices: PackedVector2Array = rest_vertices.duplicate()
+			reference_vertices[0] = Vector2.ZERO
+			for row in range(count):
+				var center_index: int = row + 1
+				var source_tangent: Vector2 = _tangent(source_centers, center_index)
+				var posed_tangent: Vector2 = _tangent(posed_centers, center_index)
+				if source_tangent.length() <= 0.000001 or posed_tangent.length() <= 0.000001:
+					return false
+				var first: int = 1 + row * WIDTH_POINTS
+				var last: int = first + WIDTH_POINTS - 1
+				var source_width: float = rest_vertices[first].distance_to(rest_vertices[last])
+				if source_width <= 0.001:
+					return false
+				var t: float = arc[center_index] / total_arc
+				var width_scale: float = _sample_reference_width(t) / source_width
+				var turn: float = wrapf(
+					posed_tangent.angle() - source_tangent.angle(),
+					-PI,
+					PI
+				)
+				for column in range(WIDTH_POINTS):
+					var vertex_index: int = first + column
+					var relative: Vector2 = (
+						rest_vertices[vertex_index]
+						+ root_anchor_px
+						- source_centers[center_index]
+					) * width_scale
+					reference_vertices[vertex_index] = (
+						posed_centers[center_index]
+						- root_anchor_px
+						+ relative.rotated(turn)
+					)
+			reference_vertices[-1] = posed_centers[-1] - root_anchor_px
+			rest_vertices = reference_vertices
+			centers = posed_centers
+		elif idle_curve_enabled:
 			if (
 				not idle_curve_control_1.is_finite()
 				or not idle_curve_control_2.is_finite()
@@ -275,6 +340,43 @@ func matches_texture(texture: Texture2D) -> bool:
 	context.start(HashingContext.HASH_SHA256)
 	context.update(image.get_data())
 	return context.finish().hex_encode() == source_rgba_sha256
+
+
+func _sample_reference_point(t: float) -> Vector2:
+	if idle_reference_curve.is_empty():
+		return Vector2.ZERO
+	if idle_reference_curve.size() == 1:
+		return idle_reference_curve[0]
+	var position: float = clampf(t, 0.0, 1.0) * float(idle_reference_curve.size() - 1)
+	var index: int = mini(int(floor(position)), idle_reference_curve.size() - 2)
+	var local_t: float = position - float(index)
+	var p0: Vector2 = idle_reference_curve[maxi(index - 1, 0)]
+	var p1: Vector2 = idle_reference_curve[index]
+	var p2: Vector2 = idle_reference_curve[mini(index + 1, idle_reference_curve.size() - 1)]
+	var p3: Vector2 = idle_reference_curve[mini(index + 2, idle_reference_curve.size() - 1)]
+	var t2: float = local_t * local_t
+	var t3: float = t2 * local_t
+	return 0.5 * (
+		2.0 * p1
+		+ (-p0 + p2) * local_t
+		+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
+	)
+
+
+func _sample_reference_width(t: float) -> float:
+	if idle_reference_widths.is_empty():
+		return 0.0
+	if idle_reference_widths.size() == 1:
+		return idle_reference_widths[0]
+	var position: float = clampf(t, 0.0, 1.0) * float(idle_reference_widths.size() - 1)
+	var index: int = mini(int(floor(position)), idle_reference_widths.size() - 2)
+	var local_t: float = position - float(index)
+	return lerpf(
+		float(idle_reference_widths[index]),
+		float(idle_reference_widths[index + 1]),
+		local_t
+	)
 
 
 func _cubic_bezier(
