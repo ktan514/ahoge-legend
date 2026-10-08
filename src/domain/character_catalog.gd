@@ -6,6 +6,16 @@ const CharacterDefinitionScript := preload("res://src/domain/character_definitio
 static func all() -> Array:
 	var characters: Array = []
 	characters.append(CharacterDefinitionScript.create(
+		"SAKURAMIKO",
+		"さくらみこ",
+		CharacterDefinitionScript.AhogeType.LONG,
+		CharacterDefinitionScript.AttackType.SWING,
+		"1人目の正式実装キャラクター",
+		"",
+		"res://assets/characters/sakuramiko/ahoge.png",
+		0.64
+	))
+	characters.append(CharacterDefinitionScript.create(
 		"LONG_TEST",
 		"LONG TEST",
 		CharacterDefinitionScript.AhogeType.LONG,
