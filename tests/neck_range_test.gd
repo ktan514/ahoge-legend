@@ -122,7 +122,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"NeckRange専用middle側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["directional_control_step_tip"]) >= 0.04 and float(tuning["directional_control_step_tip"]) <= 0.06,
+		float(tuning["directional_control_step_tip"]) >= 0.08 and float(tuning["directional_control_step_tip"]) <= 0.10,
 		"NeckRange専用tip側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(float(tuning["active_tip_mass"]) >= 1.50, "NeckRange専用の毛先慣性が不足しています: " + label)
@@ -133,8 +133,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
 	_expect(
-		float(tuning["directional_clamp_upstream_blend"]) >= 0.59
-		and float(tuning["directional_clamp_upstream_blend"]) <= 0.61,
+		float(tuning["directional_clamp_upstream_blend"]) >= 0.999
+		and float(tuning["directional_clamp_upstream_blend"]) <= 1.001,
 		"NeckRange専用のclamp部分伝播率が候補域から外れています: " + label
 	)
 	_expect(
