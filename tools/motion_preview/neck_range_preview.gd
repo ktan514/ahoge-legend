@@ -15,13 +15,18 @@ enum PreviewMode {
 }
 
 const PREVIEW_MODE_NAMES: Array[String] = ["チャージ攻撃", "通常攻撃", "パリィ"]
-const NORMAL_PREP_SECONDS: float = 0.10
+const NORMAL_IDLE_BEFORE_SECONDS: float = 0.45
+const NORMAL_PREP_SECONDS: float = 0.16
+const NORMAL_HEAD_LEAD_SECONDS: float = 0.04
 const NORMAL_FRONT_HOLD_SECONDS: float = 0.12
-const NORMAL_RESET_SECONDS: float = 0.24
+const NORMAL_RETURN_TO_IDLE_SECONDS: float = 0.35
+const NORMAL_IDLE_HOLD_SECONDS: float = 1.20
 const NORMAL_PRELOAD_CONTRACTION: float = -0.015
 const NORMAL_STRIKE_STRETCH: float = 0.14
 const NORMAL_RESIDUAL_STRETCH: float = 0.01
-const PARRY_RESET_SECONDS: float = 0.30
+const PARRY_IDLE_BEFORE_SECONDS: float = 0.45
+const PARRY_RETURN_TO_IDLE_SECONDS: float = 0.35
+const PARRY_IDLE_HOLD_SECONDS: float = 1.20
 
 const CHARGE_PREP_SECONDS: float = 0.20
 const REAR_HOLD_SECONDS: float = 0.30
@@ -254,9 +259,9 @@ func set_preview_mode(index: int) -> void:
 		PreviewMode.CHARGED_ATTACK:
 			_notice.text = "チャージ攻撃: 溜め→攻撃→基準0D・待機C字への自然復帰→1.20秒の静止確認まで見られます。"
 		PreviewMode.NORMAL_ATTACK:
-			_notice.text = "通常攻撃: 未承認の初期候補。チャージ攻撃より短く軽い動作としてここから調整します。"
+			_notice.text = "通常攻撃: 開始前0.45秒→攻撃→自然復帰→標準C字1.20秒確認。初動は頭を0.04秒先行させます。"
 		PreviewMode.PARRY:
-			_notice.text = "パリィ: 既存PARRY変形を同じ画面で再生します。ここから払い・反動・戻りを調整します。"
+			_notice.text = "パリィ: 開始前0.45秒→払い→自然復帰→標準C字1.20秒確認。初動prepareを緩やかにしています。"
 
 
 func set_ratio(value: float) -> void:
@@ -489,12 +494,24 @@ func _charged_is_idle_hold(seconds: float) -> bool:
 
 func _normal_cycle_seconds() -> float:
 	var config = ConfigScript.new()
-	return NORMAL_PREP_SECONDS + config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS + NORMAL_RESET_SECONDS
+	return (
+		NORMAL_IDLE_BEFORE_SECONDS
+		+ NORMAL_PREP_SECONDS
+		+ config.normal_strike_seconds
+		+ NORMAL_FRONT_HOLD_SECONDS
+		+ NORMAL_RETURN_TO_IDLE_SECONDS
+		+ NORMAL_IDLE_HOLD_SECONDS
+	)
 
 
 func _parry_cycle_seconds() -> float:
 	var config = ConfigScript.new()
-	return config.parry_active_seconds + PARRY_RESET_SECONDS
+	return (
+		PARRY_IDLE_BEFORE_SECONDS
+		+ config.parry_active_seconds
+		+ PARRY_RETURN_TO_IDLE_SECONDS
+		+ PARRY_IDLE_HOLD_SECONDS
+	)
 
 
 func preview_cycle_seconds() -> float:
@@ -507,9 +524,16 @@ func preview_cycle_seconds() -> float:
 			return CHARGED_PREVIEW_SECONDS
 
 
+func _normal_local_time(seconds: float) -> float:
+	return fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+
+
 func _normal_ratio(seconds: float) -> float:
 	var config = ConfigScript.new()
-	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	var t: float = _normal_local_time(seconds)
+	if t < NORMAL_IDLE_BEFORE_SECONDS:
+		return 0.0
+	t -= NORMAL_IDLE_BEFORE_SECONDS
 	if t < NORMAL_PREP_SECONDS:
 		return lerpf(0.0, -0.18, smoothstep(0.0, NORMAL_PREP_SECONDS, t))
 	t -= NORMAL_PREP_SECONDS
@@ -519,12 +543,17 @@ func _normal_ratio(seconds: float) -> float:
 	if t < NORMAL_FRONT_HOLD_SECONDS:
 		return 0.30
 	t -= NORMAL_FRONT_HOLD_SECONDS
-	return lerpf(0.30, 0.0, smoothstep(0.0, NORMAL_RESET_SECONDS, t))
+	if t < NORMAL_RETURN_TO_IDLE_SECONDS:
+		return lerpf(0.30, 0.0, smoothstep(0.0, NORMAL_RETURN_TO_IDLE_SECONDS, t))
+	return 0.0
 
 
 func _normal_direction(seconds: float) -> float:
 	var config = ConfigScript.new()
-	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	var t: float = _normal_local_time(seconds)
+	if t < NORMAL_IDLE_BEFORE_SECONDS:
+		return -1.0
+	t -= NORMAL_IDLE_BEFORE_SECONDS
 	if t < NORMAL_PREP_SECONDS:
 		return -1.0
 	t -= NORMAL_PREP_SECONDS
@@ -540,18 +569,33 @@ func _normal_direction(seconds: float) -> float:
 
 func _normal_directional_amount(seconds: float) -> float:
 	var config = ConfigScript.new()
-	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	var t: float = _normal_local_time(seconds)
+	if t < NORMAL_IDLE_BEFORE_SECONDS:
+		return 0.0
+	t -= NORMAL_IDLE_BEFORE_SECONDS
 	if t < NORMAL_PREP_SECONDS:
-		return smoothstep(0.0, NORMAL_PREP_SECONDS, t)
-	t -= NORMAL_PREP_SECONDS + config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS
-	if t <= 0.0:
+		if t <= NORMAL_HEAD_LEAD_SECONDS:
+			return 0.0
+		return smoothstep(
+			NORMAL_HEAD_LEAD_SECONDS,
+			NORMAL_PREP_SECONDS,
+			t
+		)
+	t -= NORMAL_PREP_SECONDS
+	if t < config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS:
 		return 1.0
-	return lerpf(1.0, 0.0, smoothstep(0.0, NORMAL_RESET_SECONDS, t))
+	t -= config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS
+	if t < NORMAL_RETURN_TO_IDLE_SECONDS:
+		return lerpf(1.0, 0.0, smoothstep(0.0, NORMAL_RETURN_TO_IDLE_SECONDS, t))
+	return 0.0
 
 
 func _normal_active_progress(seconds: float) -> float:
 	var config = ConfigScript.new()
-	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	var t: float = _normal_local_time(seconds)
+	if t < NORMAL_IDLE_BEFORE_SECONDS:
+		return -1.0
+	t -= NORMAL_IDLE_BEFORE_SECONDS
 	if t < NORMAL_PREP_SECONDS:
 		return 0.0
 	t -= NORMAL_PREP_SECONDS
@@ -565,9 +609,18 @@ func _normal_active_progress(seconds: float) -> float:
 
 func _normal_elastic_stretch(seconds: float) -> float:
 	var config = ConfigScript.new()
-	var t: float = fposmod(maxf(seconds, 0.0), _normal_cycle_seconds())
+	var t: float = _normal_local_time(seconds)
+	if t < NORMAL_IDLE_BEFORE_SECONDS:
+		return 0.0
+	t -= NORMAL_IDLE_BEFORE_SECONDS
 	if t < NORMAL_PREP_SECONDS:
-		return lerpf(0.0, NORMAL_PRELOAD_CONTRACTION, smoothstep(0.0, NORMAL_PREP_SECONDS, t))
+		if t <= NORMAL_HEAD_LEAD_SECONDS:
+			return 0.0
+		return lerpf(
+			0.0,
+			NORMAL_PRELOAD_CONTRACTION,
+			smoothstep(NORMAL_HEAD_LEAD_SECONDS, NORMAL_PREP_SECONDS, t)
+		)
 	t -= NORMAL_PREP_SECONDS
 	if t < config.normal_strike_seconds:
 		var q: float = clampf(t / config.normal_strike_seconds, 0.0, 1.0)
@@ -576,12 +629,37 @@ func _normal_elastic_stretch(seconds: float) -> float:
 	if t < NORMAL_FRONT_HOLD_SECONDS:
 		return lerpf(NORMAL_STRIKE_STRETCH, NORMAL_RESIDUAL_STRETCH, smoothstep(0.0, 1.0, t / NORMAL_FRONT_HOLD_SECONDS))
 	t -= NORMAL_FRONT_HOLD_SECONDS
-	return lerpf(NORMAL_RESIDUAL_STRETCH, 0.0, smoothstep(0.0, NORMAL_RESET_SECONDS, t))
+	if t < NORMAL_RETURN_TO_IDLE_SECONDS:
+		return lerpf(NORMAL_RESIDUAL_STRETCH, 0.0, smoothstep(0.0, NORMAL_RETURN_TO_IDLE_SECONDS, t))
+	return 0.0
+
+
+func _normal_is_idle_hold(seconds: float) -> bool:
+	var t: float = _normal_local_time(seconds)
+	var idle_start: float = (
+		NORMAL_IDLE_BEFORE_SECONDS
+		+ NORMAL_PREP_SECONDS
+		+ ConfigScript.new().normal_strike_seconds
+		+ NORMAL_FRONT_HOLD_SECONDS
+		+ NORMAL_RETURN_TO_IDLE_SECONDS
+	)
+	return t >= idle_start or t < NORMAL_IDLE_BEFORE_SECONDS
+
+
+func _parry_local_time(seconds: float) -> float:
+	return fposmod(maxf(seconds, 0.0), _parry_cycle_seconds())
+
+
+func _parry_action_time(seconds: float) -> float:
+	return _parry_local_time(seconds) - PARRY_IDLE_BEFORE_SECONDS
 
 
 func _parry_ratio(seconds: float) -> float:
 	var config = ConfigScript.new()
-	var t: float = fposmod(maxf(seconds, 0.0), _parry_cycle_seconds())
+	var t: float = _parry_local_time(seconds)
+	if t < PARRY_IDLE_BEFORE_SECONDS:
+		return 0.0
+	t -= PARRY_IDLE_BEFORE_SECONDS
 	if t < config.parry_active_seconds:
 		var q: float = clampf(t / config.parry_active_seconds, 0.0, 1.0)
 		if q < 0.16:
@@ -591,8 +669,13 @@ func _parry_ratio(seconds: float) -> float:
 		if q < 0.72:
 			return lerpf(0.18, 0.06, smoothstep(0.40, 0.72, q))
 		return lerpf(0.06, 0.0, smoothstep(0.72, 1.0, q))
-	t -= config.parry_active_seconds
-	return lerpf(0.0, 0.0, smoothstep(0.0, PARRY_RESET_SECONDS, t))
+	return 0.0
+
+
+func _parry_is_idle_hold(seconds: float) -> bool:
+	var t: float = _parry_local_time(seconds)
+	var idle_start: float = PARRY_IDLE_BEFORE_SECONDS + ConfigScript.new().parry_active_seconds + PARRY_RETURN_TO_IDLE_SECONDS
+	return t >= idle_start or t < PARRY_IDLE_BEFORE_SECONDS
 
 
 func _apply_preview_frame(seconds: float, delta: float) -> void:
@@ -610,11 +693,13 @@ func _apply_preview_frame(seconds: float, delta: float) -> void:
 			_apply_ratio(_normal_ratio(seconds), delta)
 		PreviewMode.PARRY:
 			var config = ConfigScript.new()
-			var t: float = fposmod(maxf(seconds, 0.0), _parry_cycle_seconds())
+			var action_t: float = _parry_action_time(seconds)
 			fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
 			fighter.set_neck_ahoge_attack_profile(-1.0, 0.0)
 			fighter.set_neck_preview_action(
-				StateScript.ActionState.PARRY if t < config.parry_active_seconds else StateScript.ActionState.IDLE,
+				StateScript.ActionState.PARRY
+				if action_t >= 0.0 and action_t < config.parry_active_seconds
+				else StateScript.ActionState.IDLE,
 				config.parry_active_seconds
 			)
 			_apply_ratio(_parry_ratio(seconds), delta)
