@@ -742,6 +742,7 @@ func _advance_softness(
 			var target: float = lerp_angle(coupled_target, absolute_target, absolute_restore)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var active_section: float = 0.0
+			var active_wave_hold_weight: float = 0.0
 			var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
 				var active_start: float = 0.30 + 0.55 * smoothstep(0.0, 1.0, fraction)
@@ -758,8 +759,12 @@ func _advance_softness(
 						active_start + 0.02,
 						active_q
 					)
-					var hold_weight: float = soft_active_wave_hold * (1.0 - wave_release)
-					target = lerp_angle(target, previous_world[control], hold_weight)
+					active_wave_hold_weight = soft_active_wave_hold * (1.0 - wave_release)
+					target = lerp_angle(
+						target,
+						previous_world[control],
+						active_wave_hold_weight
+					)
 				active_section = smoothstep(active_start, active_full, active_q)
 				var direct_gain: float = lerpf(
 					soft_active_root_direct_gain,
@@ -833,6 +838,14 @@ func _advance_softness(
 						)
 					else:
 						control_step_limit = effective_tip_step
+				# 手描き形状へcontrolを広く配置したため、wave到達前まで通常clampで
+				# 上流へ引き戻すとroot/middle/tipが同frameで反転する。
+				# hold中だけ0.42radまで旧方向へ残れる余白を与え、releaseと共に戻す。
+				control_step_limit = lerpf(
+					control_step_limit,
+					maxf(control_step_limit, 0.42),
+					active_wave_hold_weight
+				)
 				var limited_relative: float = clampf(
 					relative_angle,
 					-control_step_limit,
