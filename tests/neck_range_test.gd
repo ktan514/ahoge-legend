@@ -3,6 +3,7 @@ extends SceneTree
 const PreviewScene := preload("res://tools/motion_preview/NeckRangePreview.tscn")
 const StateScript := preload("res://src/domain/combatant_state.gd")
 const ConfigScript := preload("res://src/config/combat_config.gd")
+const CatalogScript := preload("res://src/domain/character_catalog.gd")
 const OUT: String = "res://artifacts/neck-range/"
 var failures: Array[String] = []
 var cases: Array = []
@@ -41,6 +42,45 @@ func _run() -> void:
 			await scene.rebuild()
 			for fps in [30, 60, 120]:
 				await _case(scene, fps, resolution, side)
+	# 同一画面でキャラクターを切り替えられる。
+	var catalog: Array = CatalogScript.all()
+	_expect(scene._character != null, "キャラクター選択部品がありません")
+	_expect(
+		scene._character.item_count == catalog.size(),
+		"キャラクター選択数がCharacterCatalogと一致しません"
+	)
+	var sakuramiko_index: int = -1
+	var long_test_index: int = -1
+	for i in range(catalog.size()):
+		var definition = catalog[i]
+		var item_id: String = str(scene._character.get_item_metadata(i))
+		_expect(item_id == str(definition.character_id), "キャラクター選択順がCatalogと一致しません")
+		var ready: bool = (
+			not str(definition.head_asset_path).is_empty()
+			and ResourceLoader.exists(str(definition.head_asset_path))
+			and not str(definition.ahoge_asset_path).is_empty()
+			and ResourceLoader.exists(str(definition.ahoge_asset_path))
+		)
+		_expect(
+			scene._character.is_item_disabled(i) == not ready,
+			"素材準備状態とキャラクター選択可否が一致しません: " + item_id
+		)
+		if item_id == "SAKURAMIKO":
+			sakuramiko_index = i
+			_expect(
+				scene._character.get_item_text(i).begins_with("さくらみこ"),
+				"さくらみこの表示名が不正です"
+			)
+		if item_id == "LONG_TEST":
+			long_test_index = i
+	_expect(sakuramiko_index >= 0, "さくらみこがCharacterCatalogにありません")
+	_expect(long_test_index >= 0, "LONG_TESTがCharacterCatalogにありません")
+	_expect(
+		not scene._character.is_item_disabled(scene._character.selected),
+		"初期選択キャラクターが選択不可です"
+	)
+	_expect(not scene._selected_character_id().is_empty(), "選択中character_idを取得できません")
+
 	# 同一画面でチャージ攻撃・通常攻撃・パリィを切り替えられる。
 	_expect(scene._mode != null and scene._mode.item_count == 3, "3モード切り替え部品がありません")
 	_expect(scene._mode.get_item_text(0) == "チャージ攻撃", "チャージ攻撃モード名が不正です")
