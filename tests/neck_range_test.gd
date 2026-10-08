@@ -223,8 +223,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var tuning: Dictionary = actor.action_motion.soft_tuning_snapshot()
 	_expect(tuning["control_targets"] == actor.NECK_SOFT_TUNING["control_targets"], "NeckRange専用control配置が未適用です: " + label)
 	_expect(
-		tuning["control_targets"] == [0.00, 0.10, 0.20, 0.31, 0.45, 0.60, 0.75, 0.90, 1.00],
-		"手描き参照に合わせた9制御点配置ではありません: " + label
+		tuning["control_targets"] == [0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00],
+		"Human Verification済みの9制御点fractionではありません: " + label
 	)
 	_expect(is_equal_approx(float(tuning["root_hinge_hz"]), 4.5), "NeckRange専用root hingeが未適用です: " + label)
 	_expect(float(tuning["root_hinge_damping"]) >= 0.90, "NeckRange専用root dampingが不足しています: " + label)
