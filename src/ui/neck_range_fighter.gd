@@ -34,7 +34,7 @@ const NECK_SOFT_TUNING := {
 	"directional_max_offset": 3.10,
 	"directional_control_step": 0.32,
 	"directional_control_step_middle": 0.22,
-	"directional_control_step_tip": 0.09,
+	"directional_control_step_tip": 0.18,
 	"active_tip_mass": 1.90,
 	"active_root_direct_gain": 0.18,
 	"active_tip_direct_gain": 0.82,
