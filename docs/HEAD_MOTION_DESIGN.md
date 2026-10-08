@@ -1226,3 +1226,25 @@ Bezier候補P1/P2/P3はこの時点で不採用。今後のHuman Verificationは
 - wave releaseに合わせて0.42rad→通常control stepへ連続的に戻す。
 - clamp自体を無効化しない。0.42radは9 control全体の総曲率2.20rad契約を超えない範囲の上限候補とする。
 - 採用条件は30/60/120fpsでroot < middle < tip、最大総曲率<=2.20rad、端点・伸長・tip速度条件を同時に満たすこと。
+
+
+#### 手描きbone fraction再配置の棄却
+
+手描き中心線へ合わせてcontrol fractionを
+`[0.00, 0.10, 0.20, 0.31, 0.45, 0.60, 0.75, 0.90, 1.00]`
+へ変更し、wave hold中のcontrol差上限を0.42radへ拡張した候補は不採用とする。
+
+実測:
+- 30fps: root/middle/tip forward crossが0.09/0.09/0.09へ同時化。
+- 60fps: 0.0833/0.0833/0.10。
+- 最大総曲率: 約2.67〜2.73radとなり、2.20rad契約を超過。
+
+したがって次を正とする。
+
+- **mesh/rest geometry** は手描き33点reference curve + reference widthを採用する。
+- 動的9 controlのfractionは、Human Verificationでチャージ攻撃が良好だった従来配置
+  `[0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00]`
+  へ戻す。
+- controlの実座標は新しい手描きcenterline上で再計算されるため、bone自体は新形状へ追従する。
+- wave holdの0.42rad拡張は削除し、従来clampへ戻す。
+- これにより「形状正本の変更」と「Human Verification済みの伝播特性」を分離する。
