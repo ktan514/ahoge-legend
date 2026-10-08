@@ -48,16 +48,39 @@ func _run() -> void:
 	_expect(scene.preview_cycle_seconds() > 0.0, "チャージ攻撃の再生周期が不正です")
 	scene.set_preview_mode(scene.PreviewMode.NORMAL_ATTACK)
 	_expect(scene._mode.selected == scene.PreviewMode.NORMAL_ATTACK, "通常攻撃モードへ切り替えられません")
-	_expect(scene.preview_cycle_seconds() > 0.0, "通常攻撃の再生周期が不正です")
+	_expect(
+		scene.preview_cycle_seconds()
+		> scene.NORMAL_IDLE_BEFORE_SECONDS + scene.NORMAL_PREP_SECONDS + scene.NORMAL_FRONT_HOLD_SECONDS + scene.NORMAL_RETURN_TO_IDLE_SECONDS,
+		"通常攻撃に前後の待機区間がありません"
+	)
 	_expect(absf(scene._normal_ratio(0.0)) < 0.0001, "通常攻撃が中立位置から開始しません")
+	_expect(scene._normal_directional_amount(0.0) <= 0.0001, "通常攻撃開始前に方向付き伸長が残っています")
+	_expect(
+		scene._normal_directional_amount(scene.NORMAL_IDLE_BEFORE_SECONDS + scene.NORMAL_HEAD_LEAD_SECONDS * 0.5) <= 0.0001,
+		"通常攻撃の頭部先行前にアホ毛targetが動いています"
+	)
+	var normal_idle_probe: float = scene.preview_cycle_seconds() - scene.NORMAL_IDLE_HOLD_SECONDS * 0.5
+	_expect(scene._normal_is_idle_hold(normal_idle_probe), "通常攻撃後の待機区間を判定できません")
+	_expect(absf(scene._normal_ratio(normal_idle_probe)) < 0.0001, "通常攻撃後に頭部が0Dへ戻りません")
+	_expect(scene._normal_directional_amount(normal_idle_probe) <= 0.0001, "通常攻撃後に方向付き伸長が残っています")
+	_expect(scene._normal_active_progress(normal_idle_probe) < 0.0, "通常攻撃後にActive Driveが残っています")
+	_expect(absf(scene._normal_elastic_stretch(normal_idle_probe)) < 0.0001, "通常攻撃後に弾性伸長が残っています")
 	scene.toggle_oscillation()
 	_expect(scene.oscillating, "通常攻撃の動作テストが開始しません")
 	scene.stop_oscillation()
 	scene.set_preview_mode(scene.PreviewMode.PARRY)
 	_expect(scene._mode.selected == scene.PreviewMode.PARRY, "パリィモードへ切り替えられません")
-	_expect(scene.preview_cycle_seconds() > 0.0, "パリィの再生周期が不正です")
+	_expect(
+		scene.preview_cycle_seconds()
+		> scene.PARRY_IDLE_BEFORE_SECONDS + scene.PARRY_RETURN_TO_IDLE_SECONDS + scene.PARRY_IDLE_HOLD_SECONDS,
+		"パリィに前後の待機区間がありません"
+	)
+	_expect(absf(scene._parry_ratio(0.0)) < 0.0001, "パリィ開始前に頭部が動いています")
+	var parry_idle_probe: float = scene.preview_cycle_seconds() - scene.PARRY_IDLE_HOLD_SECONDS * 0.5
+	_expect(scene._parry_is_idle_hold(parry_idle_probe), "パリィ後の待機区間を判定できません")
+	_expect(absf(scene._parry_ratio(parry_idle_probe)) < 0.0001, "パリィ後に頭部が0Dへ戻りません")
 	scene.toggle_oscillation()
-	scene._apply_preview_frame(0.01, 1.0 / 60.0)
+	scene._apply_preview_frame(scene.PARRY_IDLE_BEFORE_SECONDS + 0.01, 1.0 / 60.0)
 	_expect(scene.fighter.ahoge_preview_action_state == StateScript.ActionState.PARRY, "パリィモードが実PARRY stateへ接続されていません")
 	scene.stop_oscillation()
 	scene.set_preview_mode(scene.PreviewMode.CHARGED_ATTACK)
