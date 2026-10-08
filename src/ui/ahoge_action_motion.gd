@@ -745,7 +745,11 @@ func _advance_softness(
 				var active_full: float = 0.50 + 0.50 * smoothstep(0.0, 1.0, fraction)
 				# wave到達前はそのcontrolの前substep角へtargetを寄せ、
 				# root→middle→tipの順に旧方向を解放する。
-				if soft_active_wave_hold > 0.000001:
+				if (
+					soft_active_wave_hold > 0.000001
+					and active_q > 0.000001
+					and active_q < 0.999999
+				):
 					var wave_release: float = smoothstep(
 						active_start - 0.08,
 						active_start + 0.02,
