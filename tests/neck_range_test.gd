@@ -133,6 +133,10 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
 	_expect(
+		bool(tuning["directional_clamp_previous_upstream"]),
+		"NeckRange専用の同一step伝播抑制が未適用です: " + label
+	)
+	_expect(
 		float(tuning["active_preload_contraction"]) >= -0.037
 		and float(tuning["active_preload_contraction"]) <= -0.033,
 		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
