@@ -28,7 +28,13 @@ func _run() -> void:
 	_check(profile.bind_vertices.size() == 427, "基準頂点数")
 	_check(profile.rest_vertices[0] == Vector2.ZERO, "待機根元")
 	_check(profile.bind_vertices[-1].distance_to(profile.rest_vertices[-1]) > 300.0, "画像基準とC字姿勢を分離")
-	_check(profile.idle_centerline_scale.is_equal_approx(Vector2(0.75, 0.34)), "待機C字の圧縮率")
+	_check(profile.idle_curve_enabled, "待機C字のBezier生成が無効です")
+	_check(profile.idle_centerline_scale.is_equal_approx(Vector2.ONE), "旧centerline圧縮が残っています")
+	_check(profile.idle_curve_control_1.is_equal_approx(Vector2(-177.8, -508.0)), "待機C字P1")
+	_check(profile.idle_curve_control_2.is_equal_approx(Vector2(558.8, -457.2)), "待機C字P2")
+	_check(profile.idle_curve_end.is_equal_approx(Vector2(304.8, -127.0)), "待機C字終点")
+	_check(absf(profile.idle_width_scale - 0.55) < 0.0001, "待機C字の太さscale")
+	_check(absf(profile.attack_length_scale - 2.0) < 0.0001, "短い待機形状の攻撃リーチ補償")
 	var source_idle_centers: PackedVector2Array = ParryScript.centers_of(
 		profile.idle_pose_vertices,
 		profile.WIDTH_POINTS
@@ -41,28 +47,40 @@ func _run() -> void:
 	var compact_idle_length: float = _centerline_length(compact_idle_centers)
 	var idle_length_ratio: float = compact_idle_length / maxf(source_idle_length, 0.001)
 	_check(
-		idle_length_ratio >= 0.48 and idle_length_ratio <= 0.53,
+		idle_length_ratio >= 0.48 and idle_length_ratio <= 0.52,
 		"待機C字の中心線長が約半分ではありません: ratio=%f" % idle_length_ratio
 	)
 	var source_idle_bounds: Rect2 = _point_bounds(source_idle_centers)
 	var compact_idle_bounds: Rect2 = _point_bounds(compact_idle_centers)
 	var idle_height_ratio: float = compact_idle_bounds.size.y / maxf(source_idle_bounds.size.y, 0.001)
+	var idle_width_ratio: float = compact_idle_bounds.size.x / maxf(source_idle_bounds.size.x, 0.001)
 	_check(
-		idle_height_ratio >= 0.32 and idle_height_ratio <= 0.36,
-		"待機C字が十分に潰れていません: ratio=%f" % idle_height_ratio
+		idle_height_ratio >= 0.37 and idle_height_ratio <= 0.41,
+		"待機C字が低く潰れていません: ratio=%f" % idle_height_ratio
 	)
-	var max_idle_width_error: float = 0.0
+	_check(
+		idle_width_ratio >= 0.54 and idle_width_ratio <= 0.60,
+		"待機C字の横幅が候補域ではありません: ratio=%f" % idle_width_ratio
+	)
+	var maximum_idle_width_ratio_error: float = 0.0
 	for row in range(85):
 		var first: int = 1 + row * profile.WIDTH_POINTS
 		var last: int = first + profile.WIDTH_POINTS - 1
-		max_idle_width_error = maxf(
-			max_idle_width_error,
-			absf(
-				profile.idle_pose_vertices[first].distance_to(profile.idle_pose_vertices[last])
-				- profile.rest_vertices[first].distance_to(profile.rest_vertices[last])
-			)
+		var source_width: float = profile.idle_pose_vertices[first].distance_to(
+			profile.idle_pose_vertices[last]
 		)
-	_check(max_idle_width_error < 0.02, "待機C字の短縮で断面幅を潰しました: %f" % max_idle_width_error)
+		var compact_width: float = profile.rest_vertices[first].distance_to(
+			profile.rest_vertices[last]
+		)
+		if source_width > 0.001:
+			maximum_idle_width_ratio_error = maxf(
+				maximum_idle_width_ratio_error,
+				absf(compact_width / source_width - profile.idle_width_scale)
+			)
+	_check(
+		maximum_idle_width_ratio_error < 0.002,
+		"待機C字の断面太さscaleが不均一です: %f" % maximum_idle_width_ratio_error
+	)
 	for i in range(profile.uvs.size()):
 		_check((profile.uvs[i] * Vector2(profile.source_size) - profile.root_anchor_px).distance_to(profile.bind_vertices[i]) < 0.005, "UVは素材の基準座標に固定")
 	for k in range(65):
