@@ -18,6 +18,8 @@ const PREVIEW_MODE_NAMES: Array[String] = ["チャージ攻撃", "通常攻撃",
 const NORMAL_IDLE_BEFORE_SECONDS: float = 0.45
 const NORMAL_PREP_SECONDS: float = 0.16
 const NORMAL_HEAD_LEAD_SECONDS: float = 0.04
+const NORMAL_PREP_DIRECTIONAL_MAX: float = 0.20
+const NORMAL_STRIKE_DIRECTIONAL_FULL_Q: float = 0.35
 const NORMAL_FRONT_HOLD_SECONDS: float = 0.12
 const NORMAL_RETURN_TO_IDLE_SECONDS: float = 0.35
 const NORMAL_IDLE_HOLD_SECONDS: float = 1.20
@@ -576,15 +578,23 @@ func _normal_directional_amount(seconds: float) -> float:
 	if t < NORMAL_PREP_SECONDS:
 		if t <= NORMAL_HEAD_LEAD_SECONDS:
 			return 0.0
-		return smoothstep(
+		return NORMAL_PREP_DIRECTIONAL_MAX * smoothstep(
 			NORMAL_HEAD_LEAD_SECONDS,
 			NORMAL_PREP_SECONDS,
 			t
 		)
 	t -= NORMAL_PREP_SECONDS
-	if t < config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS:
+	if t < config.normal_strike_seconds:
+		var q: float = clampf(t / config.normal_strike_seconds, 0.0, 1.0)
+		return lerpf(
+			NORMAL_PREP_DIRECTIONAL_MAX,
+			1.0,
+			smoothstep(0.0, NORMAL_STRIKE_DIRECTIONAL_FULL_Q, q)
+		)
+	t -= config.normal_strike_seconds
+	if t < NORMAL_FRONT_HOLD_SECONDS:
 		return 1.0
-	t -= config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS
+	t -= NORMAL_FRONT_HOLD_SECONDS
 	if t < NORMAL_RETURN_TO_IDLE_SECONDS:
 		return lerpf(1.0, 0.0, smoothstep(0.0, NORMAL_RETURN_TO_IDLE_SECONDS, t))
 	return 0.0
@@ -719,11 +729,9 @@ func _apply_preview_frame(seconds: float, delta: float) -> void:
 func _process(delta: float) -> void:
 	if oscillating and ready_for_input:
 		var cycle: float = preview_cycle_seconds()
-		var previous_phase: float = _phase
+		# ループ境界でActionMotion/soft chainを作り直さない。
+		# 終了後IDLE_HOLDで自然収束した状態をそのまま次周期へ持ち越す。
 		_phase = fposmod(_phase + delta, cycle)
-		if _phase < previous_phase and is_instance_valid(fighter):
-			fighter.reset_neck_preview_action()
-			fighter.reset_ahoge_soft_follow()
 		_apply_preview_frame(_phase, delta)
 
 
