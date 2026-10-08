@@ -60,6 +60,8 @@ const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
 const SOFT_ACTIVE_PRELOAD_CONTRACTION: float = 0.0
+const SOFT_ACTIVE_WAVE_HOLD: float = 0.0
+const SOFT_ACTIVE_DIRECTIONAL_CONTROL_STEP_TIP: float = SOFT_DIRECTIONAL_CONTROL_STEP_TIP
 const SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND: float = 1.0
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
@@ -139,6 +141,8 @@ var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
 var soft_active_preload_contraction: float = SOFT_ACTIVE_PRELOAD_CONTRACTION
+var soft_active_wave_hold: float = SOFT_ACTIVE_WAVE_HOLD
+var soft_active_directional_control_step_tip: float = SOFT_ACTIVE_DIRECTIONAL_CONTROL_STEP_TIP
 var soft_directional_clamp_upstream_blend: float = SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND
 
 
@@ -170,7 +174,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"curve_release_angular_speed", "forward_accel_drive", "drive_limit", "max_offset",
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
 		"active_tip_drive_gain", "active_tip_damping_ratio",
-		"active_preload_contraction", "directional_clamp_upstream_blend"
+		"active_preload_contraction", "active_wave_hold",
+		"active_directional_control_step_tip", "directional_clamp_upstream_blend"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -214,6 +219,12 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
 	soft_active_preload_contraction = clampf(float(tuning.get("active_preload_contraction", soft_active_preload_contraction)), -0.08, 0.0)
+	soft_active_wave_hold = clampf(float(tuning.get("active_wave_hold", soft_active_wave_hold)), 0.0, 1.0)
+	soft_active_directional_control_step_tip = clampf(
+		float(tuning.get("active_directional_control_step_tip", soft_active_directional_control_step_tip)),
+		0.001,
+		PI
+	)
 	soft_directional_clamp_upstream_blend = clampf(
 		float(tuning.get("directional_clamp_upstream_blend", soft_directional_clamp_upstream_blend)),
 		0.0,
@@ -262,6 +273,8 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
 		"active_preload_contraction": soft_active_preload_contraction,
+		"active_wave_hold": soft_active_wave_hold,
+		"active_directional_control_step_tip": soft_active_directional_control_step_tip,
 		"directional_clamp_upstream_blend": soft_directional_clamp_upstream_blend
 	}
 
@@ -726,10 +739,20 @@ func _advance_softness(
 			var target: float = lerp_angle(coupled_target, absolute_target, absolute_restore)
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var active_section: float = 0.0
+			var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
-				var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 				var active_start: float = 0.30 + 0.55 * smoothstep(0.0, 1.0, fraction)
 				var active_full: float = 0.50 + 0.50 * smoothstep(0.0, 1.0, fraction)
+				# wave到達前はそのcontrolの前substep角へtargetを寄せ、
+				# root→middle→tipの順に旧方向を解放する。
+				if soft_active_wave_hold > 0.000001:
+					var wave_release: float = smoothstep(
+						active_start - 0.08,
+						active_start + 0.02,
+						active_q
+					)
+					var hold_weight: float = soft_active_wave_hold * (1.0 - wave_release)
+					target = lerp_angle(target, previous_world[control], hold_weight)
 				active_section = smoothstep(active_start, active_full, active_q)
 				var direct_gain: float = lerpf(
 					soft_active_root_direct_gain,
@@ -771,9 +794,12 @@ func _advance_softness(
 					soft_directional_clamp_upstream_blend
 				)
 				var relative_angle: float = wrapf(world_angle - upstream_world, -PI, PI)
+				var effective_tip_step: float = soft_directional_control_step_tip
+				if _soft_active_progress > 0.000001 and _soft_active_progress < 0.999999:
+					effective_tip_step = soft_active_directional_control_step_tip
 				var control_step_limit: float = lerpf(
 					soft_directional_control_step,
-					soft_directional_control_step_tip,
+					effective_tip_step,
 					fraction
 				)
 				if soft_directional_control_step_middle >= 0.0:
@@ -786,11 +812,11 @@ func _advance_softness(
 					elif fraction < 0.75:
 						control_step_limit = lerpf(
 							soft_directional_control_step_middle,
-							soft_directional_control_step_tip,
+							effective_tip_step,
 							smoothstep(0.45, 0.75, fraction)
 						)
 					else:
-						control_step_limit = soft_directional_control_step_tip
+						control_step_limit = effective_tip_step
 				var limited_relative: float = clampf(
 					relative_angle,
 					-control_step_limit,
