@@ -977,7 +977,17 @@ func active_strike_vertices(target_local: Vector2, contact_progress: float, char
 	var base_angles: PackedFloat32Array = _softened_angles(current_angles)
 	var aimed_angles: PackedFloat32Array = base_angles.duplicate()
 	var desired_angle: float = target_local.angle()
-	var stretch_max: float = lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0))
+	var profile_attack_length_scale: float = 1.0
+	if _profile != null:
+		profile_attack_length_scale = maxf(float(_profile.attack_length_scale), 0.5)
+	var stretch_max: float = (
+		lerpf(
+			ACTIVE_NORMAL_STRETCH,
+			ACTIVE_CHARGED_STRETCH,
+			clampf(charge_ratio, 0.0, 1.0)
+		)
+		* profile_attack_length_scale
+	)
 	var length_scales: PackedFloat32Array = PackedFloat32Array()
 	var active_offsets: PackedFloat32Array = PackedFloat32Array()
 	var snap_offsets: PackedFloat32Array = PackedFloat32Array()
@@ -1070,7 +1080,18 @@ func _active_distal_aim(source: PackedVector2Array, target_local: Vector2, q: fl
 
 func active_stretch_ratio(contact_progress: float, charge_ratio: float) -> float:
 	var active: float = smoothstep(ACTIVE_START_Q, ACTIVE_FULL_Q, clampf(contact_progress, 0.0, 1.0))
-	return lerpf(1.0, lerpf(ACTIVE_NORMAL_STRETCH, ACTIVE_CHARGED_STRETCH, clampf(charge_ratio, 0.0, 1.0)), active)
+	var profile_attack_length_scale: float = 1.0
+	if _profile != null:
+		profile_attack_length_scale = maxf(float(_profile.attack_length_scale), 0.5)
+	var maximum: float = (
+		lerpf(
+			ACTIVE_NORMAL_STRETCH,
+			ACTIVE_CHARGED_STRETCH,
+			clampf(charge_ratio, 0.0, 1.0)
+		)
+		* profile_attack_length_scale
+	)
+	return lerpf(1.0, maximum, active)
 
 
 func vertices_from_angles_scaled(values: PackedFloat32Array, length_scales: PackedFloat32Array) -> PackedVector2Array:
@@ -1078,7 +1099,7 @@ func vertices_from_angles_scaled(values: PackedFloat32Array, length_scales: Pack
 		return PackedVector2Array()
 	var posed: PackedVector2Array = PackedVector2Array([_centers[0]])
 	for i in range(values.size()):
-		var scale_value: float = clampf(length_scales[i], 0.25, 2.0)
+		var scale_value: float = clampf(length_scales[i], 0.25, 3.20)
 		posed.append(posed[-1] + Vector2.from_angle(values[i]) * _lengths[i] * scale_value)
 	return _vertices_from_posed_centers(posed)
 
