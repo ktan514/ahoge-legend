@@ -62,6 +62,46 @@ func _run() -> void:
 	scene.stop_oscillation()
 	scene.set_preview_mode(scene.PreviewMode.CHARGED_ATTACK)
 	_expect(scene._mode.selected == scene.PreviewMode.CHARGED_ATTACK, "チャージ攻撃モードへ戻せません")
+	_expect(
+		scene.preview_cycle_seconds() > scene.ATTACK_PREVIEW_SECONDS,
+		"チャージ攻撃の確認周期に復帰・待機区間がありません"
+	)
+	_expect(absf(scene._charged_ratio(0.0)) < 0.0001, "チャージ攻撃周期が基準0Dから開始しません")
+	var charged_idle_probe: float = (
+		scene.CHARGE_PREP_SECONDS
+		+ scene.REAR_HOLD_SECONDS
+		+ scene.STRIKE_SWING_SECONDS
+		+ scene.FRONT_HOLD_SECONDS
+		+ scene.RETURN_TO_IDLE_SECONDS
+		+ scene.IDLE_HOLD_SECONDS * 0.5
+	)
+	_expect(scene._charged_is_idle_hold(charged_idle_probe), "チャージ攻撃後の待機確認区間を判定できません")
+	_expect(absf(scene._charged_ratio(charged_idle_probe)) < 0.0001, "チャージ攻撃後に頭部が基準0Dへ戻りません")
+	_expect(scene._charged_directional_amount(charged_idle_probe) <= 0.0001, "チャージ攻撃後に方向付き伸長が残っています")
+	_expect(scene._charged_active_progress(charged_idle_probe) < 0.0, "チャージ攻撃後にActive Driveが残っています")
+	_expect(absf(scene._charged_elastic_stretch(charged_idle_probe)) < 0.0001, "チャージ攻撃後に弾性伸長が残っています")
+	_expect(
+		absf(scene._charged_ratio(scene.preview_cycle_seconds() - 0.001) - scene._charged_ratio(0.0)) < 0.001,
+		"チャージ攻撃のループ境界で頭部位置がジャンプします"
+	)
+
+	# 実際に1周期進め、待機区間で標準形状へ収束することを確認する。
+	var return_mesh = scene.fighter.find_child("AhogeDeformMesh", true, false)
+	var default_vertices: PackedVector2Array = return_mesh.profile.rest_vertices.duplicate()
+	scene.fighter.reset_neck_preview_action()
+	scene.fighter.reset_ahoge_soft_follow()
+	var charged_step: float = 1.0 / 60.0
+	var charged_time: float = 0.0
+	var charged_settle_target: float = scene.preview_cycle_seconds() - scene.IDLE_HOLD_SECONDS * 0.10
+	while charged_time < charged_settle_target - 0.000001:
+		var next_time: float = minf(charged_time + charged_step, charged_settle_target)
+		scene._apply_preview_frame(next_time, next_time - charged_time)
+		charged_time = next_time
+	_expect(absf(scene.travel_ratio) < 0.0001, "チャージ攻撃後の待機確認で頭部が0Dではありません")
+	_expect(
+		_difference(return_mesh.current_vertices, default_vertices) <= 6.0,
+		"チャージ攻撃後の待機確認で標準C字へ戻っていません"
+	)
 
 	# UIから直接操作したときに数値・実際の表示・攻撃速度テスト状態が一致する。
 	scene.set_ratio(0.0)
