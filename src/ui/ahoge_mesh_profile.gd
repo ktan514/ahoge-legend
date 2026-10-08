@@ -14,6 +14,12 @@ extends Resource
 @export var straight_direction: float = -0.85
 @export var idle_pose_vertices: PackedVector2Array = PackedVector2Array()
 @export var idle_centerline_scale: Vector2 = Vector2.ONE
+@export var idle_curve_enabled: bool = false
+@export var idle_curve_control_1: Vector2 = Vector2.ZERO
+@export var idle_curve_control_2: Vector2 = Vector2.ZERO
+@export var idle_curve_end: Vector2 = Vector2.ZERO
+@export_range(0.05, 2.0, 0.01) var idle_width_scale: float = 1.0
+@export_range(0.5, 4.0, 0.01) var attack_length_scale: float = 1.0
 var bind_vertices: PackedVector2Array = PackedVector2Array()
 
 const WIDTH_POINTS: int = 5
@@ -58,6 +64,10 @@ func prepare() -> bool:
 			not idle_centerline_scale.is_finite()
 			or idle_centerline_scale.x <= 0.0
 			or idle_centerline_scale.y <= 0.0
+			or not is_finite(idle_width_scale)
+			or idle_width_scale <= 0.0
+			or not is_finite(attack_length_scale)
+			or attack_length_scale <= 0.0
 		):
 			return false
 		for point in idle_pose_vertices:
@@ -69,7 +79,64 @@ func prepare() -> bool:
 			var first: int = 1 + row * WIDTH_POINTS
 			centers.append((rest_vertices[first] + rest_vertices[first + WIDTH_POINTS - 1]) * 0.5 + root_anchor_px)
 		centers.append(rest_vertices[-1] + root_anchor_px)
-		if not idle_centerline_scale.is_equal_approx(Vector2.ONE):
+
+		if idle_curve_enabled:
+			if (
+				not idle_curve_control_1.is_finite()
+				or not idle_curve_control_2.is_finite()
+				or not idle_curve_end.is_finite()
+			):
+				return false
+			var source_centers: PackedVector2Array = centers.duplicate()
+			var arc: PackedFloat32Array = PackedFloat32Array([0.0])
+			var total_arc: float = 0.0
+			for i in range(1, source_centers.size()):
+				total_arc += source_centers[i].distance_to(source_centers[i - 1])
+				arc.append(total_arc)
+			if total_arc <= 0.001:
+				return false
+
+			var posed_centers: PackedVector2Array = PackedVector2Array()
+			for i in range(source_centers.size()):
+				var t: float = arc[i] / total_arc
+				var local_center: Vector2 = _cubic_bezier(
+					Vector2.ZERO,
+					idle_curve_control_1,
+					idle_curve_control_2,
+					idle_curve_end,
+					t
+				)
+				posed_centers.append(root_anchor_px + local_center)
+
+			var curved_vertices: PackedVector2Array = rest_vertices.duplicate()
+			curved_vertices[0] = Vector2.ZERO
+			for row in range(count):
+				var center_index: int = row + 1
+				var source_tangent: Vector2 = _tangent(source_centers, center_index)
+				var posed_tangent: Vector2 = _tangent(posed_centers, center_index)
+				if source_tangent.length() <= 0.000001 or posed_tangent.length() <= 0.000001:
+					return false
+				var turn: float = wrapf(
+					posed_tangent.angle() - source_tangent.angle(),
+					-PI,
+					PI
+				)
+				for column in range(WIDTH_POINTS):
+					var vertex_index: int = 1 + row * WIDTH_POINTS + column
+					var relative: Vector2 = (
+						rest_vertices[vertex_index]
+						+ root_anchor_px
+						- source_centers[center_index]
+					) * idle_width_scale
+					curved_vertices[vertex_index] = (
+						posed_centers[center_index]
+						- root_anchor_px
+						+ relative.rotated(turn)
+					)
+			curved_vertices[-1] = posed_centers[-1] - root_anchor_px
+			rest_vertices = curved_vertices
+			centers = posed_centers
+		elif not idle_centerline_scale.is_equal_approx(Vector2.ONE):
 			var source_centers: PackedVector2Array = centers.duplicate()
 			var posed_centers: PackedVector2Array = PackedVector2Array()
 			for center in source_centers:
@@ -208,6 +275,23 @@ func matches_texture(texture: Texture2D) -> bool:
 	context.start(HashingContext.HASH_SHA256)
 	context.update(image.get_data())
 	return context.finish().hex_encode() == source_rgba_sha256
+
+
+func _cubic_bezier(
+	p0: Vector2,
+	p1: Vector2,
+	p2: Vector2,
+	p3: Vector2,
+	t: float
+) -> Vector2:
+	var u: float = 1.0 - clampf(t, 0.0, 1.0)
+	var v: float = 1.0 - u
+	return (
+		p0 * u * u * u
+		+ p1 * 3.0 * u * u * v
+		+ p2 * 3.0 * u * v * v
+		+ p3 * v * v * v
+	)
 
 
 func _append_triangle(a: int, b: int, c: int) -> void:
