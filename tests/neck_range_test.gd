@@ -132,14 +132,20 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	)
 	_expect(float(tuning["active_tip_drive_gain"]) >= 1.50, "NeckRange専用の毛先駆動gainが不足しています: " + label)
 	_expect(float(tuning["active_tip_damping_ratio"]) < 0.80, "NeckRange専用の毛先慣性保持が不足しています: " + label)
+	_expect(float(tuning["active_wave_hold"]) >= 0.99, "NeckRange専用Active wave holdが未適用です: " + label)
+	_expect(
+		float(tuning["active_directional_control_step_tip"]) >= 0.17
+		and float(tuning["active_directional_control_step_tip"]) <= 0.19,
+		"NeckRange専用の攻撃中distal位相上限が候補域から外れています: " + label
+	)
 	_expect(
 		float(tuning["directional_clamp_upstream_blend"]) >= 0.999
 		and float(tuning["directional_clamp_upstream_blend"]) <= 1.001,
 		"NeckRange専用のclamp部分伝播率が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["active_preload_contraction"]) >= -0.062
-		and float(tuning["active_preload_contraction"]) <= -0.058,
+		float(tuning["active_preload_contraction"]) >= -0.037
+		and float(tuning["active_preload_contraction"]) <= -0.033,
 		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
 	)
 	_expect(
