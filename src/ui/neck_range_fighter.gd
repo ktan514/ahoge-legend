@@ -119,7 +119,7 @@ func set_neck_ahoge_attack_profile(active_progress: float, elastic_stretch: floa
 	if not is_finite(active_progress) or not is_finite(elastic_stretch):
 		return false
 	ahoge_active_progress = clampf(active_progress, -1.0, 1.0)
-	ahoge_elastic_stretch = clampf(elastic_stretch, -0.08, 0.35)
+	ahoge_elastic_stretch = clampf(elastic_stretch, -0.08, 0.70)
 	return true
 
 
