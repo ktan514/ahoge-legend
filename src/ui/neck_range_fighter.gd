@@ -10,7 +10,7 @@ const MAX_GAZE_MAX_DEGREES: float = 30.0
 # NeckRangePreview専用の未承認tuning。
 # MotionPreview/Battleの共通defaultへはHuman Verification合格まで昇格しない。
 const NECK_SOFT_TUNING := {
-	"control_targets": [0.00, 0.10, 0.20, 0.31, 0.45, 0.60, 0.75, 0.90, 1.00],
+	"control_targets": [0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00],
 	"root_hinge_hz": 4.5,
 	"root_hinge_damping": 1.00,
 	"root_max_offset": 0.36,
