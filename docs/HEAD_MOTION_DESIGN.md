@@ -722,3 +722,14 @@ tip側control差上限を0.18radまで広げても、30/60fpsのcross時刻は0.
 - hold中に上流clampへ吸着して位相が消えないよう、forward swing中だけdistal control差上限を0.18radまで許可する。rear/front保持は0.05radを維持する。
 - 3段階上限はroot 0.32 / middle 0.22 / distal-active 0.18で、総曲率2.20rad契約を超えないことをテストで確認する。
 - 共通defaultではwave hold強度0、active distal stepは通常tip stepと同値とし、NeckRange専用tuningだけ有効化する。
+
+
+#### 2026-10-08 Active wave holdの実装候補
+
+cross判定が純粋な角度波伝播であることを確認したため、NeckRange専用の次候補を次で固定する。
+
+- `active_wave_hold = 1.00`。各controlのwave到達前は前substep角を保持し、到達後に既存coupling + Active Driveへ解放する。
+- `active_directional_control_step_tip = 0.18rad`。通常の後端/前端保持ではtip上限0.05radを維持し、前方swing中だけdistal側に旧方向へ残る角度自由度を与える。
+- `active_preload_contraction = -0.035`へ戻す。伸縮は攻撃勢いの表現として維持するが、cross位相の調整には使用しない。
+- `directional_clamp_upstream_blend = 1.00`を維持し、U字抑止を弱めない。
+- 採用条件は従来どおり、30/60/120fpsでroot < middle < tip、最大総曲率<=2.20rad、端点ほぼ直線、速度ピーク順序、tip速度優位、伸長量条件を同時に満たすこと。
