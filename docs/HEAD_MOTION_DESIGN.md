@@ -896,3 +896,27 @@ NeckRangePreviewのモード=`パリィ`を正本確認経路とする。
 - パリィは既存 `AhogeParryMotion` / PARRY stateの実変形コードを使用し、見た目だけを別の偽物モーションで代替しない。
 
 初期表示はチャージ攻撃とする。通常攻撃・パリィの初期パラメータはHuman Verificationのための出発点であり、ここで完成扱いしない。
+
+
+### チャージ攻撃Previewの復帰確認区間
+
+Human Verificationで、チャージ攻撃そのものは良好だが、現在の確認画面は攻撃を連続ループするため「攻撃終了後に標準形状へ戻る動作」を確認できないことが指摘された。
+
+NeckRangePreviewのチャージ攻撃モードは、攻撃本体の調整値を変えず、確認周期だけを次のフルサイクルへ変更する。
+
+1. **IDLE開始**: 頭部は基準0D、directional amount=0、elastic stretch=0、待機C字。
+2. **CHARGE_PREP**: 基準0Dから後端-0.4Dへ移動しながら、directional amountを0→1、後方targetを立ち上げ、preload contractionへ入る。
+3. **REAR_HOLD**: 既存の後端保持0.30秒。現在のチャージ攻撃調整値をそのまま使用する。
+4. **STRIKE_SWING**: 既存0.15秒の前方切り返し。頭部・Active Drive・一時伸長は変更しない。
+5. **FRONT_HOLD**: 既存0.30秒。振り抜き時の約1.25倍overshoot後、残留伸長へ戻る。
+6. **RETURN_TO_IDLE**: 前端+0.4Dから基準0Dへ戻しながらdirectional amountを1→0、elastic stretchを0へ戻す。待機C字へ自然復帰させる。
+7. **IDLE_HOLD**: 基準0D・待機C字のまま静止し、Human Verificationで復帰完了を目視できる時間を確保する。
+
+初期候補:
+- CHARGE_PREP = 0.20秒
+- RETURN_TO_IDLE = 0.30秒
+- IDLE_HOLD = 0.45秒
+
+ループ境界はIDLE_HOLD終端→次周期CHARGE_PREP開始とし、前端や後端へ瞬間ジャンプしない。
+
+既存の `attack_preview_*` 関数は、チャージ攻撃本体の詳細自動検証で使用しているため意味を変更しない。UIループ用にフルサイクル関数を追加し、既存の速度・曲率・1.25倍伸長検証を壊さない。
