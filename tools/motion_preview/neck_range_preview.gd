@@ -28,7 +28,7 @@ const REAR_HOLD_SECONDS: float = 0.30
 const STRIKE_SWING_SECONDS: float = 0.15
 const FRONT_HOLD_SECONDS: float = 0.30
 const RETURN_TO_IDLE_SECONDS: float = 0.30
-const IDLE_HOLD_SECONDS: float = 0.45
+const IDLE_HOLD_SECONDS: float = 1.20
 const RESET_SECONDS: float = 0.30
 const PRELOAD_CONTRACTION: float = -0.035
 const STRIKE_STRETCH: float = 0.30
@@ -252,7 +252,7 @@ func set_preview_mode(index: int) -> void:
 	_apply_ratio(0.0)
 	match selected:
 		PreviewMode.CHARGED_ATTACK:
-			_notice.text = "チャージ攻撃: 溜め→攻撃→基準0D・待機C字への復帰→0.45秒静止まで確認できます。"
+			_notice.text = "チャージ攻撃: 溜め→攻撃→基準0D・待機C字への自然復帰→1.20秒の静止確認まで見られます。"
 		PreviewMode.NORMAL_ATTACK:
 			_notice.text = "通常攻撃: 未承認の初期候補。チャージ攻撃より短く軽い動作としてここから調整します。"
 		PreviewMode.PARRY:
