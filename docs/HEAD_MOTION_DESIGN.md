@@ -790,3 +790,22 @@ Mac Human Verificationで現在のActive Drive / Passive Flexは「だいぶ良�
 - 頭部モーション、Active Driveの角度伝播、PARRY、FollowThroughは変更しない。
 
 自動検証は最大centerline ratioを従来1.04〜1.07から**1.22〜1.28**へ更新する。またfront hold終盤では1.04以下まで戻ることを検査し、「1.25倍を保持する」実装を禁止する。
+
+
+#### 2026-10-08 1.25倍伸長の実測補正
+
+初回候補 `STRIKE_STRETCH=0.30` を実メッシュcenterlineで測定した結果、30/60/120fps・P1/P2・1280/1600の全条件で最大ratioは **1.118448** だった。内部segment伸長値と実描画centerline倍率は1:1ではない。
+
+この実測から、基準長1.0に対する増分を線形近似して次候補を求める。
+
+- 実測: internal +0.30 → centerline +0.118448
+- 目標: centerline +0.25
+- 次候補: `0.30 * 0.25 / 0.118448 ≈ 0.633`
+
+したがってNeckRangePreview専用の振り抜きpeakを `STRIKE_STRETCH=0.63` とする。入力上限は0.70まで許可するが、通常Battle/MotionPreviewの既定値・挙動は変更しない。
+
+採用条件:
+- 実描画centerline最大ratio 1.22〜1.28。
+- peakはswing終端〜前端到達直後のみ。
+- 前端保持0.12秒後には残留2%相当へ戻る。
+- width、root固定、角度chain、U字禁止条件を維持する。
