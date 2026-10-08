@@ -769,3 +769,24 @@ cross判定が純粋な角度波伝播であることを確認したため、Nec
 - root固定、端点ほぼ直線、U字禁止、停止後C字復帰を維持する。
 
 ここからは自動testのcross 1frame差だけを完成判定にせず、MacのNeckRangePreviewで「頭が先行し、アホ毛自身が後方で溜め、根元→中央→毛先へ波が走り、最後に毛先が加速して前方へ伸びる」見た目をHuman Verificationする。見た目が未達なら、その録画を次の設計入力とする。
+
+
+#### 2026-10-08 Human Verification: 振り抜き慣性で約1.25倍へ一時伸長
+
+Mac Human Verificationで現在のActive Drive / Passive Flexは「だいぶ良くなった」と確認された。次の要望は、前方へ振った勢いによってアホ毛全体が一瞬約1.25倍まで伸びることである。
+
+これは前端保持時の恒常長を1.25倍にする仕様ではない。**振り抜き速度による一時的なovershoot**として扱う。
+
+- 後端保持: 現在どおり少量のpreload contractionを持つ。
+- 前方swing前半: まだ縮みを残し、頭部→root→middleの方向転換を優先する。
+- swing後半: Active Driveと毛先側慣性が立ち上がるタイミングで伸長を急増させる。
+- swing終端〜前端到達直後: centerline全長が基準弧長の約1.25倍を最大値とする。
+- 前端保持: 1.25倍を固定せず、最初の約0.10〜0.12秒で急速に約1.02倍まで戻す。
+- reset/停止: 伸長0へ戻し、待機C字の基準弧長へ復帰する。
+- 根元座標は頭部anchorへ固定し、伸長はsegment lengthだけで表現する。
+- 根元直後だけ極端に引き伸ばさず、弧長10〜20%までに伸長率を立ち上げ、その先はほぼ均等に伸びる。これにより「毛先だけびよよーん」ではなく毛束全体が勢いで伸びる。
+- width、UV、mesh topologyは維持する。
+- これはNeckRangePreview専用Human Verification候補であり、合格まではMotionPreview/Battle共通defaultへ昇格しない。
+- 頭部モーション、Active Driveの角度伝播、PARRY、FollowThroughは変更しない。
+
+自動検証は最大centerline ratioを従来1.04〜1.07から**1.22〜1.28**へ更新する。またfront hold終盤では1.04以下まで戻ることを検査し、「1.25倍を保持する」実装を禁止する。
