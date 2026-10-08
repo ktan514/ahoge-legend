@@ -701,3 +701,24 @@ tip側control差上限を0.18radまで広げても、30/60fpsのcross時刻は0.
 - 曲げ角は増やさないため、U字抑制と総曲率2.20rad契約を維持する。
 - tipが前方へ向いた後に収縮が解けて+10%伸長へ移ることで、位置crossを1frame遅らせつつ終端速度を増やす。
 - 後端centerline長は基準の96%以上、最大前方伸長は従来の1.04〜1.07倍を維持する。
+
+
+#### 2026-10-08 cross判定と弾性伸縮の責務分離
+
+30/60fps crossが伸長時刻・preload量の変更で一切変化しなかったためテスト実装を再確認した。cross判定は `_soft_chain_points()` が `_softened_angles(rest_angles)` と基準segment長 `_lengths` だけで中心線を再構築しており、弾性伸縮済みmesh長は使用していない。
+
+このためcross順序は純粋な**角度波伝播の契約**であり、伸縮量で合わせてはいけない。
+
+- preload -6%試行はcross修正には無効なので不採用。NeckRange専用preloadは-3.5%へ戻す。
+- swing後半で+10%へ伸ばす弾性表現自体は、攻撃の勢い表現として維持する。
+- cross修正は角度chainだけで行う。
+
+新しい角度波は「wave arrival前のhold → arrival後のActive Drive」とする。
+
+- 各controlのwave到達時刻は弧長sに応じて遅らせる。
+- wave到達前はtargetをそのcontrolの前substep角へ寄せ、旧方向の角度状態を短時間保持する。
+- wave到達後は既存coupling + Active Driveへ滑らかに解放する。
+- rear/frontの静止保持ではwave holdを残さない。
+- hold中に上流clampへ吸着して位相が消えないよう、forward swing中だけdistal control差上限を0.18radまで許可する。rear/front保持は0.05radを維持する。
+- 3段階上限はroot 0.32 / middle 0.22 / distal-active 0.18で、総曲率2.20rad契約を超えないことをテストで確認する。
+- 共通defaultではwave hold強度0、active distal stepは通常tip stepと同値とし、NeckRange専用tuningだけ有効化する。
