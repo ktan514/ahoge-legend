@@ -828,3 +828,48 @@ Mac Human Verificationで現在のActive Drive / Passive Flexは「だいぶ良�
 - 過剰補正していた `STRIKE_STRETCH=0.63` は不採用とし、元の0.30へ戻す。
 - 実測では0.14入力で全長1.118448倍なので、0.30入力では線形近似で約1.254倍となり、目標1.22〜1.28の中央付近になる見込み。
 - 伸長分布、0.12秒での急速復帰、根元固定、角度chainは変更しない。
+
+
+## 次フェーズ: 通常攻撃とパリィのHuman Verification
+
+2026-10-08のMac Human Verificationで、NeckRangePreviewで調整したチャージ攻撃系の基礎モーションは「だいぶ良くなった」、振り抜き時の一時伸長も含めて次工程へ進める状態と判断された。
+
+以後、通常攻撃とパリィも同じ手順で個別にHuman Verificationする。ただしチャージ攻撃の数値を無条件にコピーしない。
+
+### 共通の進め方
+
+1. 実Battleと同じ描画コードを使う `MotionPreview.tscn` で対象動作だけを再生する。
+2. まず現在実装の見た目をMac録画で確認する。
+3. Human Verificationの指摘を設計正本へ反映する。
+4. 未承認の調整値はPreview専用として隔離し、Battle共通defaultへ即時反映しない。
+5. 自動試験は見た目の要求を固定するために追加する。
+6. CI合格後もHuman VerificationがOKになるまで採用しない。
+7. Human Verification合格後にだけ共通Battle値へ昇格する。
+
+### 通常攻撃ゲート
+
+MotionPreviewのscenario=`通常攻撃`、charge=0.0を正本確認経路とする。
+
+確認対象:
+- 頭部が先に前へ駆動すること。
+- アホ毛が頭部へ剛体追従せず、root→middle→tipへ運動が伝わること。
+- チャージ攻撃より短く軽い予備動作であること。
+- Active Strikeによりアホ毛自身が相手へ加速すること。
+- 毛先が最後に最も速くなること。
+- 通常攻撃として必要な一時伸長量・戻り時間はHuman Verificationで決める。チャージ攻撃の約1.25倍を既定値としてコピーしない。
+- 接触後FollowThrough、接触freeze、PARRY遷移の既存契約を壊さない。
+
+### パリィゲート
+
+MotionPreviewのscenario=`パリィ`を正本確認経路とする。
+
+確認対象:
+- 頭部の短い切り返しがアホ毛より先行すること。
+- 根元側を大きく振り回さず、主に中腹〜毛先で素早く払い返すこと。
+- 近距離防御として見え、通常攻撃のように相手頭部へ長く伸び続けないこと。
+- prepare→sweep→recoilが1本の柔らかい毛束として連続すること。
+- 最初の1frameは直前427 verticesを保持する既存PARRY entry契約を維持すること。
+- STRIKE→PARRY、WINDUP→PARRY、IDLE→PARRY等の既存遷移を壊さないこと。
+- パリィ固有の伸縮が必要かどうかはHuman Verificationで決める。現時点ではチャージ攻撃の1.25倍伸長をコピーしない。
+
+通常攻撃Human Verificationを先に完了し、その後パリィへ進む。両者を同時に調整して原因を混ぜない。
