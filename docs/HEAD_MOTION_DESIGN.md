@@ -1103,3 +1103,53 @@ Human Verification候補:
 - Human Verification合格前はこの待機形状を完成扱いしない。
 
 この変更はモーション数値の微調整より先に行う。通常攻撃・チャージ攻撃・パリィは、短い潰れC字を新しいneutral poseとして再評価する。
+
+
+### 2026-10-09 短い待機C字をBezier正本へ変更
+
+初期候補の「旧idle centerlineをX=0.75 / Y=0.34へ圧縮し、断面幅を維持する」方式は、待機長自体は約50.5%になったが、短い中心線に旧断面幅を残すためshape-key直線化途中で面反転が発生した。また通常/チャージ攻撃の絶対リーチも約半分になり、接触表示へ届かなくなった。
+
+この方式は不採用とする。
+
+#### 新しい待機C字
+
+旧idle_pose_verticesは参照形状として保持し、85断面の弧長fractionだけを利用する。実待機中心線はrootをP0=(0,0)とする3次Bezierへ再配置する。
+
+- P1 = **(-177.8, -508.0)**
+- P2 = **(558.8, -457.2)**
+- P3 = **(304.8, -127.0)**
+- 断面幅scale = **0.55**
+
+実測候補:
+
+- centerline arc length ratio ≈ **0.499**
+- bounds width ratio ≈ **0.57**
+- bounds height ratio ≈ **0.39**
+- 直線化までの全shape候補で三角形最小面積 > 0
+
+このBezierは「縦に大きい輪」ではなく、頭頂近くへ収まる低く潰れたC字を意図する。
+
+実装要件:
+
+- root=Vector2.ZERO固定。
+- 旧idle中心線の弧長fractionをBezier parameterとして使い、断面密度の偏りを維持する。
+- 各断面は旧idleの中心からの相対座標を0.55倍し、旧tangent→新Bezier tangentへ回転して配置する。
+- 承認PNG、bind vertices、UV、indicesの接続規則は維持する。
+- `idle_pose_vertices` は比較元として変更しない。
+- LONG straight profileだけBezier compact idleを有効化し、他profileは従来動作を維持する。
+
+#### 攻撃時の絶対リーチ補償
+
+待機長が約0.499倍になるため、Active Strikeのrelative stretch値1.22 / 1.45をそのまま使うと実リーチも約半分になる。
+
+LONG straight profileへ `attack_length_scale = 2.0` を持たせ、Active Strike時だけ次のように補償する。
+
+- 通常攻撃: 1.22 × 2.0 ≈ 2.44倍
+- 最大チャージ: 1.45 × 2.0 ≈ 2.90倍
+
+これは新しい短いrest長に対する倍率であり、絶対長としては従来の攻撃リーチとほぼ同等になる。
+
+- 待機/パリィ/復帰にはattack_length_scaleを適用しない。
+- ActionMotionのsegment scale上限を3.2まで許可する。
+- legacy profileはattack_length_scale=1.0のまま。
+- 接触誤差、FollowThrough、PARRY entry、arena安全条件は従来契約を維持する。
