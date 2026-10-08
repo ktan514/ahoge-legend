@@ -769,7 +769,16 @@ func _advance_softness(
 				# hold解除後はキャラクター前方基準のlocal 0radへ自力で向く。
 				target = lerp_angle(target, angle, direct_gain)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
-			var mass: float = lerpf(1.0, soft_active_tip_mass, pow(fraction, 1.5))
+			# 毛先の追加massは前方振り抜き用。後方へ溜め始める段階から重くすると
+			# middleだけ先に動いてtipが一瞬hookするため、active進行で立ち上げる。
+			var active_mass_weight: float = 0.0
+			if _soft_active_progress > 0.000001:
+				active_mass_weight = smoothstep(0.0, 0.35, active_q)
+			var mass: float = lerpf(
+				1.0,
+				soft_active_tip_mass,
+				pow(fraction, 1.5) * active_mass_weight
+			)
 			var damping: float = lerpf(soft_root_damping, soft_tip_damping, fraction)
 			damping *= lerpf(1.0, soft_active_tip_damping_ratio, active_section * fraction)
 			var relative_damping: float = lerpf(soft_relative_damping_root, soft_relative_damping_tip, fraction)
