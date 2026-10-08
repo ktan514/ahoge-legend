@@ -600,3 +600,12 @@ distal 25%を0.05radへしたCIでも、他条件は全PASSのままcrossだけ3
 - 停止後は伸長0・待機C字へ戻る。
 
 この層の目的は、**「頭に運ばれる紐」から「頭で初速を得て、自分でも加速し、先端へ運動量を集めて叩く毛束」へ見え方を変えること**である。
+
+
+#### 2026-10-07 direction target前倒し案の棄却
+
+Active Driveの位相再配分後、direction target自体を22%→62%反転から10%→50%反転へ18ms前倒しした試行では、30fpsの前方crossが root/middle/tip = 0.09/0.09/0.09 となり、全長同時反転へ悪化した。60fpsでも root 0.0667 / middle 0.10 / tip 0.10 となった。
+
+このためdirection targetの前倒しは不採用とし、従来の「頭部が先行し、アホ毛は序盤22%を後方保持、22%→62%で反転」を維持する。Active Driveの弧長別開始時刻だけで速度ピークをroot→middle→tipへ分離する。
+
+direction targetの開始を早めてcross時刻を合わせる方法は禁止する。cross順序はPassive chainの伝播と毛先側慣性で作る。
