@@ -733,3 +733,17 @@ cross判定が純粋な角度波伝播であることを確認したため、Nec
 - `active_preload_contraction = -0.035`へ戻す。伸縮は攻撃勢いの表現として維持するが、cross位相の調整には使用しない。
 - `directional_clamp_upstream_blend = 1.00`を維持し、U字抑止を弱めない。
 - 採用条件は従来どおり、30/60/120fpsでroot < middle < tip、最大総曲率<=2.20rad、端点ほぼ直線、速度ピーク順序、tip速度優位、伸長量条件を同時に満たすこと。
+
+
+#### 2026-10-08 Active wave hold後のdistal上限再調整
+
+`active_wave_hold=1.00` と攻撃中distal上限0.18radを有効化しても、30/60fpsのcrossは root/middle/tip = 0.09/0.12/0.12、0.10/0.1167/0.1167のまま変化しなかった。wave hold自体ではなく、hold中のdistal controlが0.18rad clampで上流へ引き戻されている。
+
+次候補は攻撃中だけ `active_directional_control_step_tip=0.24rad` とする。
+
+- 通常のrear/front保持では従来tip上限0.05radを維持する。
+- swing中だけdistal側へ0.24radまで旧方向へ残る自由度を与える。
+- root 0.32 / middle 0.22 / active tip 0.24 の8 control差上限合計は約2.17radで、総曲率2.20rad契約の設計範囲内に収める。
+- `active_wave_hold=1.00`、tip mass=1.90、tip drive=1.75は維持する。
+- 採用条件は閾値を変えず、30/60/120fpsすべてでroot < middle < tip、最大総曲率<=2.20rad、端点ほぼ直線、角速度peak順、tip実速度優位、伸長条件を同時に満たすこと。
+- この候補でも不成立なら、数値だけの追加追い込みを停止し、Human Verificationで見た目を再評価する。
