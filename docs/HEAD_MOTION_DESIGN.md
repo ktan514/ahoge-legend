@@ -1051,3 +1051,18 @@ Human Verification候補:
 - amount=1は従来directional描画と同等であること。
 - 通常攻撃のPREP開始・RETURN終端で1frame形状jumpを生じないこと。
 - 既存チャージ攻撃の後方/前方形状・1.25倍伸長を壊さないこと。
+
+
+#### 復帰開始時のActive Drive切断を廃止
+
+通常攻撃のFRONT_HOLD→RETURN_TO_IDLE境界でも不連続を確認した。従来はFRONT_HOLD終端まで `active_progress=1`、RETURN開始直後から `-1` へ切り替えていた。一方、directional amountはRETURN開始時点ではまだ1に近い。
+
+このため方向付きchainがまだ有効なままActive Driveだけが1frameで消え、復帰開始時のshape/velocity targetが急変する。
+
+修正:
+
+- 通常攻撃はRETURN_TO_IDLE中も `active_progress=1` を保持する。
+- Active Driveの見た目の効力は `directional_amount: 1→0` によって滑らかに抜く。
+- RETURN完了後、directional amount=0 / elastic stretch=0になったIDLE区間で初めて `active_progress=-1` へ戻す。
+- チャージ攻撃も同じ境界規則へ揃える。攻撃本体の値は変更しない。
+- これによりFRONT_HOLD→RETURNとRETURN→IDLEの両境界で、目視できるshape jumpを作らない。
