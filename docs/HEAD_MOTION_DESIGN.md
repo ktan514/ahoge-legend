@@ -932,3 +932,55 @@ NeckRangePreviewのチャージ攻撃モードは、攻撃本体の調整値を�
 - その後1.20秒、頭部0D・directional amount=0・elastic stretch=0・Active Drive解除のまま自然減衰させる。
 - 待機区間終盤でprofile標準C字へ収束していることを自動検証する。
 - ループ境界は標準C字→次のCHARGE_PREP開始とし、形状の瞬間ジャンプを作らない。
+
+
+### 通常攻撃・パリィの間隔追加と初動/復帰の連続化
+
+2026-10-08 Human Verification録画で、通常攻撃・パリィは連続ループが速すぎて各動作の開始前/終了後を確認しにくい。また次の2つの視覚不具合を確認した。
+
+1. 動作開始直後、毛先側だけが一瞬強く曲がり「ひん曲がった」形になる。
+2. 動作終了後、待機C字へ戻る境界で形状が一段で切り替わり「がくん」となる。
+
+#### 共通確認周期
+
+チャージ攻撃と同様、通常攻撃・パリィにも開始前と終了後の待機区間を持たせる。
+
+- 開始前IDLE_HOLD: 0.45秒。基準0D・待機C字。
+- 動作本体: 各モードの既存/調整対象モーション。
+- RETURN_TO_IDLE: 0.35秒。入力・頭部位置・伸縮を基準へ戻す。
+- 終了後IDLE_HOLD: 1.20秒。柔軟chainが待機C字へ自然収束するまで確認する。
+- ループ境界では終了後IDLE_HOLDから次周期の開始前IDLE_HOLDへ連続し、ActionMotion resetが見える形状ジャンプを作らない。
+
+#### チャージ攻撃・通常攻撃の初動tip折れ
+
+NeckRange専用 `active_tip_mass=1.90` は前方振り抜き時の慣性を作る値であり、後方準備にも常時適用するのは誤り。
+
+- `active_progress <= 0` の後方準備/保持では追加tip massを無効化し、mass=1.0を基準とする。
+- 前方swingで `active_progress` が0→約0.35へ進む間にtip massを1.0→1.90へ滑らかに立ち上げる。
+- これにより後方準備でmiddleだけ先行してtipが残りすぎる一瞬のhookを抑える。
+- forward strike後半のtip inertia / tip drive gain=1.75は維持する。
+- 共通Battle defaultのtip mass=1.0は変わらない。
+
+通常攻撃のPREPは現行0.10秒から0.16秒へ延長し、最初0.04秒は頭部だけが先に動き、directional amountは0のまま。その後0.12秒でdirectional amountを0→1へsmoothstepする。待機C字から後方targetへ瞬時に引っ張らない。
+
+#### パリィ初動tip折れ
+
+既存Parryのprepareは、0.18秒全体の最初12%（約0.022秒）で `PREPARE_ANGLE=0.24rad` まで毛先側を曲げており、60fpsでは最初の可視frameでほぼ最大prepareへ到達する。
+
+Human Verification候補:
+- PREPARE_ANGLE: 0.24 → 0.10rad。
+- prepare区間: u=0.00→0.22。
+- sweep到達: u=0.22→0.58。
+- recoil: u=0.58→0.82。
+- return: u=0.82→1.00。
+- SWEEP_ANGLE / RECOIL_ANGLE自体は現段階では変更しない。
+
+これにより最初の1〜2frameでtipだけが急に折れる挙動をなくし、頭部の小さいprepareから払いへ連続させる。
+
+#### 復帰時の「がくん」防止
+
+通常攻撃・パリィとも、動作直後に次周期へresetしない。RETURN_TO_IDLEと1.20秒の終了後IDLE_HOLDで、現在の実形状から待機C字へ自然復帰させる。
+
+- directional amount、elastic stretch、Active DriveはRETURN_TO_IDLE中に連続的に0へ戻す。
+- PARRY終了後はActionMotionの既存 `_recover_from_entry()` を0.35秒以上進めてからIDLE_HOLDへ入る。
+- ループ境界の `reset_neck_preview_action()` は、既に待機C字へ収束した後にだけ実行されるため、目視できるjumpを作らない。
