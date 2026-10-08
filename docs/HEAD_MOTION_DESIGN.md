@@ -838,7 +838,7 @@ Mac Human Verificationで現在のActive Drive / Passive Flexは「だいぶ良�
 
 ### 共通の進め方
 
-1. 実Battleと同じ描画コードを使う `MotionPreview.tscn` で対象動作だけを再生する。
+1. 実Battleと同じ描画コードを使う `NeckRangePreview.tscn` のモード切り替えで対象動作だけを再生する。
 2. まず現在実装の見た目をMac録画で確認する。
 3. Human Verificationの指摘を設計正本へ反映する。
 4. 未承認の調整値はPreview専用として隔離し、Battle共通defaultへ即時反映しない。
@@ -848,7 +848,7 @@ Mac Human Verificationで現在のActive Drive / Passive Flexは「だいぶ良�
 
 ### 通常攻撃ゲート
 
-MotionPreviewのscenario=`通常攻撃`、charge=0.0を正本確認経路とする。
+NeckRangePreviewのモード=`通常攻撃`を正本確認経路とする。
 
 確認対象:
 - 頭部が先に前へ駆動すること。
@@ -861,7 +861,7 @@ MotionPreviewのscenario=`通常攻撃`、charge=0.0を正本確認経路とす�
 
 ### パリィゲート
 
-MotionPreviewのscenario=`パリィ`を正本確認経路とする。
+NeckRangePreviewのモード=`パリィ`を正本確認経路とする。
 
 確認対象:
 - 頭部の短い切り返しがアホ毛より先行すること。
@@ -873,3 +873,26 @@ MotionPreviewのscenario=`パリィ`を正本確認経路とする。
 - パリィ固有の伸縮が必要かどうかはHuman Verificationで決める。現時点ではチャージ攻撃の1.25倍伸長をコピーしない。
 
 通常攻撃Human Verificationを先に完了し、その後パリィへ進む。両者を同時に調整して原因を混ぜない。
+
+
+### 同一画面での3モード切り替え
+
+通常攻撃・チャージ攻撃・パリィのHuman Verificationは別Sceneへ分離せず、現在チャージ攻撃を調整している `NeckRangePreview.tscn` へモード切り替え部品を追加して行う。
+
+モードは次の3つとする。
+
+- チャージ攻撃
+- 通常攻撃
+- パリィ
+
+共通要件:
+
+- 同じ画面、同じLONG_TEST fighter、同じ承認アホ毛素材・profileを使用する。
+- 向き、内部解像度、柔らかさ、手動の首位置確認は共通部品として残す。
+- 「動作テスト」ボタンは選択中モードのモーションをループ再生する。
+- モード切り替え時は再生を停止し、古いActionMotion状態・方向付き伸長・弾性伸長を次モードへ持ち越さない。
+- チャージ攻撃は現在Human Verificationで良好とされたモーションを変更しない。
+- 通常攻撃・パリィはこの画面内で独立に調整し、未承認値をBattle共通defaultへ自動昇格しない。
+- パリィは既存 `AhogeParryMotion` / PARRY stateの実変形コードを使用し、見た目だけを別の偽物モーションで代替しない。
+
+初期表示はチャージ攻撃とする。通常攻撃・パリィの初期パラメータはHuman Verificationのための出発点であり、ここで完成扱いしない。
