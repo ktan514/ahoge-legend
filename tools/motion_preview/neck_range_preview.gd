@@ -12,7 +12,7 @@ const STRIKE_SWING_SECONDS: float = 0.15
 const FRONT_HOLD_SECONDS: float = 0.30
 const RESET_SECONDS: float = 0.30
 const PRELOAD_CONTRACTION: float = -0.035
-const STRIKE_STRETCH: float = 0.10
+const STRIKE_STRETCH: float = 0.30
 const FRONT_RESIDUAL_STRETCH: float = 0.02
 const ATTACK_PREVIEW_SECONDS: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS + RESET_SECONDS
 
@@ -315,7 +315,9 @@ static func attack_preview_elastic_stretch(seconds: float) -> float:
 	t -= STRIKE_SWING_SECONDS
 	if t < FRONT_HOLD_SECONDS:
 		var front_u: float = clampf(t / FRONT_HOLD_SECONDS, 0.0, 1.0)
-		return lerpf(STRIKE_STRETCH, FRONT_RESIDUAL_STRETCH, smoothstep(0.20, 0.80, front_u))
+		# 1.25倍は前端の恒常長ではなく、振り抜き慣性による一時overshoot。
+		# 前端到達後約0.12秒で残留2%まで急速に戻す。
+		return lerpf(STRIKE_STRETCH, FRONT_RESIDUAL_STRETCH, smoothstep(0.0, 0.40, front_u))
 	t -= FRONT_HOLD_SECONDS
 	var reset_u: float = clampf(t / RESET_SECONDS, 0.0, 1.0)
 	return lerpf(FRONT_RESIDUAL_STRETCH, 0.0, smoothstep(0.0, 0.65, reset_u))
