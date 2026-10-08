@@ -861,34 +861,14 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 	if values.size() != fractions.size() or softness <= 0.000001 or _soft_control_indices.size() < 2:
 		return values.duplicate()
 
-	# NeckRangeの方向付き伸長では、待機C字へのoffset差分へ戻さず、
-	# chainが実際に保持している区間角度をlocalへ戻して直接描画する。
-	# これにより保持中はほぼ直線、反転中だけcontrol間の位相差で曲がる。
-	if _soft_directional_amount > 0.000001 and _soft_world_angles.size() == _soft_control_indices.size():
-		var directional_result: PackedFloat32Array = values.duplicate()
-		var directional_control: int = 0
-		for i in range(directional_result.size()):
-			var s: float = fractions[i]
-			while directional_control < _soft_control_indices.size() - 2 and s > fractions[_soft_control_indices[directional_control + 1]]:
-				directional_control += 1
-			var left_index: int = _soft_control_indices[directional_control]
-			var right_index: int = _soft_control_indices[directional_control + 1]
-			var left_s: float = fractions[left_index]
-			var right_s: float = fractions[right_index]
-			var weight: float = 0.0 if right_s <= left_s else clampf((s - left_s) / (right_s - left_s), 0.0, 1.0)
-			var left_local: float = _soft_world_angles[directional_control] - attachment_angle
-			var right_local: float = _soft_world_angles[directional_control + 1] - attachment_angle
-			var chain_local: float = lerp_angle(left_local, right_local, weight)
-			directional_result[i] = lerp_angle(values[i], chain_local, _soft_directional_amount)
-
-		return directional_result
-
-	var result: PackedFloat32Array = values.duplicate()
+	# Passive Flexは常に計算し、directional描画への0境界でアルゴリズムを切り替えない。
+	# これによりdirectional amountが0↔微小値を跨いでも形状が1frameで飛ばない。
+	var passive_result: PackedFloat32Array = values.duplicate()
 	var offsets: PackedFloat32Array = PackedFloat32Array()
-	offsets.resize(result.size())
+	offsets.resize(passive_result.size())
 	var control: int = 0
 	var root_offset: float = _control_offset(0)
-	for i in range(result.size()):
+	for i in range(passive_result.size()):
 		var s: float = fractions[i]
 		while control < _soft_control_indices.size() - 2 and s > fractions[_soft_control_indices[control + 1]]:
 			control += 1
@@ -914,14 +894,53 @@ func _softened_angles(values: PackedFloat32Array) -> PackedFloat32Array:
 
 	# 隣接区間の角度差を両方向から制限し、面反転を防ぎながら曲げを全体へ分散する。
 	for i in range(1, offsets.size()):
-		offsets[i] = clampf(offsets[i], offsets[i - 1] - soft_max_offset_step, offsets[i - 1] + soft_max_offset_step)
+		offsets[i] = clampf(
+			offsets[i],
+			offsets[i - 1] - soft_max_offset_step,
+			offsets[i - 1] + soft_max_offset_step
+		)
 	for i in range(offsets.size() - 2, -1, -1):
-		offsets[i] = clampf(offsets[i], offsets[i + 1] - soft_max_offset_step, offsets[i + 1] + soft_max_offset_step)
+		offsets[i] = clampf(
+			offsets[i],
+			offsets[i + 1] - soft_max_offset_step,
+			offsets[i + 1] + soft_max_offset_step
+		)
 
+	for i in range(passive_result.size()):
+		passive_result[i] += offsets[i] * softness
+
+	# directional amount=0ではPassive Flexと完全一致する。
+	if (
+		_soft_directional_amount <= 0.000001
+		or _soft_world_angles.size() != _soft_control_indices.size()
+	):
+		return passive_result
+
+	# direction付きchainは別経路へ即時切替せず、Passive Flexから連続補間する。
+	# amount=1では従来のdirectional chainそのものになる。
+	var result: PackedFloat32Array = passive_result.duplicate()
+	var directional_control: int = 0
 	for i in range(result.size()):
-		result[i] += offsets[i] * softness
+		var s: float = fractions[i]
+		while (
+			directional_control < _soft_control_indices.size() - 2
+			and s > fractions[_soft_control_indices[directional_control + 1]]
+		):
+			directional_control += 1
+		var left_index: int = _soft_control_indices[directional_control]
+		var right_index: int = _soft_control_indices[directional_control + 1]
+		var left_s: float = fractions[left_index]
+		var right_s: float = fractions[right_index]
+		var weight: float = (
+			0.0
+			if right_s <= left_s
+			else clampf((s - left_s) / (right_s - left_s), 0.0, 1.0)
+		)
+		var left_local: float = _soft_world_angles[directional_control] - attachment_angle
+		var right_local: float = _soft_world_angles[directional_control + 1] - attachment_angle
+		var chain_local: float = lerp_angle(left_local, right_local, weight)
+		result[i] = lerp_angle(passive_result[i], chain_local, _soft_directional_amount)
 	return result
-
 
 func soft_control_world_angles() -> PackedFloat32Array:
 	return _soft_world_angles.duplicate()
