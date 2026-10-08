@@ -1024,3 +1024,30 @@ Human Verification候補:
 - return 0.76→1.00
 
 パリィの開始前0.45秒・復帰0.35秒・終了後1.20秒の確認間隔は維持する。
+
+
+### 2026-10-08 directional描画経路の不連続を廃止
+
+追加録画とコードread-backにより、通常攻撃初動のtip hookと復帰時の「がくん」に共通する構造上の原因を確認した。
+
+`AhogeActionMotion._softened_angles()` は現在、`_soft_directional_amount > 0.000001` のときだけ方向付きchainを直接描画し、0以下ではPassive Flexのoffset描画へ切り替える。このためamountが0↔微小値を跨ぐだけで、**補間値ではなく描画アルゴリズム自体が切り替わる**。
+
+この不連続は数値を0.20や0.10へ下げても解消しない。
+
+修正方針:
+
+- Passive Flex結果を常に計算する。
+- directional chain結果もsoft controlが有効なら計算する。
+- 最終segment角は `lerp_angle(passive_result, directional_chain, directional_amount)` で連続補間する。
+- directional_amount=0では従来Passive Flexと完全一致する。
+- directional_amount=1では従来directional chainと一致する。
+- 0<amount<1では両者の中間となり、0境界で形状が1frame切り替わらない。
+- root固定、control数、角度clamp、Active Drive、弾性伸長、PARRY形状は変更しない。
+
+通常攻撃PREPではこの連続補間を前提にdirectional amountを0→0.20まで使用する。復帰では1→0へ下げても同じ連続式のまま待機C字へ戻る。
+
+採用条件:
+- amount=0とamount=0.0001の最終形状差が微小であること。
+- amount=1は従来directional描画と同等であること。
+- 通常攻撃のPREP開始・RETURN終端で1frame形状jumpを生じないこと。
+- 既存チャージ攻撃の後方/前方形状・1.25倍伸長を壊さないこと。
