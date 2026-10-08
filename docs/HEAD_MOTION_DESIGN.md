@@ -1153,3 +1153,62 @@ LONG straight profileへ `attack_length_scale = 2.0` を持たせ、Active Strik
 - ActionMotionのsegment scale上限を3.2まで許可する。
 - legacy profileはattack_length_scale=1.0のまま。
 - 接触誤差、FollowThrough、PARRY entry、arena安全条件は従来契約を維持する。
+
+
+### 2026-10-09 手描き参照画像を形状正本へ昇格
+
+Human Verificationで手描きされたアホ毛単体画像を受領した。以後、待機形状はBezier近似ではなく、この手描き画像から抽出した輪郭を**形状正本**とする。画像そのものをゲーム素材へ差し替えるのではなく、承認済み `ahoge_straight.png` のmesh/UVをこの形へ変形する。
+
+参照画像の計測:
+- 画像サイズ: 800 × 2000
+- alpha輪郭bbox: x=153..621 / y=778..1981
+- root: 下端 skeleton endpoint ≈ (389, 1981)
+- tip: 上端 skeleton endpoint ≈ (613, 818)
+- skeleton arc length: 約1560.95px
+- skeleton tip local: (224, -1163)
+- 旧idle centerline 1765.20pxの約半分を採用し、ゲーム内target arc lengthを **約882.60px** とする。
+- target tip local ≈ **(126.66, -657.59)**
+- target centerline bboxは概ね width≈232px / height≈677px。
+
+#### 中心線
+
+参照画像のalpha silhouetteをskeletonizeし、root→tipを1本の非分岐pathとして取得する。これを弧長等間隔33点へsampleし、その33点をprofileへ直接保持する。Bezier近似は不採用。
+
+- point 0 = root = Vector2.ZERO
+- point 32 = tip ≈ Vector2(126.655, -657.587)
+- 33点は参照画像skeletonの弧長fraction 0/32..32/32に対応する。
+- 85断面は旧idleの弧長fractionを使って33点polyline上へ再配置する。
+- root/tip間の途中形状もこの33点polylineから補間し、手描きのS字/C字の癖を保持する。
+
+#### 太さ
+
+参照画像のalpha maskにdistance transformを掛け、skeleton各点の局所半径を取得する。33点のtarget full widthもprofileへ保持する。
+
+- 最大target widthは約58px。
+- root/tipは尖る。
+- 中央付近が最も太く、tipへ向かって段階的に細くなる。
+- 各mesh断面は旧idleの断面幅をtarget widthへscaleし、中心線tangentへ回転する。
+- UVとbind topologyは変更しない。
+
+#### 制御点 / bone相当
+
+NeckRangeの9 controlは旧root集中配置を廃止し、手描き中心線の曲率に合わせて次へ再配置する。
+
+`[0.00, 0.10, 0.20, 0.31, 0.45, 0.60, 0.75, 0.90, 1.00]`
+
+- 0.31付近: 中腹の方向変化。
+- 0.90付近: 毛先直前の強い返し。
+- control数は9のまま。
+- root固定、Passive Flex / Active Drive / PARRYの既存境界は維持する。
+
+#### 動作
+
+待機時は手描き正本形状をneutral poseとする。攻撃・パリィはこの形状から開始し、この形状へ戻る。
+
+- 通常攻撃/チャージ攻撃: 短いneutralからActive Driveで伸びる。
+- attack_length_scale=2.0の絶対リーチ補償を維持する。
+- 待機/RETURN/PARRYにはattack_length_scaleを直接掛けない。
+- RETURN完了時はreference centerline/widthへ自然収束する。
+- 初動tip hookを避けるため、reference control配置へ切り替えた後もPREPのdirectional amount上限0.20と連続blendを維持する。
+
+Bezier候補P1/P2/P3はこの時点で不採用。今後のHuman Verificationは33点reference curveを基準に行う。
