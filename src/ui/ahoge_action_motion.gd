@@ -656,7 +656,7 @@ func _advance_softness(
 	_soft_directional_amount = clampf(directional_amount, 0.0, 1.0) * bounded
 	_soft_directional_direction = clampf(directional_direction, -1.0, 1.0)
 	_soft_active_progress = clampf(active_progress, -1.0, 1.0)
-	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.35) * bounded
+	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.70) * bounded
 	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
 		_reset_soft_motion()
 		return
