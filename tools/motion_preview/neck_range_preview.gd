@@ -59,6 +59,7 @@ var travel_ratio: float = 0.0
 var _phase: float = 0.0
 var _slider: HSlider
 var _number: SpinBox
+var _character: OptionButton
 var _mode: OptionButton
 var _side: OptionButton
 var _resolution: OptionButton
@@ -109,8 +110,46 @@ func _build_ui() -> void:
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 10)
 	margin.add_child(stack)
-	_text(stack, "STEP 4  ロングアホ毛 動作調整  |  チャージ攻撃 / 通常攻撃 / パリィ").add_theme_font_size_override("font_size", 24)
-	_text(stack, "同じ画面・同じLONG_TEST素材で3動作を切り替え、Human Verificationしながら個別に調整します。")
+	_text(stack, "STEP 4  キャラクター別 アホ毛動作調整").add_theme_font_size_override("font_size", 24)
+	_text(stack, "キャラクターと動作モードを切り替え、同じ検証環境でHuman Verificationします。")
+	var character_row := HBoxContainer.new()
+	character_row.add_theme_constant_override("separation", 10)
+	stack.add_child(character_row)
+	_text(character_row, "キャラクター")
+	_character = OptionButton.new()
+	var default_index: int = -1
+	var first_enabled_index: int = -1
+	var catalog: Array = CatalogScript.all()
+	for i in range(catalog.size()):
+		var definition = catalog[i]
+		var prototype: bool = str(definition.character_id).ends_with("_TEST")
+		var head_ready: bool = (
+			not str(definition.head_asset_path).is_empty()
+			and ResourceLoader.exists(str(definition.head_asset_path))
+		)
+		var ahoge_ready: bool = (
+			not str(definition.ahoge_asset_path).is_empty()
+			and ResourceLoader.exists(str(definition.ahoge_asset_path))
+		)
+		var enabled: bool = head_ready and ahoge_ready
+		var label: String = str(definition.display_name)
+		if prototype:
+			label += "（prototype）"
+		elif not enabled:
+			label += "（素材準備中）"
+		_character.add_item(label)
+		_character.set_item_metadata(i, str(definition.character_id))
+		_character.set_item_disabled(i, not enabled)
+		if enabled and first_enabled_index < 0:
+			first_enabled_index = i
+		if enabled and str(definition.character_id) == "SAKURAMIKO":
+			default_index = i
+	if default_index < 0:
+		default_index = maxi(first_enabled_index, 0)
+	_character.selected = default_index
+	_character.item_selected.connect(set_preview_character)
+	character_row.add_child(_character)
+	_text(character_row, "正式キャラとprototypeを同じ画面で比較できます。")
 	var mode_row := HBoxContainer.new()
 	mode_row.add_theme_constant_override("separation", 10)
 	stack.add_child(mode_row)
@@ -221,8 +260,13 @@ func rebuild() -> void:
 	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud.contact_director.set_process(false)
 	var config = ConfigScript.new()
-	var character = CatalogScript.get_by_id("LONG_TEST")
-	hud.set_combatants(character, StateScript.new(config), character, StateScript.new(config))
+	var selected_character = CatalogScript.get_by_id(_selected_character_id())
+	hud.set_combatants(
+		selected_character,
+		StateScript.new(config),
+		selected_character,
+		StateScript.new(config)
+	)
 	await get_tree().process_frame
 	await get_tree().process_frame
 	fighter = hud.contact_director.fighters[_side.selected]
@@ -244,6 +288,34 @@ func rebuild() -> void:
 	if _pending:
 		_pending = false
 		await rebuild()
+
+
+func _selected_character_id() -> String:
+	if _character == null or _character.item_count <= 0:
+		return "LONG_TEST"
+	var index: int = clampi(_character.selected, 0, _character.item_count - 1)
+	var metadata = _character.get_item_metadata(index)
+	var character_id: String = str(metadata)
+	return "LONG_TEST" if character_id.is_empty() else character_id
+
+
+func _selected_character_name() -> String:
+	var definition = CatalogScript.get_by_id(_selected_character_id())
+	return str(definition.display_name) if definition != null else _selected_character_id()
+
+
+func set_preview_character(index: int) -> void:
+	if _character == null or index < 0 or index >= _character.item_count:
+		return
+	if _character.is_item_disabled(index):
+		return
+	_character.select(index)
+	stop_oscillation()
+	if ready_for_input and is_instance_valid(fighter):
+		fighter.reset_neck_preview_action()
+		fighter.set_neck_ahoge_directional_extension(0.0, 0.0)
+		fighter.set_neck_ahoge_attack_profile(-1.0, 0.0)
+	rebuild()
 
 
 func set_preview_mode(index: int) -> void:
@@ -306,7 +378,14 @@ func _apply_ratio(value: float, dynamic_delta: float = 0.0) -> void:
 		fighter.advance_neck_preview(dynamic_delta)
 	var d: float = fighter.head_display_diameter()
 	var elevation: float = fighter.neck_gaze_elevation_degrees()
-	_status.text = "位置 %+.3fD  |  移動量 %+.1fpx  |  仰角 %+.1f°  |  柔らかさ %.2f  |  D=%.1fpx" % [travel_ratio, travel_ratio * d, elevation, fighter.ahoge_softness, d]
+	_status.text = "%s  |  位置 %+.3fD  |  移動量 %+.1fpx  |  仰角 %+.1f°  |  柔らかさ %.2f  |  D=%.1fpx" % [
+		_selected_character_name(),
+		travel_ratio,
+		travel_ratio * d,
+		elevation,
+		fighter.ahoge_softness,
+		d
+	]
 	_overlay.queue_redraw()
 
 
