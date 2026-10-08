@@ -640,3 +640,17 @@ NeckRange専用active tip massを1.60→1.90へ増やしても、30fpsの前方c
 - `upstream_for_clamp = lerp_angle(previous_world[control - 1], _soft_world_angles[control - 1], blend)` とする。
 - blendを0へ寄せるほど位相差が増え、1へ寄せるほど折れが減る。テスト閾値は変更しない。
 - 採用条件は、root < middle < tip と最大総曲率<=2.20radを同時に満たすこと。速度ピーク・伸長・端点形状も従来条件を維持する。
+
+
+#### 2026-10-08 部分伝播案の棄却とdistal遅れへの切替
+
+clamp上流角blend=0.60では、60/120fpsのroot < middle < tipは分離したが最大総曲率が約2.69〜2.70radとなり、30fpsは依然0.09/0.12/0.12でmiddleとtipが同frameだった。全controlへ上流遅延を入れる方法はU字抑制と30fps位相差を同時に満たせないため不採用とする。
+
+次はclamp上流角を共通従来値blend=1.0へ戻し、distal側だけに小さな角度自由度を与える。
+
+- root側0.32rad、middle 0.22radは維持する。
+- tip側control差上限を0.05radから0.09radへ広げる候補とする。
+- tip側上限を狭くしすぎると、更新済み上流角へ毛先がclampで強制的に吸着し、massを増やしてもmiddleと同frameでcrossする。
+- distalだけ0.09radまで旧方向へ残る自由度を与え、毛先自身のmass=1.90と後段Active Driveで次frameに前方へ抜けさせる。
+- 全chainの上流角を遅らせないため、U字を作る大域的な位相差は増やさない。
+- 採用条件は従来どおり最大総曲率<=2.20rad、root < middle < tip、速度ピーク順序、tip速度優位、伸長・端点条件の同時合格とする。
