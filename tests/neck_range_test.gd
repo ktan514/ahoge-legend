@@ -138,8 +138,8 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"NeckRange専用のclamp部分伝播率が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["active_preload_contraction"]) >= -0.037
-		and float(tuning["active_preload_contraction"]) <= -0.033,
+		float(tuning["active_preload_contraction"]) >= -0.062
+		and float(tuning["active_preload_contraction"]) <= -0.058,
 		"NeckRange専用の弾性溜め量が候補域から外れています: " + label
 	)
 	_expect(
