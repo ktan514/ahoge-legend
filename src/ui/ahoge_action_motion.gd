@@ -397,7 +397,7 @@ func advance(
 		clampf(directional_amount, 0.0, 1.0),
 		clampf(directional_direction, -1.0, 1.0),
 		clampf(active_progress, -1.0, 1.0),
-		clampf(elastic_stretch, -0.08, 0.14)
+		clampf(elastic_stretch, -0.08, 0.70)
 	)
 
 
