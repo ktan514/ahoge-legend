@@ -157,7 +157,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"STRIKE終盤で弾性伸長が十分に立ち上がっていません: " + label
 	)
 	_expect(
-		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS) >= 0.29,
+		scene.attack_preview_elastic_stretch(scene.REAR_HOLD_SECONDS + scene.STRIKE_SWING_SECONDS) >= 0.62,
 		"振り抜き終端で1.25倍候補の伸長ピークへ到達していません: " + label
 	)
 	_expect(
