@@ -5,7 +5,7 @@ const FIXED_FRACTION: float = 0.62
 const FULL_FRACTION: float = 0.80
 const ENTRY_SECONDS: float = 0.055
 const EXIT_SECONDS: float = 0.08
-const PREPARE_ANGLE: float = 0.10
+const PREPARE_ANGLE: float = 0.24
 const SWEEP_ANGLE: float = -0.72
 const RECOIL_ANGLE: float = 0.12
 const HEAD_MOVE_PX: float = 3.0
@@ -13,13 +13,13 @@ const HEAD_MOVE_PX: float = 3.0
 
 static func sweep_at(elapsed: float, duration: float) -> float:
 	var u: float = clampf(elapsed / maxf(duration, 0.001), 0.0, 1.0)
-	if u < 0.22:
-		return lerpf(0.0, PREPARE_ANGLE, smoothstep(0.0, 0.22, u))
-	if u < 0.58:
-		return lerpf(PREPARE_ANGLE, SWEEP_ANGLE, smoothstep(0.22, 0.58, u))
-	if u < 0.82:
-		return lerpf(SWEEP_ANGLE, RECOIL_ANGLE, smoothstep(0.58, 0.82, u))
-	return lerpf(RECOIL_ANGLE, 0.0, smoothstep(0.82, 1.0, u))
+	if u < 0.12:
+		return lerpf(0.0, PREPARE_ANGLE, smoothstep(0.0, 0.12, u))
+	if u < 0.52:
+		return lerpf(PREPARE_ANGLE, SWEEP_ANGLE, smoothstep(0.12, 0.52, u))
+	if u < 0.76:
+		return lerpf(SWEEP_ANGLE, RECOIL_ANGLE, smoothstep(0.52, 0.76, u))
+	return lerpf(RECOIL_ANGLE, 0.0, smoothstep(0.76, 1.0, u))
 
 
 static func centers_of(vertices: PackedVector2Array, width_points: int) -> PackedVector2Array:
