@@ -1212,3 +1212,17 @@ NeckRangeの9 controlは旧root集中配置を廃止し、手描き中心線の�
 - 初動tip hookを避けるため、reference control配置へ切り替えた後もPREPのdirectional amount上限0.20と連続blendを維持する。
 
 Bezier候補P1/P2/P3はこの時点で不採用。今後のHuman Verificationは33点reference curveを基準に行う。
+
+
+#### 手描きbone配置でのActive wave hold
+
+9 controlを手描き曲線へ再配置した結果、従来のdirectional clampがwave hold中のcontrolまで上流へ引き戻し、30fpsではroot/middle/tipのforward crossが同frameになることを確認した。
+
+原因は、Active wave holdがtargetを前substep角へ保持しても、その後段のcontrol差clampが現在substepの上流角を基準に再制限するためである。
+
+修正:
+- wave到達前のhold weightをclamp段へも伝える。
+- hold中はcontrol間許容差を通常値から **0.42rad** まで拡張し、下流boneが旧方向へ残れる余白を与える。
+- wave releaseに合わせて0.42rad→通常control stepへ連続的に戻す。
+- clamp自体を無効化しない。0.42radは9 control全体の総曲率2.20rad契約を超えない範囲の上限候補とする。
+- 採用条件は30/60/120fpsでroot < middle < tip、最大総曲率<=2.20rad、端点・伸長・tip速度条件を同時に満たすこと。
