@@ -564,7 +564,10 @@ func visual_vertices_from_angles(values: PackedFloat32Array) -> PackedVector2Arr
 	for i in range(length_scales.size()):
 		# 根元固定を守り、弧長方向にだけ伸縮を増やす。
 		var s: float = clampf(fractions[i], 0.0, 1.0)
-		var weight: float = smoothstep(0.08, 1.0, s)
+		# 根元座標は固定したまま、根元直後から毛束全体へ伸長を分散する。
+		# 以前の0.08→1.0勾配では全長伸長が小さく毛先寄りだったため、
+		# 0.02→0.30で立ち上げ、振り抜き時は全体が勢いで伸びる形にする。
+		var weight: float = smoothstep(0.02, 0.30, s)
 		var local_stretch: float = _soft_elastic_stretch
 		if _soft_active_progress >= 0.0 and soft_active_preload_contraction < -0.000001:
 			# 後端の圧縮をroot→middle→tipの順に解放する。
@@ -653,7 +656,7 @@ func _advance_softness(
 	_soft_directional_amount = clampf(directional_amount, 0.0, 1.0) * bounded
 	_soft_directional_direction = clampf(directional_direction, -1.0, 1.0)
 	_soft_active_progress = clampf(active_progress, -1.0, 1.0)
-	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.14) * bounded
+	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.35) * bounded
 	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
 		_reset_soft_motion()
 		return
