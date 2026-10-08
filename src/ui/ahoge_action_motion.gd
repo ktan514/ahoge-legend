@@ -60,6 +60,7 @@ const SOFT_ACTIVE_TIP_DIRECT_GAIN: float = 0.0
 const SOFT_ACTIVE_TIP_DRIVE_GAIN: float = 1.0
 const SOFT_ACTIVE_TIP_DAMPING_RATIO: float = 1.0
 const SOFT_ACTIVE_PRELOAD_CONTRACTION: float = 0.0
+const SOFT_DIRECTIONAL_CLAMP_PREVIOUS_UPSTREAM: bool = false
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -138,6 +139,7 @@ var soft_active_tip_direct_gain: float = SOFT_ACTIVE_TIP_DIRECT_GAIN
 var soft_active_tip_drive_gain: float = SOFT_ACTIVE_TIP_DRIVE_GAIN
 var soft_active_tip_damping_ratio: float = SOFT_ACTIVE_TIP_DAMPING_RATIO
 var soft_active_preload_contraction: float = SOFT_ACTIVE_PRELOAD_CONTRACTION
+var soft_directional_clamp_previous_upstream: bool = SOFT_DIRECTIONAL_CLAMP_PREVIOUS_UPSTREAM
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -175,6 +177,8 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 			var raw_value = tuning[key]
 			if typeof(raw_value) not in [TYPE_FLOAT, TYPE_INT] or not is_finite(float(raw_value)):
 				return false
+	if tuning.has("directional_clamp_previous_upstream") and typeof(tuning["directional_clamp_previous_upstream"]) != TYPE_BOOL:
+		return false
 
 	soft_control_targets = targets
 	soft_root_hinge_hz = maxf(0.01, float(tuning.get("root_hinge_hz", soft_root_hinge_hz)))
@@ -213,6 +217,10 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_tip_drive_gain = maxf(1.0, float(tuning.get("active_tip_drive_gain", soft_active_tip_drive_gain)))
 	soft_active_tip_damping_ratio = clampf(float(tuning.get("active_tip_damping_ratio", soft_active_tip_damping_ratio)), 0.05, 1.0)
 	soft_active_preload_contraction = clampf(float(tuning.get("active_preload_contraction", soft_active_preload_contraction)), -0.08, 0.0)
+	soft_directional_clamp_previous_upstream = bool(tuning.get(
+		"directional_clamp_previous_upstream",
+		soft_directional_clamp_previous_upstream
+	))
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -255,7 +263,8 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_tip_direct_gain": soft_active_tip_direct_gain,
 		"active_tip_drive_gain": soft_active_tip_drive_gain,
 		"active_tip_damping_ratio": soft_active_tip_damping_ratio,
-		"active_preload_contraction": soft_active_preload_contraction
+		"active_preload_contraction": soft_active_preload_contraction,
+		"directional_clamp_previous_upstream": soft_directional_clamp_previous_upstream
 	}
 
 
@@ -756,7 +765,13 @@ func _advance_softness(
 			if directional_weight > 0.000001:
 				# 描画segmentではなく動的control同士の差を制限する。
 				# controlの速度状態は残すため、rootの変化を同一frameでtipまで書き換えない。
-				var upstream_world: float = _soft_world_angles[control - 1]
+				# NeckRangeでは前substepの上流角をclamp基準にし、同じsubstepで更新した
+				# root/middleの新角度がclamp経由でtipまで一気に伝わるのを防ぐ。
+				var upstream_world: float = (
+					previous_world[control - 1]
+					if soft_directional_clamp_previous_upstream
+					else _soft_world_angles[control - 1]
+				)
 				var relative_angle: float = wrapf(world_angle - upstream_world, -PI, PI)
 				var control_step_limit: float = lerpf(
 					soft_directional_control_step,
