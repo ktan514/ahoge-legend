@@ -13,6 +13,7 @@ extends Resource
 @export var section_right_px: PackedVector2Array = PackedVector2Array()
 @export var straight_direction: float = -0.85
 @export var idle_pose_vertices: PackedVector2Array = PackedVector2Array()
+@export var idle_centerline_scale: Vector2 = Vector2.ONE
 var bind_vertices: PackedVector2Array = PackedVector2Array()
 
 const WIDTH_POINTS: int = 5
@@ -53,6 +54,12 @@ func prepare() -> bool:
 	if not idle_pose_vertices.is_empty():
 		if idle_pose_vertices.size() != bind_vertices.size() or not idle_pose_vertices[0].is_equal_approx(Vector2.ZERO):
 			return false
+		if (
+			not idle_centerline_scale.is_finite()
+			or idle_centerline_scale.x <= 0.0
+			or idle_centerline_scale.y <= 0.0
+		):
+			return false
 		for point in idle_pose_vertices:
 			if not point.is_finite():
 				return false
@@ -62,6 +69,45 @@ func prepare() -> bool:
 			var first: int = 1 + row * WIDTH_POINTS
 			centers.append((rest_vertices[first] + rest_vertices[first + WIDTH_POINTS - 1]) * 0.5 + root_anchor_px)
 		centers.append(rest_vertices[-1] + root_anchor_px)
+		if not idle_centerline_scale.is_equal_approx(Vector2.ONE):
+			var source_centers: PackedVector2Array = centers.duplicate()
+			var posed_centers: PackedVector2Array = PackedVector2Array()
+			for center in source_centers:
+				var local: Vector2 = center - root_anchor_px
+				posed_centers.append(
+					root_anchor_px + Vector2(
+						local.x * idle_centerline_scale.x,
+						local.y * idle_centerline_scale.y
+					)
+				)
+			var scaled_vertices: PackedVector2Array = rest_vertices.duplicate()
+			scaled_vertices[0] = Vector2.ZERO
+			for row in range(count):
+				var center_index: int = row + 1
+				var source_tangent: Vector2 = _tangent(source_centers, center_index)
+				var posed_tangent: Vector2 = _tangent(posed_centers, center_index)
+				if source_tangent.length() <= 0.000001 or posed_tangent.length() <= 0.000001:
+					return false
+				var turn: float = wrapf(
+					posed_tangent.angle() - source_tangent.angle(),
+					-PI,
+					PI
+				)
+				for column in range(WIDTH_POINTS):
+					var vertex_index: int = 1 + row * WIDTH_POINTS + column
+					var relative: Vector2 = (
+						rest_vertices[vertex_index]
+						+ root_anchor_px
+						- source_centers[center_index]
+					)
+					scaled_vertices[vertex_index] = (
+						posed_centers[center_index]
+						- root_anchor_px
+						+ relative.rotated(turn)
+					)
+			scaled_vertices[-1] = posed_centers[-1] - root_anchor_px
+			rest_vertices = scaled_vertices
+			centers = posed_centers
 	for column in range(WIDTH_POINTS - 1):
 		_append_triangle(0, 1 + column, 2 + column)
 	for row in range(count - 1):
