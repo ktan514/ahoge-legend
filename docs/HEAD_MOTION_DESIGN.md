@@ -611,3 +611,17 @@ Active Driveの位相再配分後、direction target自体を22%→62%反転か�
 direction targetの開始を早めてcross時刻を合わせる方法は禁止する。cross順序はPassive chainの伝播と毛先側慣性で作る。
 
 direction targetを従来時刻へ戻した上で、middle→tipが同frameに残る場合は毛先側慣性だけを微増する。NeckRange専用active tip massは1.60→1.90を次候補とし、active tip drive gain=1.75は維持する。これにより毛先は前半でさらに1frame遅れ、後半では既存の能動driveにより中央を上回る速度で前方へ抜ける。
+
+
+#### 2026-10-08 middle→tip同frameの原因切り分け
+
+NeckRange専用active tip massを1.60→1.90へ増やしても、30fpsの前方crossは root/middle/tip = 0.09/0.12/0.12、60fpsは0.10/0.1167/0.1167のままで変化しなかった。一方、速度ピーク順序・毛先速度優位・弾性伸長・総曲率2.20rad以下は合格している。
+
+したがって残件は毛先の質量不足ではなく、directional control間角度差clampが同一積分substepで**更新済み上流control角度**を参照していることによる下流への即時伝播と判断する。
+
+- spring/coupling targetは従来どおり前substepの `previous_world[control - 1]` を参照する。
+- directional control差clampも、NeckRange専用では同じ `previous_world[control - 1]` を参照する。
+- 同じsubstepで更新した `_soft_world_angles[control - 1]` を下流clamp基準に使わない。これによりclamp自身がrootの新角度をmiddle→tipへ一気にコピーすることを防ぐ。
+- 通常Battle/MotionPreviewの共通defaultは変更しないため、この挙動はtuning flagでNeckRange専用に有効化する。
+- 既に合格しているtip速度優位、active drive、伸長、端点形状、総曲率上限は維持する。
+- 採用条件は30/60/120fpsすべてでroot < middle < tipを維持し、端点0.30秒内に前後ほぼ直線へ収束すること。
