@@ -23,14 +23,26 @@ const NORMAL_STRIKE_STRETCH: float = 0.14
 const NORMAL_RESIDUAL_STRETCH: float = 0.01
 const PARRY_RESET_SECONDS: float = 0.30
 
+const CHARGE_PREP_SECONDS: float = 0.20
 const REAR_HOLD_SECONDS: float = 0.30
 const STRIKE_SWING_SECONDS: float = 0.15
 const FRONT_HOLD_SECONDS: float = 0.30
+const RETURN_TO_IDLE_SECONDS: float = 0.30
+const IDLE_HOLD_SECONDS: float = 0.45
 const RESET_SECONDS: float = 0.30
 const PRELOAD_CONTRACTION: float = -0.035
 const STRIKE_STRETCH: float = 0.30
 const FRONT_RESIDUAL_STRETCH: float = 0.02
+# ATTACK_PREVIEW_SECONDSはチャージ攻撃本体の既存自動検証用。意味を変更しない。
 const ATTACK_PREVIEW_SECONDS: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS + RESET_SECONDS
+const CHARGED_PREVIEW_SECONDS: float = (
+	CHARGE_PREP_SECONDS
+	+ REAR_HOLD_SECONDS
+	+ STRIKE_SWING_SECONDS
+	+ FRONT_HOLD_SECONDS
+	+ RETURN_TO_IDLE_SECONDS
+	+ IDLE_HOLD_SECONDS
+)
 
 var fighter
 var viewport: SubViewport
@@ -240,7 +252,7 @@ func set_preview_mode(index: int) -> void:
 	_apply_ratio(0.0)
 	match selected:
 		PreviewMode.CHARGED_ATTACK:
-			_notice.text = "チャージ攻撃: 現在の承認候補。後方で溜め、振り抜き時に一時約1.25倍へ伸びます。"
+			_notice.text = "チャージ攻撃: 溜め→攻撃→基準0D・待機C字への復帰→0.45秒静止まで確認できます。"
 		PreviewMode.NORMAL_ATTACK:
 			_notice.text = "通常攻撃: 未承認の初期候補。チャージ攻撃より短く軽い動作としてここから調整します。"
 		PreviewMode.PARRY:
@@ -387,6 +399,94 @@ static func attack_preview_ratio(seconds: float) -> float:
 	return lerpf(0.4, -0.4, back)
 
 
+func _charged_ratio(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	if t < CHARGE_PREP_SECONDS:
+		return lerpf(0.0, -0.4, smoothstep(0.0, CHARGE_PREP_SECONDS, t))
+	t -= CHARGE_PREP_SECONDS
+	if t < REAR_HOLD_SECONDS:
+		return -0.4
+	t -= REAR_HOLD_SECONDS
+	if t < STRIKE_SWING_SECONDS:
+		return lerpf(-0.4, 0.4, smoothstep(0.0, STRIKE_SWING_SECONDS, t))
+	t -= STRIKE_SWING_SECONDS
+	if t < FRONT_HOLD_SECONDS:
+		return 0.4
+	t -= FRONT_HOLD_SECONDS
+	if t < RETURN_TO_IDLE_SECONDS:
+		return lerpf(0.4, 0.0, smoothstep(0.0, RETURN_TO_IDLE_SECONDS, t))
+	return 0.0
+
+
+func _charged_directional_amount(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	if t < CHARGE_PREP_SECONDS:
+		return smoothstep(0.0, CHARGE_PREP_SECONDS, t)
+	t -= CHARGE_PREP_SECONDS
+	var active_seconds: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS
+	if t < active_seconds:
+		return 1.0
+	t -= active_seconds
+	if t < RETURN_TO_IDLE_SECONDS:
+		return lerpf(1.0, 0.0, smoothstep(0.0, RETURN_TO_IDLE_SECONDS, t))
+	return 0.0
+
+
+func _charged_direction(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	if t < CHARGE_PREP_SECONDS:
+		return -1.0
+	t -= CHARGE_PREP_SECONDS
+	var core_seconds: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS
+	if t < core_seconds:
+		return attack_preview_direction(t)
+	return 1.0
+
+
+func _charged_active_progress(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	if t < CHARGE_PREP_SECONDS:
+		return 0.0
+	t -= CHARGE_PREP_SECONDS
+	var core_seconds: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS
+	if t < core_seconds:
+		return attack_preview_active_progress(t)
+	return -1.0
+
+
+func _charged_elastic_stretch(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	if t < CHARGE_PREP_SECONDS:
+		return lerpf(0.0, PRELOAD_CONTRACTION, smoothstep(0.0, CHARGE_PREP_SECONDS, t))
+	t -= CHARGE_PREP_SECONDS
+	if t < REAR_HOLD_SECONDS:
+		return PRELOAD_CONTRACTION
+	t -= REAR_HOLD_SECONDS
+	if t < STRIKE_SWING_SECONDS:
+		var strike_u: float = clampf(t / STRIKE_SWING_SECONDS, 0.0, 1.0)
+		return lerpf(PRELOAD_CONTRACTION, STRIKE_STRETCH, smoothstep(0.68, 1.00, strike_u))
+	t -= STRIKE_SWING_SECONDS
+	if t < FRONT_HOLD_SECONDS:
+		var front_u: float = clampf(t / FRONT_HOLD_SECONDS, 0.0, 1.0)
+		return lerpf(STRIKE_STRETCH, FRONT_RESIDUAL_STRETCH, smoothstep(0.0, 0.40, front_u))
+	t -= FRONT_HOLD_SECONDS
+	if t < RETURN_TO_IDLE_SECONDS:
+		return lerpf(FRONT_RESIDUAL_STRETCH, 0.0, smoothstep(0.0, 0.65, t / RETURN_TO_IDLE_SECONDS))
+	return 0.0
+
+
+func _charged_is_idle_hold(seconds: float) -> bool:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	var idle_start: float = (
+		CHARGE_PREP_SECONDS
+		+ REAR_HOLD_SECONDS
+		+ STRIKE_SWING_SECONDS
+		+ FRONT_HOLD_SECONDS
+		+ RETURN_TO_IDLE_SECONDS
+	)
+	return t >= idle_start
+
+
 func _normal_cycle_seconds() -> float:
 	var config = ConfigScript.new()
 	return NORMAL_PREP_SECONDS + config.normal_strike_seconds + NORMAL_FRONT_HOLD_SECONDS + NORMAL_RESET_SECONDS
@@ -404,7 +504,7 @@ func preview_cycle_seconds() -> float:
 		PreviewMode.PARRY:
 			return _parry_cycle_seconds()
 		_:
-			return ATTACK_PREVIEW_SECONDS
+			return CHARGED_PREVIEW_SECONDS
 
 
 func _normal_ratio(seconds: float) -> float:
@@ -520,12 +620,15 @@ func _apply_preview_frame(seconds: float, delta: float) -> void:
 			_apply_ratio(_parry_ratio(seconds), delta)
 		_:
 			fighter.set_neck_preview_action(StateScript.ActionState.IDLE, 1.0)
-			fighter.set_neck_ahoge_directional_extension(1.0, attack_preview_direction(seconds))
-			fighter.set_neck_ahoge_attack_profile(
-				attack_preview_active_progress(seconds),
-				attack_preview_elastic_stretch(seconds)
+			fighter.set_neck_ahoge_directional_extension(
+				_charged_directional_amount(seconds),
+				_charged_direction(seconds)
 			)
-			_apply_ratio(attack_preview_ratio(seconds), delta)
+			fighter.set_neck_ahoge_attack_profile(
+				_charged_active_progress(seconds),
+				_charged_elastic_stretch(seconds)
+			)
+			_apply_ratio(_charged_ratio(seconds), delta)
 
 
 func _process(delta: float) -> void:
