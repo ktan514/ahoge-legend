@@ -311,7 +311,7 @@ static func attack_preview_elastic_stretch(seconds: float) -> float:
 	t -= REAR_HOLD_SECONDS
 	if t < STRIKE_SWING_SECONDS:
 		var strike_u: float = clampf(t / STRIKE_SWING_SECONDS, 0.0, 1.0)
-		return lerpf(PRELOAD_CONTRACTION, STRIKE_STRETCH, smoothstep(0.05, 0.90, strike_u))
+		return lerpf(PRELOAD_CONTRACTION, STRIKE_STRETCH, smoothstep(0.68, 1.00, strike_u))
 	t -= STRIKE_SWING_SECONDS
 	if t < FRONT_HOLD_SECONDS:
 		var front_u: float = clampf(t / FRONT_HOLD_SECONDS, 0.0, 1.0)
