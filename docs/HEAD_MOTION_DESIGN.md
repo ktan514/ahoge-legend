@@ -910,13 +910,25 @@ NeckRangePreviewのチャージ攻撃モードは、攻撃本体の調整値を�
 4. **STRIKE_SWING**: 既存0.15秒の前方切り返し。頭部・Active Drive・一時伸長は変更しない。
 5. **FRONT_HOLD**: 既存0.30秒。振り抜き時の約1.25倍overshoot後、残留伸長へ戻る。
 6. **RETURN_TO_IDLE**: 前端+0.4Dから基準0Dへ戻しながらdirectional amountを1→0、elastic stretchを0へ戻す。待機C字へ自然復帰させる。
-7. **IDLE_HOLD**: 基準0D・待機C字のまま静止し、Human Verificationで復帰完了を目視できる時間を確保する。
+7. **IDLE_HOLD**: 基準0D・待機C字へ自然減衰し、Human Verificationで復帰途中から復帰完了まで目視できる時間を確保する。
 
 初期候補:
 - CHARGE_PREP = 0.20秒
 - RETURN_TO_IDLE = 0.30秒
-- IDLE_HOLD = 0.45秒
+- IDLE_HOLD = 1.20秒
 
 ループ境界はIDLE_HOLD終端→次周期CHARGE_PREP開始とし、前端や後端へ瞬間ジャンプしない。
 
 既存の `attack_preview_*` 関数は、チャージ攻撃本体の詳細自動検証で使用しているため意味を変更しない。UIループ用にフルサイクル関数を追加し、既存の速度・曲率・1.25倍伸長検証を壊さない。
+
+
+#### 2026-10-08 待機C字への自然復帰時間
+
+初回のIDLE_HOLD=0.45秒では、directional amount=0、elastic stretch=0、Active Drive解除、頭部0Dまでは戻ったが、柔らかいcontrol chainが標準C字へ十分収束しきらず自動検証で不合格になった。
+
+標準形状へ瞬間スナップさせるのではなく、復帰運動そのものをHuman Verificationしたいため、IDLE_HOLDを **1.20秒** へ延長する。
+
+- RETURN_TO_IDLE 0.30秒は維持。
+- その後1.20秒、頭部0D・directional amount=0・elastic stretch=0・Active Drive解除のまま自然減衰させる。
+- 待機区間終盤でprofile標準C字へ収束していることを自動検証する。
+- ループ境界は標準C字→次のCHARGE_PREP開始とし、形状の瞬間ジャンプを作らない。
