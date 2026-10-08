@@ -458,6 +458,10 @@ func _charged_active_progress(seconds: float) -> float:
 	var core_seconds: float = REAR_HOLD_SECONDS + STRIKE_SWING_SECONDS + FRONT_HOLD_SECONDS
 	if t < core_seconds:
 		return attack_preview_active_progress(t)
+	t -= core_seconds
+	if t < RETURN_TO_IDLE_SECONDS:
+		# 復帰開始でActive Driveだけを切らず、directional amountと一緒に効力を抜く。
+		return 1.0
 	return -1.0
 
 
@@ -613,6 +617,10 @@ func _normal_active_progress(seconds: float) -> float:
 		return clampf(t / config.normal_strike_seconds, 0.0, 1.0)
 	t -= config.normal_strike_seconds
 	if t < NORMAL_FRONT_HOLD_SECONDS:
+		return 1.0
+	t -= NORMAL_FRONT_HOLD_SECONDS
+	if t < NORMAL_RETURN_TO_IDLE_SECONDS:
+		# RETURN中はdirectional amountを1→0へ下げることでActive Driveを連続的に抜く。
 		return 1.0
 	return -1.0
 
