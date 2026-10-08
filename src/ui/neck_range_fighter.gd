@@ -59,6 +59,8 @@ var ahoge_directional_amount: float = 0.0
 var ahoge_directional_direction: float = 0.0
 var ahoge_active_progress: float = -1.0
 var ahoge_elastic_stretch: float = 0.0
+var ahoge_preview_action_state: int = StateScript.ActionState.IDLE
+var ahoge_preview_action_duration: float = 1.0
 var _neck_soft_tuning_applied: bool = false
 
 
@@ -123,6 +125,25 @@ func set_neck_ahoge_attack_profile(active_progress: float, elastic_stretch: floa
 	return true
 
 
+func set_neck_preview_action(action_state: int, phase_duration: float = 1.0) -> bool:
+	if action_state not in [StateScript.ActionState.IDLE, StateScript.ActionState.PARRY]:
+		return false
+	if not is_finite(phase_duration) or phase_duration <= 0.0:
+		return false
+	ahoge_preview_action_state = action_state
+	ahoge_preview_action_duration = maxf(phase_duration, 0.001)
+	return true
+
+
+func reset_neck_preview_action() -> void:
+	ahoge_preview_action_state = StateScript.ActionState.IDLE
+	ahoge_preview_action_duration = 1.0
+	action_motion = ActionMotionScript.new()
+	_neck_soft_tuning_applied = false
+	if neck_preview_enabled:
+		_apply_neck_pose()
+
+
 func _neck_soft_attachment_angle() -> float:
 	return deg_to_rad(_head_rotation * facing)
 
@@ -155,6 +176,8 @@ func clear_neck_preview() -> void:
 	ahoge_directional_direction = 0.0
 	ahoge_active_progress = -1.0
 	ahoge_elastic_stretch = 0.0
+	ahoge_preview_action_state = StateScript.ActionState.IDLE
+	ahoge_preview_action_duration = 1.0
 	_head_offset = Vector2.ZERO
 	_head_velocity = Vector2.ZERO
 	_head_acceleration = Vector2.ZERO
@@ -215,9 +238,9 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 			if action_motion.configured and _ensure_neck_soft_tuning():
 				if dynamic_delta > 0.0:
 					action_motion.advance(
-						StateScript.ActionState.IDLE,
+						ahoge_preview_action_state,
 						dynamic_delta,
-						1.0,
+						ahoge_preview_action_duration,
 						1.0,
 						0.0,
 						true,
