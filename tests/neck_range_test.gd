@@ -122,7 +122,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 		"NeckRange専用middle側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(
-		float(tuning["directional_control_step_tip"]) >= 0.08 and float(tuning["directional_control_step_tip"]) <= 0.10,
+		float(tuning["directional_control_step_tip"]) >= 0.17 and float(tuning["directional_control_step_tip"]) <= 0.19,
 		"NeckRange専用tip側control間位相差上限が候補域から外れています: " + label
 	)
 	_expect(float(tuning["active_tip_mass"]) >= 1.50, "NeckRange専用の毛先慣性が不足しています: " + label)
