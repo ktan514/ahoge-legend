@@ -140,6 +140,11 @@ func _process(delta: float) -> void:
 	# NeckRangePreview / MotionPreview / 通常Battleで同じ柔らかさ設定を使用する。
 	# 溜め形そのものはActionMotionを正としつつ、頭部の後退・切り返しへ二次動作を重ねる。
 	var motion_softness: float = motion_softness_amount * _state_softness_weight(next_state)
+	var breath_sway_weight: float = 1.0 if next_state == CombatantStateScript.ActionState.IDLE else 0.20
+	var attachment_angle: float = (
+		deg_to_rad(_head_rotation)
+		+ _ahoge_breath_sway_radians() * breath_sway_weight
+	)
 	action_motion.advance(
 		next_state,
 		delta,
@@ -147,7 +152,7 @@ func _process(delta: float) -> void:
 		_max_charge_duration(),
 		charge,
 		bool(combat_state.ahoge_available),
-		deg_to_rad(_head_rotation),
+		attachment_angle,
 		motion_softness,
 		_head_offset.x
 	)
@@ -355,6 +360,8 @@ func _centerline_length(points: PackedVector2Array) -> float:
 
 func _neutral_transform() -> Transform2D:
 	var base_scale: float = maxf(0.21, get_viewport_rect().size.x / 5200.0)
+	if _ahoge_rig != null:
+		base_scale *= float(_ahoge_rig.display_scale)
 	# 頭部の位置と傾きはroot anchorへ反映済み。全毛束を一体で回さない。
 	# しなりはActionMotionへ任せ、接触補正後の歪みもここへ持ち越さない。
 	return Transform2D(0.0, Vector2.ONE * base_scale, 0.0, Vector2.ZERO)
