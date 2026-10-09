@@ -94,10 +94,10 @@ const SAKURAMIKO_SOFT_TUNING := {
 	"drive_limit": 0.00,
 	"max_offset": 0.90,
 	"active_arc_weight": 1.00,
-	"active_arc_charge_root_angle": -2.90,
-	"active_arc_charge_tip_angle": -2.70,
+	"active_arc_charge_root_angle": -2.95,
+	"active_arc_charge_tip_angle": -3.65,
 	"active_arc_release_root_angle": 0.15,
-	"active_arc_release_tip_angle": 0.55,
+	"active_arc_release_tip_angle": 0.65,
 	"active_wave_start_root": 0.05,
 	"active_wave_start_tip": 0.48,
 	"active_wave_full_root": 0.38,
@@ -113,6 +113,7 @@ var ahoge_directional_direction: float = 0.0
 var ahoge_active_progress: float = -1.0
 var ahoge_elastic_stretch: float = 0.0
 var ahoge_active_arc_amount: float = 0.0
+var ahoge_active_arc_progress: float = -1.0
 var ahoge_preview_action_state: int = StateScript.ActionState.IDLE
 var ahoge_preview_action_duration: float = 1.0
 var _neck_soft_tuning_applied: bool = false
@@ -180,17 +181,20 @@ func set_neck_ahoge_directional_extension(amount: float, direction: float) -> bo
 func set_neck_ahoge_attack_profile(
 	active_progress: float,
 	elastic_stretch: float,
-	active_arc_amount: float = 0.0
+	active_arc_amount: float = 0.0,
+	active_arc_progress: float = -1.0
 ) -> bool:
 	if (
 		not is_finite(active_progress)
 		or not is_finite(elastic_stretch)
 		or not is_finite(active_arc_amount)
+		or not is_finite(active_arc_progress)
 	):
 		return false
 	ahoge_active_progress = clampf(active_progress, -1.0, 1.0)
 	ahoge_elastic_stretch = clampf(elastic_stretch, -0.08, 0.70)
 	ahoge_active_arc_amount = clampf(active_arc_amount, 0.0, 1.0)
+	ahoge_active_arc_progress = clampf(active_arc_progress, -1.0, 1.0)
 	return true
 
 
@@ -250,6 +254,7 @@ func clear_neck_preview() -> void:
 	ahoge_active_progress = -1.0
 	ahoge_elastic_stretch = 0.0
 	ahoge_active_arc_amount = 0.0
+	ahoge_active_arc_progress = -1.0
 	ahoge_preview_action_state = StateScript.ActionState.IDLE
 	ahoge_preview_action_duration = 1.0
 	_head_offset = Vector2.ZERO
@@ -343,7 +348,8 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 						ahoge_directional_direction,
 						ahoge_active_progress,
 						ahoge_elastic_stretch,
-						ahoge_active_arc_amount
+						ahoge_active_arc_amount,
+						ahoge_active_arc_progress
 					)
 					idle_vertices = action_motion.visual_vertices()
 				else:
