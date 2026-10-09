@@ -63,6 +63,16 @@ const SOFT_ACTIVE_PRELOAD_CONTRACTION: float = 0.0
 const SOFT_ACTIVE_WAVE_HOLD: float = 0.0
 const SOFT_ACTIVE_DIRECTIONAL_CONTROL_STEP_TIP: float = SOFT_DIRECTIONAL_CONTROL_STEP_TIP
 const SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND: float = 1.0
+# Active arcはdefault無効。キャラクター固有Human Verificationでだけ有効化する。
+const SOFT_ACTIVE_ARC_WEIGHT: float = 0.0
+const SOFT_ACTIVE_ARC_CHARGE_ROOT_ANGLE: float = -PI
+const SOFT_ACTIVE_ARC_CHARGE_TIP_ANGLE: float = -PI
+const SOFT_ACTIVE_ARC_RELEASE_ROOT_ANGLE: float = 0.0
+const SOFT_ACTIVE_ARC_RELEASE_TIP_ANGLE: float = 0.0
+const SOFT_ACTIVE_WAVE_START_ROOT: float = 0.30
+const SOFT_ACTIVE_WAVE_START_TIP: float = 0.85
+const SOFT_ACTIVE_WAVE_FULL_ROOT: float = 0.50
+const SOFT_ACTIVE_WAVE_FULL_TIP: float = 1.00
 const SOFT_MAX_STEP: float = 1.0 / 240.0
 
 var configured: bool = false
@@ -144,6 +154,15 @@ var soft_active_preload_contraction: float = SOFT_ACTIVE_PRELOAD_CONTRACTION
 var soft_active_wave_hold: float = SOFT_ACTIVE_WAVE_HOLD
 var soft_active_directional_control_step_tip: float = SOFT_ACTIVE_DIRECTIONAL_CONTROL_STEP_TIP
 var soft_directional_clamp_upstream_blend: float = SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND
+var soft_active_arc_weight: float = SOFT_ACTIVE_ARC_WEIGHT
+var soft_active_arc_charge_root_angle: float = SOFT_ACTIVE_ARC_CHARGE_ROOT_ANGLE
+var soft_active_arc_charge_tip_angle: float = SOFT_ACTIVE_ARC_CHARGE_TIP_ANGLE
+var soft_active_arc_release_root_angle: float = SOFT_ACTIVE_ARC_RELEASE_ROOT_ANGLE
+var soft_active_arc_release_tip_angle: float = SOFT_ACTIVE_ARC_RELEASE_TIP_ANGLE
+var soft_active_wave_start_root: float = SOFT_ACTIVE_WAVE_START_ROOT
+var soft_active_wave_start_tip: float = SOFT_ACTIVE_WAVE_START_TIP
+var soft_active_wave_full_root: float = SOFT_ACTIVE_WAVE_FULL_ROOT
+var soft_active_wave_full_tip: float = SOFT_ACTIVE_WAVE_FULL_TIP
 
 
 func set_soft_tuning(tuning: Dictionary) -> bool:
@@ -175,7 +194,11 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"active_tip_mass", "active_root_direct_gain", "active_tip_direct_gain",
 		"active_tip_drive_gain", "active_tip_damping_ratio",
 		"active_preload_contraction", "active_wave_hold",
-		"active_directional_control_step_tip", "directional_clamp_upstream_blend"
+		"active_directional_control_step_tip", "directional_clamp_upstream_blend",
+		"active_arc_weight", "active_arc_charge_root_angle", "active_arc_charge_tip_angle",
+		"active_arc_release_root_angle", "active_arc_release_tip_angle",
+		"active_wave_start_root", "active_wave_start_tip",
+		"active_wave_full_root", "active_wave_full_tip"
 	]
 	for key in numeric_keys:
 		if tuning.has(key):
@@ -230,6 +253,43 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		0.0,
 		1.0
 	)
+	soft_active_arc_weight = clampf(
+		float(tuning.get("active_arc_weight", soft_active_arc_weight)),
+		0.0,
+		1.0
+	)
+	soft_active_arc_charge_root_angle = float(
+		tuning.get("active_arc_charge_root_angle", soft_active_arc_charge_root_angle)
+	)
+	soft_active_arc_charge_tip_angle = float(
+		tuning.get("active_arc_charge_tip_angle", soft_active_arc_charge_tip_angle)
+	)
+	soft_active_arc_release_root_angle = float(
+		tuning.get("active_arc_release_root_angle", soft_active_arc_release_root_angle)
+	)
+	soft_active_arc_release_tip_angle = float(
+		tuning.get("active_arc_release_tip_angle", soft_active_arc_release_tip_angle)
+	)
+	soft_active_wave_start_root = clampf(
+		float(tuning.get("active_wave_start_root", soft_active_wave_start_root)),
+		0.0,
+		1.0
+	)
+	soft_active_wave_start_tip = clampf(
+		float(tuning.get("active_wave_start_tip", soft_active_wave_start_tip)),
+		0.0,
+		1.0
+	)
+	soft_active_wave_full_root = clampf(
+		float(tuning.get("active_wave_full_root", soft_active_wave_full_root)),
+		soft_active_wave_start_root + 0.001,
+		1.0
+	)
+	soft_active_wave_full_tip = clampf(
+		float(tuning.get("active_wave_full_tip", soft_active_wave_full_tip)),
+		soft_active_wave_start_tip + 0.001,
+		1.0
+	)
 	_build_soft_controls()
 	_reset_soft_motion()
 	return true
@@ -275,7 +335,16 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_preload_contraction": soft_active_preload_contraction,
 		"active_wave_hold": soft_active_wave_hold,
 		"active_directional_control_step_tip": soft_active_directional_control_step_tip,
-		"directional_clamp_upstream_blend": soft_directional_clamp_upstream_blend
+		"directional_clamp_upstream_blend": soft_directional_clamp_upstream_blend,
+		"active_arc_weight": soft_active_arc_weight,
+		"active_arc_charge_root_angle": soft_active_arc_charge_root_angle,
+		"active_arc_charge_tip_angle": soft_active_arc_charge_tip_angle,
+		"active_arc_release_root_angle": soft_active_arc_release_root_angle,
+		"active_arc_release_tip_angle": soft_active_arc_release_tip_angle,
+		"active_wave_start_root": soft_active_wave_start_root,
+		"active_wave_start_tip": soft_active_wave_start_tip,
+		"active_wave_full_root": soft_active_wave_full_root,
+		"active_wave_full_tip": soft_active_wave_full_tip
 	}
 
 
