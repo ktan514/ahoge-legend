@@ -783,7 +783,7 @@ func _advance_softness(
 		var root_index: int = _soft_control_indices[0]
 		var root_local_baseline: float = current_angles[root_index]
 		var root_local_target: float = lerp_angle(root_local_baseline, directional_local_angle, directional_weight)
-		var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
+		var root_active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 		if (
 			soft_active_arc_weight * _soft_active_arc_amount > 0.000001
 			and _soft_active_progress >= 0.0
@@ -792,7 +792,7 @@ func _advance_softness(
 			var root_arc_progress: float = smoothstep(
 				soft_active_wave_start_root,
 				soft_active_wave_full_root,
-				active_q
+				root_active_q
 			)
 			var root_arc_local: float = lerpf(
 				soft_active_arc_charge_root_angle,
