@@ -34,6 +34,7 @@ const CHARGE_PREP_SECONDS: float = 0.20
 const REAR_HOLD_SECONDS: float = 0.30
 const STRIKE_SWING_SECONDS: float = 0.15
 const FRONT_HOLD_SECONDS: float = 0.30
+const CHARGED_ARC_FRONT_SECONDS: float = 0.18
 const RETURN_TO_IDLE_SECONDS: float = 0.30
 const IDLE_HOLD_SECONDS: float = 1.20
 const RESET_SECONDS: float = 0.30
@@ -529,6 +530,18 @@ func _charged_direction(seconds: float) -> float:
 	return 1.0
 
 
+func _charged_arc_progress(seconds: float) -> float:
+	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
+	var release_start: float = CHARGE_PREP_SECONDS + REAR_HOLD_SECONDS
+	if t <= release_start:
+		return 0.0
+	t -= release_start
+	var arc_seconds: float = STRIKE_SWING_SECONDS + CHARGED_ARC_FRONT_SECONDS
+	if t < arc_seconds:
+		return smoothstep(0.0, arc_seconds, t)
+	return 1.0
+
+
 func _charged_active_progress(seconds: float) -> float:
 	var t: float = fposmod(maxf(seconds, 0.0), CHARGED_PREVIEW_SECONDS)
 	if t < CHARGE_PREP_SECONDS:
@@ -809,7 +822,8 @@ func _apply_preview_frame(seconds: float, delta: float) -> void:
 			fighter.set_neck_ahoge_attack_profile(
 				_charged_active_progress(seconds),
 				_charged_elastic_stretch(seconds),
-				1.0
+				1.0,
+				_charged_arc_progress(seconds)
 			)
 			_apply_ratio(_charged_ratio(seconds), delta)
 
