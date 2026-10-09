@@ -1524,3 +1524,28 @@ rootは安定させ、bend apex以降だけ自由度・慣性を増やす。全�
 - tipの速度ピークがmiddleより後かつ大きい。
 - rootは頭部anchorから外れない。
 - U字/loopを作らず、総曲率の安全上限は引き続き監視する。
+
+
+### 赤青軌道の時間軸を頭部切り返しから分離
+
+初回実描画候補では、青のarc progressを既存 `active_progress` と共用したため、0.15秒の頭部STRIKE内でtipまでrelease targetへ進みすぎた。これでは手描き青軌道の「上を通る扇」が視認できず、左→右下へのsnapに見える。
+
+修正:
+
+- 頭部のSTRIKE_SWING_SECONDS=0.15秒は維持する。
+- Active Driveの既存 `active_progress` も伸長・mass・接触契約用として維持する。
+- 扇状軌道専用に `active_arc_progress` を追加する。
+- さくらみこチャージでは、blue arcを **0.33秒** で0→1へ進める。
+  - 0.15秒の頭部切り返し
+  - + FRONT_HOLD最初の0.18秒
+- rootは既存wave timingで先に反応し、tipは物理遅れとwave timingの両方で後続する。
+- blue arc終了後もFRONT_HOLD残り0.12秒は右下方向の振り抜き姿勢を保持し、その後RETURNへ入る。
+
+charge終端角候補も、後方fanを明確にするため更新する。
+
+- C0 charge: -2.95rad
+- C8 charge: -3.65rad
+- C0 release: +0.15rad
+- C8 release: +0.65rad
+
+これによりfull chargeでroot側は左上寄り、tip側は左下寄りとなり、straight boardではなく後方fanを作る。releaseはunwrapped angleを-3.65→+0.65へ連続増加させ、左後方→上→右→右下を通る。
