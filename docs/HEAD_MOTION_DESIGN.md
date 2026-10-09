@@ -1293,3 +1293,83 @@ Bezier候補P1/P2/P3はこの時点で不採用。今後のHuman Verificationは
 - prototype `LONG_TEST` / `SHORT_TEST` は回帰試験用として残す。
 
 検証画面はCatalog全体を読むが、実assetが不足する項目を勝手にprototype素材へ置換しない。正式キャラクターとprototypeを混同しない。
+
+
+## さくらみこ: 待機ボーン形状・呼吸・表示倍率
+
+2026-10-09 Human Verificationで、さくらみこの待機アホ毛について次を指定された。
+
+- 現在の縦長形ではなく、画面上の赤線のような**横へ倒れた大きいC字**へボーン/meshを曲げる。
+- 頭部を呼吸で上下させる。
+- アホ毛は頭部のrootへ固定追従しつつ、呼吸へ少し遅れて柔らかく揺れる。
+- 現在の表示サイズは少し小さいため、さくらみこだけ少し拡大する。
+
+### 待機形状
+
+アップロードされた赤線markupを形状指示として用いる。画像そのものへ赤線を焼き込まない。
+
+形状要件:
+
+1. rootは頭頂anchor固定。
+2. root直後は左側へ逃がす。
+3. 弧長20〜35%で左側の最外点を作る。
+4. そこから低い大きなC字で右上へ回り込む。
+5. 弧長85〜100%は右側へ伸び、tipのみ軽く下向きへ返す。
+6. 待機時に縦長の「J」や真上へ立つ形へ戻さない。
+7. source textureの色・模様・UVは維持し、centerline/bone変形で形を作る。
+
+さくらみこ用 `ahoge_profile.tres` は、実素材 `assets/characters/sakuramiko/ahoge.png` からbind meshを作り、markupの中心線を弧長正規化してsource centerlineと同等の基準弧長へ写像する。これにより「形」は赤線へ合わせつつ、攻撃用の弧長契約を不用意に変えない。
+
+### 表示倍率
+
+さくらみこ専用 `ahoge_display_scale` 初期候補を **1.15** とする。
+
+- 頭部anchor/root位置は拡大しても不変。
+- meshだけroot基準で15%拡大。
+- LONG_TEST等のprototypeは1.00のまま。
+- Human Verificationで大きすぎ/小さすぎなら、profile形状ではなくこの倍率を調整する。
+
+### 呼吸
+
+CharacterDefinitionへキャラ固有の呼吸値を持たせる。
+
+さくらみこ初期候補:
+
+- head breath primary amplitude: **4.0px**
+- secondary amplitude: **1.2px**
+- primary angular frequency: **2.0 rad/s**
+- secondary angular frequency: **0.8 rad/s**
+- ahoge breath sway amplitude: **2.2°**
+- sway phase lag: **0.55rad**
+
+頭部:
+- IDLE/確認待機中は呼吸位相を連続更新し、Yへ上下動を加える。
+- 攻撃時の既存head motionへも小さい呼吸成分は加算可能だが、Active motionを視認しにくくしないようweightを下げる。
+
+アホ毛:
+- root座標は毎frame頭部anchorへ完全一致する。
+- 呼吸によるroot誤差を作らない。
+- mesh内部のsoft chainへ、頭部呼吸より0.55rad遅れた±2.2°の小さいattachment swayを与える。
+- directional attack中はsway weightを `1 - directional_amount` で減衰し、攻撃方向制御を邪魔しない。
+- Preview停止中でも呼吸は止めない。NeckRangePreviewは待機中も `advance_neck_preview(delta)` を進める。
+
+### キャラクター固有profile
+
+CharacterDefinitionへ以下を追加する。
+
+- `ahoge_profile_path`
+- `ahoge_display_scale`
+- 呼吸振幅/速度
+- `ahoge_breath_sway_degrees`
+- `ahoge_breath_sway_phase_lag`
+
+AhogePrototypeRig / AhogeMeshDeformerはcharacterのprofile pathを受け取る。texture pathからprototype profileを推測する方式は後方互換fallbackとしてのみ残す。
+
+採用条件:
+
+- 待機形状が赤線の方向へ明確に横倒しC字化する。
+- root errorは0px相当を維持。
+- 呼吸中に頭部Yが上下し、アホ毛rootも同量追従する。
+- root相対のtip/中腹は小さく揺れ、完全剛体追従にならない。
+- さくらみこだけ約1.15倍、prototype表示倍率は変わらない。
+- 攻撃/パリィ契約と既存CIを壊さない。
