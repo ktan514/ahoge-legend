@@ -4,6 +4,7 @@ const PreviewScene := preload("res://tools/motion_preview/NeckRangePreview.tscn"
 const StateScript := preload("res://src/domain/combatant_state.gd")
 const ConfigScript := preload("res://src/config/combat_config.gd")
 const CatalogScript := preload("res://src/domain/character_catalog.gd")
+const ParryScript := preload("res://src/ui/ahoge_parry_motion.gd")
 const OUT: String = "res://artifacts/neck-range/"
 var failures: Array[String] = []
 var cases: Array = []
@@ -35,6 +36,73 @@ func _run() -> void:
 	if not scene.ready_for_input:
 		quit(1)
 		return
+	# さくらみこ固有の待機形状・倍率・呼吸設定を固定する。
+	var sakuramiko = CatalogScript.get_by_id("SAKURAMIKO")
+	_expect(sakuramiko != null, "さくらみこの定義がありません")
+	_expect(
+		str(sakuramiko.ahoge_profile_path) == "res://assets/characters/sakuramiko/ahoge_profile.tres",
+		"さくらみこのアホ毛profile pathが不正です"
+	)
+	_expect(absf(float(sakuramiko.ahoge_display_scale) - 1.15) < 0.0001, "さくらみこのアホ毛表示倍率")
+	_expect(absf(float(sakuramiko.breath_primary_amplitude_px) - 4.0) < 0.0001, "さくらみこの呼吸主振幅")
+	_expect(absf(float(sakuramiko.breath_secondary_amplitude_px) - 1.2) < 0.0001, "さくらみこの呼吸副振幅")
+	_expect(absf(float(sakuramiko.ahoge_breath_sway_degrees) - 2.2) < 0.0001, "さくらみこのアホ毛呼吸揺れ")
+	_expect(absf(float(sakuramiko.ahoge_breath_sway_phase_lag) - 0.55) < 0.0001, "さくらみこの呼吸位相遅れ")
+	var sakuramiko_profile = load("res://assets/characters/sakuramiko/ahoge_profile.tres")
+	_expect(sakuramiko_profile != null and sakuramiko_profile.prepare(), "さくらみこのアホ毛profileを準備できません")
+	if sakuramiko_profile != null and sakuramiko_profile.prepare():
+		_expect(sakuramiko_profile.idle_reference_curve.size() == 33, "赤線待機中心線のsample数")
+		_expect(sakuramiko_profile.section_left_px.size() == 33, "さくらみこmesh断面数")
+		var reference_curve: PackedVector2Array = sakuramiko_profile.idle_reference_curve
+		var min_x: float = INF
+		var max_x: float = -INF
+		var min_y: float = INF
+		var max_y: float = -INF
+		for point in reference_curve:
+			min_x = minf(min_x, point.x)
+			max_x = maxf(max_x, point.x)
+			min_y = minf(min_y, point.y)
+			max_y = maxf(max_y, point.y)
+		_expect(reference_curve[1].x < -20.0, "赤線形状が根元直後から左へ曲がりません")
+		_expect(min_x < -280.0, "赤線形状の左側C字が浅すぎます")
+		_expect(max_x > 650.0, "赤線形状が右側まで回り込みません")
+		_expect(min_y < -490.0, "赤線形状の上端が低すぎます")
+		_expect(reference_curve[-1].x > 600.0, "赤線形状の毛先が右側にありません")
+		_expect(reference_curve[-1].y > min_y + 80.0, "赤線形状の毛先が下へ返っていません")
+		var rest_centers: PackedVector2Array = ParryScript.centers_of(
+			sakuramiko_profile.rest_vertices,
+			sakuramiko_profile.WIDTH_POINTS
+		)
+		_expect(rest_centers.size() == 35, "さくらみこ待機mesh中心線数")
+		_expect(rest_centers[0].is_equal_approx(Vector2.ZERO), "さくらみこ待機root")
+
+	# Preview停止中も頭部が呼吸し、アホ毛rootは頭部anchorへ固定されたまま少し遅れて揺れる。
+	var breath_fighter = scene.fighter
+	var breath_mesh = breath_fighter.find_child("AhogeDeformMesh", true, false)
+	var breath_y_min: float = INF
+	var breath_y_max: float = -INF
+	var breath_root_error: float = 0.0
+	var initial_tip: Vector2 = breath_mesh.current_vertices[-1] if breath_mesh != null else Vector2.ZERO
+	var breath_tip_motion: float = 0.0
+	for _breath_frame in range(180):
+		breath_fighter.advance_neck_preview(1.0 / 60.0)
+		breath_y_min = minf(breath_y_min, breath_fighter._head_offset.y)
+		breath_y_max = maxf(breath_y_max, breath_fighter._head_offset.y)
+		breath_root_error = maxf(
+			breath_root_error,
+			breath_fighter.ahoge_root_canvas_position().distance_to(
+				breath_fighter.ahoge_head_anchor_canvas_position()
+			)
+		)
+		if breath_mesh != null:
+			breath_tip_motion = maxf(
+				breath_tip_motion,
+				breath_mesh.current_vertices[-1].distance_to(initial_tip)
+			)
+	_expect(breath_y_max - breath_y_min >= 6.0, "待機中に頭部が呼吸で上下していません")
+	_expect(breath_root_error < 0.02, "呼吸中にアホ毛rootが頭部anchorから外れます")
+	_expect(breath_tip_motion >= 0.25, "呼吸に対してアホ毛が剛体追従し、遅れ揺れがありません")
+
 	for resolution in [0, 1]:
 		for side in [0, 1]:
 			scene._resolution.select(resolution)
