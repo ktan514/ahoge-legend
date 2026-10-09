@@ -131,7 +131,12 @@ func _refresh_asset_mode() -> void:
 
 	_head_sprite.texture = head_texture
 	_cache_ahoge_head_anchor()
-	_ahoge_rig.configure(ahoge_texture, facing)
+	_ahoge_rig.configure(
+		ahoge_texture,
+		facing,
+		str(character.ahoge_profile_path),
+		float(character.ahoge_display_scale)
+	)
 	_asset_root.visible = true
 	_asset_mode = true
 	# 画像modeではアホ毛をFighterVisual矩形でclipしない。
@@ -192,12 +197,47 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-func _prototype_head_target(charge_ratio: float) -> Vector2:
-	var breathe := (
-		sin(_breath_phase * 2.0 + (0.0 if facing > 0.0 else 0.7)) * 4.0
-		+ sin(_breath_phase * 0.8) * 1.6
+func _idle_breath_y() -> float:
+	var phase_offset: float = 0.0 if facing > 0.0 else 0.7
+	var primary_amplitude: float = (
+		float(character.breath_primary_amplitude_px)
+		if character != null
+		else 4.0
 	)
-	var target := Vector2(0.0, breathe)
+	var secondary_amplitude: float = (
+		float(character.breath_secondary_amplitude_px)
+		if character != null
+		else 1.6
+	)
+	var primary_speed: float = (
+		float(character.breath_primary_speed)
+		if character != null
+		else 2.0
+	)
+	var secondary_speed: float = (
+		float(character.breath_secondary_speed)
+		if character != null
+		else 0.8
+	)
+	return (
+		sin(_breath_phase * primary_speed + phase_offset) * primary_amplitude
+		+ sin(_breath_phase * secondary_speed) * secondary_amplitude
+	)
+
+
+func _ahoge_breath_sway_radians() -> float:
+	if character == null:
+		return 0.0
+	var amplitude: float = deg_to_rad(float(character.ahoge_breath_sway_degrees))
+	if amplitude <= 0.000001:
+		return 0.0
+	var speed: float = maxf(float(character.breath_primary_speed), 0.1)
+	var lag: float = float(character.ahoge_breath_sway_phase_lag)
+	return sin(_breath_phase * speed - lag) * amplitude
+
+
+func _prototype_head_target(charge_ratio: float) -> Vector2:
+	var target := Vector2(0.0, _idle_breath_y())
 
 	var charge_lean := _prototype_charge_lean(charge_ratio)
 	var cooldown_lean := _prototype_cooldown_lean(charge_ratio)
