@@ -824,8 +824,9 @@ func _process(delta: float) -> void:
 		_apply_preview_frame(_phase, delta)
 	else:
 		# 動作テスト停止中も呼吸とPassive Flexは止めない。
+		# _apply_ratio()を毎frame再適用すると呼吸速度を0へ戻すため、
+		# dynamic updateだけを進める。
 		fighter.advance_neck_preview(delta)
-		_apply_ratio(travel_ratio)
 
 
 func save_capture() -> void:
