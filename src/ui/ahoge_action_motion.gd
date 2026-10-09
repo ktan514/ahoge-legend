@@ -114,6 +114,7 @@ var _soft_directional_amount: float = 0.0
 var _soft_directional_direction: float = 0.0
 var _soft_active_progress: float = -1.0
 var _soft_elastic_stretch: float = 0.0
+var _soft_active_arc_amount: float = 0.0
 
 var soft_control_targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
 var soft_root_hinge_hz: float = SOFT_ROOT_HINGE_HZ
@@ -398,7 +399,8 @@ func advance(
 	directional_amount: float = 0.0,
 	directional_direction: float = 0.0,
 	active_progress: float = -1.0,
-	elastic_stretch: float = 0.0
+	elastic_stretch: float = 0.0,
+	active_arc_amount: float = 0.0
 ) -> void:
 	if not configured or delta <= 0.0 or not is_finite(delta):
 		return
@@ -410,6 +412,7 @@ func advance(
 		or not is_finite(directional_direction)
 		or not is_finite(active_progress)
 		or not is_finite(elastic_stretch)
+		or not is_finite(active_arc_amount)
 	):
 		return
 	attachment_angle = attachment_angle_radians
@@ -466,7 +469,8 @@ func advance(
 		clampf(directional_amount, 0.0, 1.0),
 		clampf(directional_direction, -1.0, 1.0),
 		clampf(active_progress, -1.0, 1.0),
-		clampf(elastic_stretch, -0.08, 0.70)
+		clampf(elastic_stretch, -0.08, 0.70),
+		clampf(active_arc_amount, 0.0, 1.0)
 	)
 
 
@@ -718,7 +722,8 @@ func _advance_softness(
 	directional_amount: float,
 	directional_direction: float,
 	active_progress: float,
-	elastic_stretch: float
+	elastic_stretch: float,
+	active_arc_amount: float
 ) -> void:
 	var bounded: float = clampf(amount, 0.0, 1.0)
 	softness = bounded
@@ -726,6 +731,7 @@ func _advance_softness(
 	_soft_directional_direction = clampf(directional_direction, -1.0, 1.0)
 	_soft_active_progress = clampf(active_progress, -1.0, 1.0)
 	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.70) * bounded
+	_soft_active_arc_amount = clampf(active_arc_amount, 0.0, 1.0)
 	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
 		_reset_soft_motion()
 		return
@@ -779,7 +785,7 @@ func _advance_softness(
 		var root_local_target: float = lerp_angle(root_local_baseline, directional_local_angle, directional_weight)
 		var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 		if (
-			soft_active_arc_weight > 0.000001
+			soft_active_arc_weight * _soft_active_arc_amount > 0.000001
 			and _soft_active_progress >= 0.0
 			and directional_weight > 0.000001
 		):
@@ -796,7 +802,7 @@ func _advance_softness(
 			root_local_target = lerp_angle(
 				root_local_target,
 				root_arc_local,
-				soft_active_arc_weight * directional_weight
+				soft_active_arc_weight * _soft_active_arc_amount * directional_weight
 			)
 		var root_baseline: float = angle + root_local_baseline
 		var root_target: float = angle + root_local_target + drive * soft_root_drive_ratio
@@ -849,7 +855,7 @@ func _advance_softness(
 
 				# さくらみこ等の扇状軌道では、charge終端→release終端を
 				# unwrapped local angleで連続的に進ませる。
-				if soft_active_arc_weight > 0.000001:
+				if soft_active_arc_weight * _soft_active_arc_amount > 0.000001:
 					var charge_arc_local: float = lerpf(
 						soft_active_arc_charge_root_angle,
 						soft_active_arc_charge_tip_angle,
@@ -869,7 +875,7 @@ func _advance_softness(
 					target = lerp_angle(
 						target,
 						arc_world,
-						soft_active_arc_weight * directional_weight
+						soft_active_arc_weight * _soft_active_arc_amount * directional_weight
 					)
 
 				# wave到達前はそのcontrolの前substep角へtargetを寄せ、
@@ -1092,6 +1098,7 @@ func _reset_soft_motion() -> void:
 	_soft_directional_direction = 0.0
 	_soft_active_progress = -1.0
 	_soft_elastic_stretch = 0.0
+	_soft_active_arc_amount = 0.0
 
 
 func active_strike_vertices(target_local: Vector2, contact_progress: float, charge_ratio: float) -> PackedVector2Array:
