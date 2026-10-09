@@ -14,7 +14,7 @@ var _array_mesh: ArrayMesh
 var _custom_pose: bool = false
 
 
-func configure(source: Texture2D) -> bool:
+func configure(source: Texture2D, explicit_profile_path: String = "") -> bool:
 	configured = false
 	visible = false
 	mesh = null
@@ -22,7 +22,11 @@ func configure(source: Texture2D) -> bool:
 	parry_sweep = 0.0
 	if source == null:
 		return false
-	var profile_path: String = PROFILE_PATH if source.resource_path == STRAIGHT_TEXTURE else LEGACY_PROFILE_PATH
+	var profile_path: String = explicit_profile_path
+	if profile_path.is_empty():
+		profile_path = PROFILE_PATH if source.resource_path == STRAIGHT_TEXTURE else LEGACY_PROFILE_PATH
+	if not ResourceLoader.exists(profile_path):
+		return false
 	profile = load(profile_path) as ProfileScript
 	if profile == null or not profile.matches_texture(source) or not profile.prepare():
 		return false
