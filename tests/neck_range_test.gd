@@ -103,6 +103,12 @@ func _run() -> void:
 	_expect(breath_root_error < 0.02, "呼吸中にアホ毛rootが頭部anchorから外れます")
 	_expect(breath_tip_motion >= 0.25, "呼吸に対してアホ毛が剛体追従し、遅れ揺れがありません")
 
+	# 既存の12ケース回帰はLONG_TESTで固定し、さくらみこの新軌道と混ぜない。
+	var long_test_for_regression: int = _character_index(scene, "LONG_TEST")
+	_expect(long_test_for_regression >= 0, "LONG_TESTを回帰試験へ選択できません")
+	if long_test_for_regression >= 0:
+		scene._character.select(long_test_for_regression)
+		await scene.rebuild()
 	for resolution in [0, 1]:
 		for side in [0, 1]:
 			scene._resolution.select(resolution)
@@ -110,6 +116,15 @@ func _run() -> void:
 			await scene.rebuild()
 			for fps in [30, 60, 120]:
 				await _case(scene, fps, resolution, side)
+
+	# さくらみこの赤チャージ / 青解放は専用契約で検査する。
+	var sakuramiko_for_arc: int = _character_index(scene, "SAKURAMIKO")
+	_expect(sakuramiko_for_arc >= 0, "さくらみこを軌道試験へ選択できません")
+	if sakuramiko_for_arc >= 0:
+		scene._character.select(sakuramiko_for_arc)
+		await scene.rebuild()
+		await _sakuramiko_charge_arc_case(scene)
+
 	# 同一画面でキャラクターを切り替えられる。
 	var catalog: Array = CatalogScript.all()
 	_expect(scene._character != null, "キャラクター選択部品がありません")
@@ -331,6 +346,121 @@ func _run() -> void:
 	quit(0 if failures.is_empty() else 1)
 
 
+func _character_index(scene, character_id: String) -> int:
+	for i in range(scene._character.item_count):
+		if str(scene._character.get_item_metadata(i)) == character_id:
+			return i
+	return -1
+
+
+func _unwrap_angle(previous: float, current: float) -> float:
+	return previous + wrapf(current - previous, -PI, PI)
+
+
+func _sakuramiko_charge_arc_case(scene) -> void:
+	scene._mode.select(scene.PreviewMode.CHARGED_ATTACK)
+	scene._side.select(0)
+	scene._resolution.select(0)
+	await scene.rebuild()
+	var actor = scene.fighter
+	var mesh = actor.find_child("AhogeDeformMesh", true, false)
+	_expect(actor != null and mesh != null, "さくらみこのチャージ軌道を準備できません")
+	if actor == null or mesh == null:
+		return
+
+	actor.set_ahoge_softness(1.0)
+	actor.set_neck_travel_ratio(0.0)
+	actor.reset_neck_preview_action()
+	actor.reset_ahoge_soft_follow()
+	var tuning: Dictionary = actor.action_motion.soft_tuning_snapshot()
+	_expect(
+		tuning["control_targets"] == [0.00, 0.03, 0.08, 0.15, 0.26, 0.40, 0.56, 0.74, 1.00],
+		"さくらみこのcontrol配置が赤青軌道用ではありません"
+	)
+	_expect(float(tuning["active_arc_weight"]) >= 0.99, "さくらみこの扇状軌道が無効です")
+	_expect(float(tuning["tip_damping"]) <= 0.50, "曲がり以降のtip dampingが高すぎます")
+	_expect(float(tuning["relative_damping_tip"]) <= 0.25, "tip相対減衰が高すぎます")
+	_expect(float(tuning["directional_control_step_tip"]) >= 0.18, "tip側角度自由度が不足しています")
+	_expect(float(tuning["active_directional_control_step_tip"]) >= 0.30, "攻撃中tip側角度自由度が不足しています")
+	_expect(float(tuning["active_tip_mass"]) >= 2.10, "tip慣性が不足しています")
+	_expect(float(tuning["active_wave_start_tip"]) <= 0.50, "tipの解放開始が遅すぎます")
+	_expect(float(tuning["active_wave_full_tip"]) <= 0.93, "tipの解放完了が遅すぎます")
+
+	# 赤: neutralからfull chargeまで、tipがrootと同時に動かず後方へ遅れて入る。
+	var dt: float = 1.0 / 60.0
+	var charge_end: float = scene.CHARGE_PREP_SECONDS + scene.REAR_HOLD_SECONDS
+	var previous_root_angle: float = 0.0
+	var previous_mid_angle: float = 0.0
+	var previous_tip_angle: float = 0.0
+	var root_travel: float = 0.0
+	var mid_travel: float = 0.0
+	var tip_travel: float = 0.0
+	var first_sample: bool = true
+	var t: float = 0.0
+	while t < charge_end - 0.000001:
+		t = minf(t + dt, charge_end)
+		scene._apply_preview_frame(t, dt)
+		var controls: PackedFloat32Array = actor.action_motion.soft_control_world_angles()
+		if controls.size() == actor.action_motion.SOFT_CONTROL_COUNT:
+			var root_angle: float = controls[0]
+			var mid_angle: float = controls[5]
+			var tip_angle: float = controls[-1]
+			if first_sample:
+				previous_root_angle = root_angle
+				previous_mid_angle = mid_angle
+				previous_tip_angle = tip_angle
+				first_sample = false
+			else:
+				var root_unwrapped: float = _unwrap_angle(previous_root_angle, root_angle)
+				var mid_unwrapped: float = _unwrap_angle(previous_mid_angle, mid_angle)
+				var tip_unwrapped: float = _unwrap_angle(previous_tip_angle, tip_angle)
+				root_travel += absf(root_unwrapped - previous_root_angle)
+				mid_travel += absf(mid_unwrapped - previous_mid_angle)
+				tip_travel += absf(tip_unwrapped - previous_tip_angle)
+				previous_root_angle = root_unwrapped
+				previous_mid_angle = mid_unwrapped
+				previous_tip_angle = tip_unwrapped
+	_expect(root_travel > 0.10, "赤チャージでrootが動いていません")
+	_expect(mid_travel > 0.08, "赤チャージで中腹が動いていません")
+	_expect(tip_travel > 0.05, "赤チャージでtipが動いていません")
+
+	# 青: release中のtip軌道はmiddleより大きく、最後は右下へ振り抜く。
+	var release_start: float = charge_end
+	var release_end: float = charge_end + scene.STRIKE_SWING_SECONDS + scene.FRONT_HOLD_SECONDS
+	var tip_path: float = 0.0
+	var mid_path: float = 0.0
+	var last_tip: Vector2 = mesh.current_vertices[-1]
+	var last_mid: Vector2 = _mesh_chain_points(actor.action_motion, mesh.current_vertices, [0.56])[0]
+	var maximum_tip_speed: float = 0.0
+	var maximum_mid_speed: float = 0.0
+	var seen_tip_above: bool = false
+	var seen_tip_right: bool = false
+	var seen_tip_downward_finish: bool = false
+	t = release_start
+	while t < release_end - 0.000001:
+		t = minf(t + dt, release_end)
+		scene._apply_preview_frame(t, dt)
+		var current_tip: Vector2 = mesh.current_vertices[-1]
+		var current_mid: Vector2 = _mesh_chain_points(actor.action_motion, mesh.current_vertices, [0.56])[0]
+		var tip_step: float = current_tip.distance_to(last_tip)
+		var mid_step: float = current_mid.distance_to(last_mid)
+		tip_path += tip_step
+		mid_path += mid_step
+		maximum_tip_speed = maxf(maximum_tip_speed, tip_step / dt)
+		maximum_mid_speed = maxf(maximum_mid_speed, mid_step / dt)
+		seen_tip_above = seen_tip_above or current_tip.y < -absf(current_tip.x) * 0.20
+		seen_tip_right = seen_tip_right or current_tip.x > 0.0
+		if t >= release_end - scene.FRONT_HOLD_SECONDS * 0.30:
+			seen_tip_downward_finish = seen_tip_downward_finish or current_tip.y > 0.0
+		last_tip = current_tip
+		last_mid = current_mid
+	_expect(tip_path > mid_path * 1.10, "青解放でtipの円弧半径がmiddleより大きくありません")
+	_expect(maximum_tip_speed > maximum_mid_speed * 1.05, "青解放でtip速度がmiddleを上回りません")
+	_expect(seen_tip_above, "青解放が上方を通る扇状軌道になっていません")
+	_expect(seen_tip_right, "青解放が右前方へ到達しません")
+	_expect(seen_tip_downward_finish, "青解放の最後が右下への振り抜きになっていません")
+
+
 func _case(scene, fps: int, resolution: int, side: int) -> void:
 	var actor = scene.fighter
 	var head := actor.find_child("HeadSprite", true, false) as Sprite2D
@@ -343,7 +473,7 @@ func _case(scene, fps: int, resolution: int, side: int) -> void:
 	scene.set_ratio(0.0)
 	_expect(actor.action_motion.configured, "NeckRangeのActionMotionを構成できません: " + label)
 	var tuning: Dictionary = actor.action_motion.soft_tuning_snapshot()
-	_expect(tuning["control_targets"] == actor.NECK_SOFT_TUNING["control_targets"], "NeckRange専用control配置が未適用です: " + label)
+	_expect(tuning["control_targets"] == actor.neck_soft_tuning()["control_targets"], "NeckRange専用control配置が未適用です: " + label)
 	_expect(
 		tuning["control_targets"] == [0.00, 0.02, 0.05, 0.10, 0.18, 0.30, 0.45, 0.65, 1.00],
 		"Human Verification済みの9制御点fractionではありません: " + label
