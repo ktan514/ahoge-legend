@@ -10,6 +10,8 @@ const MeshMotionScript := preload("res://src/ui/ahoge_mesh_motion.gd")
 @export var minimum_base_scale: float = 0.21
 
 var _texture: Texture2D
+var display_scale: float = 1.0
+var _profile_path: String = ""
 var _motion_root: Node2D
 var _sprite: Sprite2D
 var _mesh_deformer: MeshDeformerScript
@@ -50,15 +52,22 @@ func _ready() -> void:
 		configure(_texture, _facing)
 
 
-func configure(texture_value: Texture2D, facing_value: float) -> void:
+func configure(
+	texture_value: Texture2D,
+	facing_value: float,
+	profile_path_value: String = "",
+	display_scale_value: float = 1.0
+) -> void:
 	_texture = texture_value
 	_facing = 1.0 if facing_value >= 0.0 else -1.0
+	_profile_path = profile_path_value
+	display_scale = clampf(display_scale_value, 0.5, 2.0)
 	scale = Vector2(_facing, 1.0)
 	if _sprite == null:
 		return
 	_sprite.texture = _texture
 	_update_sprite_anchor()
-	_mesh_active = _mesh_deformer.configure(_texture)
+	_mesh_active = _mesh_deformer.configure(_texture, _profile_path)
 	_sprite.visible = not _mesh_active
 	_shape_motion = MeshMotionScript.new()
 	_apply_visual_transform()
@@ -209,6 +218,7 @@ func _apply_visual_transform() -> void:
 		var viewport_width := get_viewport_rect().size.x
 		if viewport_width > 0.0:
 			base_scale = maxf(minimum_base_scale, viewport_width / 5200.0)
+	base_scale *= display_scale
 	var vertical_squash := lerpf(1.0, 0.82, clampf((_whole_reach - 1.0) / 1.45, 0.0, 1.0))
 	# 毎frameの基準行列は内部状態から作り、接触補正のskewを持ち越さない。
 	_motion_root.transform = Transform2D(
