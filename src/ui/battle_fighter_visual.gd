@@ -206,8 +206,10 @@ func _prototype_head_target(charge_ratio: float) -> Vector2:
 	_requested_head_rotation = pose.z * facing
 	var target: Vector2 = Vector2(pose.x * facing, pose.y)
 	if action == CombatantStateScript.ActionState.IDLE:
-		var breathe: float = sin(_breath_phase * 2.0 + (0.0 if facing > 0.0 else 0.7)) * 4.0 + sin(_breath_phase * 0.8) * 1.6
-		target.y += breathe * smoothstep(0.0, HeadMotionScript.RECOVER_SECONDS, _visual_action_age)
+		target.y += (
+			_idle_breath_y()
+			* smoothstep(0.0, HeadMotionScript.RECOVER_SECONDS, _visual_action_age)
+		)
 	_cache_head_image()
 	if arena_canvas_rect.has_area() and _head_used.has_area():
 		var local_bounds: Rect2 = get_global_transform().affine_inverse() * arena_canvas_rect
