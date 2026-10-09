@@ -145,7 +145,11 @@ func reset_neck_preview_action() -> void:
 
 
 func _neck_soft_attachment_angle() -> float:
-	return deg_to_rad(_head_rotation * facing)
+	var sway_weight: float = 1.0 - clampf(ahoge_directional_amount, 0.0, 1.0)
+	return (
+		deg_to_rad(_head_rotation * facing)
+		+ _ahoge_breath_sway_radians() * sway_weight
+	)
 
 
 func _neck_soft_forward_px() -> float:
@@ -217,6 +221,8 @@ func confirm_contact() -> bool:
 func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 	if not is_inside_tree() or _head_sprite == null:
 		return
+	if dynamic_delta > 0.0 and is_finite(dynamic_delta):
+		_breath_phase += dynamic_delta
 	# 目そのものは描画しないため、首位置に応じた目線仰角を頭部回転で表現する。
 	# Sprite2Dの画面回転は仰角と符号が逆。P2は左右反転するのでfacingも掛ける。
 	var elevation: float = neck_gaze_elevation_degrees()
@@ -224,9 +230,25 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 	_head_rotation = _requested_head_rotation
 	# resize直後にも、新しい表示倍率を反映してからDを求める。
 	_update_asset_pose()
-	_head_offset = Vector2(facing * head_display_diameter() * neck_travel_ratio, 0.0)
-	_head_velocity = Vector2.ZERO
-	_head_acceleration = Vector2.ZERO
+	var previous_offset: Vector2 = _head_offset
+	var previous_velocity: Vector2 = _head_velocity
+	var breath_weight: float = lerpf(
+		1.0,
+		0.25,
+		clampf(ahoge_directional_amount, 0.0, 1.0)
+	)
+	_head_offset = Vector2(
+		facing * head_display_diameter() * neck_travel_ratio,
+		_idle_breath_y() * breath_weight
+	)
+	if dynamic_delta > 0.000001:
+		var raw_velocity: Vector2 = (_head_offset - previous_offset) / dynamic_delta
+		_head_velocity = _head_velocity.lerp(raw_velocity, 0.48)
+		var raw_acceleration: Vector2 = (_head_velocity - previous_velocity) / dynamic_delta
+		_head_acceleration = _head_acceleration.lerp(raw_acceleration, 0.34)
+	else:
+		_head_velocity = Vector2.ZERO
+		_head_acceleration = Vector2.ZERO
 	_update_asset_pose()
 	if _asset_mode and _motion_node != null:
 		_motion_node.transform = _neutral_transform()
@@ -254,7 +276,7 @@ func _apply_neck_pose(dynamic_delta: float = 0.0) -> void:
 					)
 					idle_vertices = action_motion.visual_vertices()
 				else:
-					idle_vertices = action_motion.soft_idle_vertices(deg_to_rad(_head_rotation), ahoge_softness)
+					idle_vertices = action_motion.soft_idle_vertices(_neck_soft_attachment_angle(), ahoge_softness)
 			_mesh_node.set_action_pose(idle_vertices, 0.0, 0.0)
 	last_safety_scale = 1.0
 	last_presentation_weight = 0.0
