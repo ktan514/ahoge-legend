@@ -814,12 +814,18 @@ func _apply_preview_frame(seconds: float, delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	if oscillating and ready_for_input:
+	if not ready_for_input or not is_instance_valid(fighter):
+		return
+	if oscillating:
 		var cycle: float = preview_cycle_seconds()
 		# ループ境界でActionMotion/soft chainを作り直さない。
 		# 終了後IDLE_HOLDで自然収束した状態をそのまま次周期へ持ち越す。
 		_phase = fposmod(_phase + delta, cycle)
 		_apply_preview_frame(_phase, delta)
+	else:
+		# 動作テスト停止中も呼吸とPassive Flexは止めない。
+		fighter.advance_neck_preview(delta)
+		_apply_ratio(travel_ratio)
 
 
 func save_capture() -> void:
