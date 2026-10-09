@@ -808,7 +808,8 @@ func _apply_preview_frame(seconds: float, delta: float) -> void:
 			)
 			fighter.set_neck_ahoge_attack_profile(
 				_charged_active_progress(seconds),
-				_charged_elastic_stretch(seconds)
+				_charged_elastic_stretch(seconds),
+				1.0
 			)
 			_apply_ratio(_charged_ratio(seconds), delta)
 
