@@ -1418,3 +1418,109 @@ Human Verification用の攻撃GIFは、過去にユーザーが添付した録�
 - output: `artifacts/neck-range/sakuramiko-charged/frame_###.png`
 
 既存のユーザー録画・過去のMOV・既存GIFはこの検証資料のsourceとして使用しない。
+
+
+## さくらみこ: 赤チャージ / 青解放の扇状軌道
+
+2026-10-09 Human Verificationで、チャージ攻撃の軌道を手描き2枚で指定した。
+
+- **赤**: チャージを溜めるときの軌道。
+- **青**: チャージ解放後、相手を攻撃するときの軌道。
+
+この絵をチャージ攻撃の運動正本として扱う。
+
+### 9 controlの役割
+
+さくらみこ専用control fraction候補:
+
+`[0.00, 0.03, 0.08, 0.15, 0.26, 0.40, 0.56, 0.74, 1.00]`
+
+| control | 区間 | 役割 |
+| --- | --- | --- |
+| C0 | root | 支点。頭部の切り返しを最初に受ける。位置は完全固定。 |
+| C1 | 3% | root transfer。C0の初速を受ける。 |
+| C2 | 8% | lower shaft。ここまでは比較的コシを残す。 |
+| C3 | 15% | 伝達開始。遅れを作り始める。 |
+| C4 | 26% | bend base。曲率を中腹へ分散する。 |
+| C5 | 40% | bend apex。赤/青の扇軌道の中心。明確に柔らかくする。 |
+| C6 | 56% | distal body。大きな円弧と遅れを作る。 |
+| C7 | 74% | pre-tip。低剛性・大慣性。 |
+| C8 | tip | 最も遅れ、最大半径・最大速度で走る。 |
+
+root側へ10%未満のcontrolを3本残し、過去に失敗した「0.10から均等配置」のようなroot不足は再導入しない。一方、bend apex以降へ4 controlを置き、現在の「曲がりからtipまで板状」の不足を解消する。
+
+### 赤: Charge Gather
+
+現在のdirectional targetのように全controlを同じ左向きへ揃えない。
+
+- neutral C字から後方へ、controlごとに位相差を持って扇状に移動する。
+- root側が最初に後方へ入る。
+- C5以降はrootより遅れ、より大きい半径で移動する。
+- full charge時も完全直線にはせず、後方ファン形状を残す。
+- local target angle候補:
+  - C0側: 約 -2.90rad
+  - C8側: 約 -2.70rad
+- charge中のtipはrootと同時に回転させず、柔軟chainの遅れで追従する。
+
+### 青: Strike Release
+
+blue drawingのように、rootを支点として大きい扇状軌道を通す。
+
+- 起点: 赤charge終端。
+- rootが先に切り返す。
+- C1→C8へwaveが移動する。
+- 軌道は「左後方 → 左上 → 上 → 右上 → 右 → 右下」。
+- control target angleを短絡した `lerp_angle(left,right)` で作らず、**時間とともに連続増加するunwrapped angle** として扱う。
+- release終端候補:
+  - C0側: +0.15rad
+  - C8側: +0.55rad
+- tipは右前方へ到達したあとも止めず、+0.55rad付近まで下方向へ振り抜く。
+
+### wave timing
+
+現行はtipのactive開始がq≈0.85と遅すぎ、最後に固いままsnapしやすい。さくらみこでは次の候補へ変更する。
+
+- root wave start: q=0.05
+- tip wave start: q=0.48
+- root wave full: q=0.38
+- tip wave full: q=0.92
+
+fractionでstart/fullを補間し、root→middle→tipの順を保ちつつtipにも振り抜き時間を確保する。
+
+### 剛性分布
+
+現在の `directional_control_step_tip=0.05rad` はbend apex以降をほぼ同一角度へ拘束し、板状の硬さを生む。
+
+さくらみこ候補:
+
+- chain_hz: 12.0
+- root damping: 0.92
+- tip damping: 0.46
+- tip spring gain: 0.30
+- relative damping root: 0.50
+- relative damping tip: 0.22
+- directional control step root: 0.32
+- middle: 0.30
+- tip: 0.20
+- active tip control step: 0.32
+- active tip mass: 2.20
+- active tip drive gain: 1.90
+- active tip damping ratio: 0.42
+
+rootは安定させ、bend apex以降だけ自由度・慣性を増やす。全体を一様に柔らかくしない。
+
+### 実装境界
+
+- 上記はまず `SAKURAMIKO` のNeckRange/Human Verification専用tuningとして実装する。
+- LONG_TEST等prototypeの既存tuningは変更しない。
+- `AhogeActionMotion` にはneutral defaultの汎用パラメータを追加し、値0なら従来挙動と完全互換にする。
+- Human Verification合格前にBattle共通defaultへ昇格しない。
+
+### 採用条件
+
+- 赤: charge中にroot→tipの遅れが見え、全体同時回転にならない。
+- 青: tipが左後方から上方を経由して右下まで大きな円弧を通る。
+- C5〜C8が板状に同角度で移動しない。
+- tipの速度ピークがmiddleより後かつ大きい。
+- rootは頭部anchorから外れない。
+- U字/loopを作らず、総曲率の安全上限は引き続き監視する。
