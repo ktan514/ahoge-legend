@@ -1373,3 +1373,17 @@ AhogePrototypeRig / AhogeMeshDeformerはcharacterのprofile pathを受け取る�
 - root相対のtip/中腹は小さく揺れ、完全剛体追従にならない。
 - さくらみこだけ約1.15倍、prototype表示倍率は変わらない。
 - 攻撃/パリィ契約と既存CIを壊さない。
+
+
+### 2026-10-09 正式素材と赤線markupの役割
+
+前節の表現を明確化する。
+
+- **`さくらみこのアホ毛.png` は、さくらみこで実際に使用する正式ゲーム素材である。**
+- `ahoge_straight.png` はprototype / 回帰検証用であり、さくらみこの本素材ではない。
+- 今回提示された赤線markup画像は新しいtextureではなく、正式素材 `さくらみこのアホ毛.png` をbone / meshで曲げたときの**待機形状指示**である。
+- したがって、色・模様・ハイライト・輪郭textureは正式素材を使用し、赤線に合わせるのはcenterline / bone angle / mesh poseである。
+- 正式配置pathは `res://assets/characters/sakuramiko/ahoge.png` とする。
+- さくらみこ用profileは `res://assets/characters/sakuramiko/ahoge_profile.tres` とする。
+
+Human Verificationは「正式アホ毛textureが赤線形状に曲がっているか」「呼吸で頭部とrootが上下し、毛束だけ少し遅れて揺れるか」「1.15倍候補の大きさが適切か」を確認する。
