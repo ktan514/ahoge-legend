@@ -1387,3 +1387,15 @@ AhogePrototypeRig / AhogeMeshDeformerはcharacterのprofile pathを受け取る�
 - さくらみこ用profileは `res://assets/characters/sakuramiko/ahoge_profile.tres` とする。
 
 Human Verificationは「正式アホ毛textureが赤線形状に曲がっているか」「呼吸で頭部とrootが上下し、毛束だけ少し遅れて揺れるか」「1.15倍候補の大きさが適切か」を確認する。
+
+
+### 2026-10-09 Human Verification用GIFキャプチャ
+
+さくらみこの待機形状・呼吸・アホ毛揺れをMac実行前にも確認できるよう、NeckRangePreviewを実Godot描画で約3秒キャプチャする検証経路を用意する。
+
+- Godot 4.7.2 stable。
+- Xvfb + GL Compatibilityで実描画する。
+- キャラクター=SAKURAMIKO、P1、1280x720、基準0D、動作テスト停止。
+- Preview停止中の呼吸 / Passive Flexを30fpsで90frame進める。
+- SubViewportをPNG連番として `artifacts/neck-range/sakuramiko-breath/` へ保存する。
+- これはHuman Verification資料生成のみであり、ゲーム挙動・キャラクター設定は変更しない。
