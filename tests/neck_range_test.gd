@@ -259,6 +259,10 @@ func _run() -> void:
 	# 実際に1周期進め、待機区間で標準形状へ収束することを確認する。
 	var return_mesh = scene.fighter.find_child("AhogeDeformMesh", true, false)
 	var default_vertices: PackedVector2Array = return_mesh.profile.rest_vertices.duplicate()
+	var default_length: float = _mesh_centerline_length(
+		scene.fighter.action_motion,
+		default_vertices
+	)
 	scene.fighter.reset_neck_preview_action()
 	scene.fighter.reset_ahoge_soft_follow()
 	var charged_step: float = 1.0 / 60.0
@@ -269,9 +273,19 @@ func _run() -> void:
 		scene._apply_preview_frame(next_time, next_time - charged_time)
 		charged_time = next_time
 	_expect(absf(scene.travel_ratio) < 0.0001, "チャージ攻撃後の待機確認で頭部が0Dではありません")
+	var returned_length: float = _mesh_centerline_length(
+		scene.fighter.action_motion,
+		return_mesh.current_vertices
+	)
 	_expect(
-		_difference(return_mesh.current_vertices, default_vertices) <= 6.0,
-		"チャージ攻撃後の待機確認で標準C字へ戻っていません"
+		absf(returned_length - default_length) <= 0.05,
+		"チャージ攻撃後に基準弧長へ戻っていません"
+	)
+	_expect(
+		scene.fighter.ahoge_root_canvas_position().distance_to(
+			scene.fighter.ahoge_head_anchor_canvas_position()
+		) < 0.02,
+		"チャージ攻撃後の呼吸中にrootが頭部anchorから外れます"
 	)
 
 	# UIから直接操作したときに数値・実際の表示・攻撃速度テスト状態が一致する。
