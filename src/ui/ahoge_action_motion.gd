@@ -115,6 +115,7 @@ var _soft_directional_direction: float = 0.0
 var _soft_active_progress: float = -1.0
 var _soft_elastic_stretch: float = 0.0
 var _soft_active_arc_amount: float = 0.0
+var _soft_active_arc_progress: float = -1.0
 
 var soft_control_targets: Array[float] = [0.00, 0.04, 0.10, 0.18, 0.30, 0.45, 0.62, 0.80, 1.00]
 var soft_root_hinge_hz: float = SOFT_ROOT_HINGE_HZ
@@ -400,7 +401,8 @@ func advance(
 	directional_direction: float = 0.0,
 	active_progress: float = -1.0,
 	elastic_stretch: float = 0.0,
-	active_arc_amount: float = 0.0
+	active_arc_amount: float = 0.0,
+	active_arc_progress: float = -1.0
 ) -> void:
 	if not configured or delta <= 0.0 or not is_finite(delta):
 		return
@@ -413,6 +415,7 @@ func advance(
 		or not is_finite(active_progress)
 		or not is_finite(elastic_stretch)
 		or not is_finite(active_arc_amount)
+		or not is_finite(active_arc_progress)
 	):
 		return
 	attachment_angle = attachment_angle_radians
@@ -470,7 +473,8 @@ func advance(
 		clampf(directional_direction, -1.0, 1.0),
 		clampf(active_progress, -1.0, 1.0),
 		clampf(elastic_stretch, -0.08, 0.70),
-		clampf(active_arc_amount, 0.0, 1.0)
+		clampf(active_arc_amount, 0.0, 1.0),
+		clampf(active_arc_progress, -1.0, 1.0)
 	)
 
 
@@ -723,7 +727,8 @@ func _advance_softness(
 	directional_direction: float,
 	active_progress: float,
 	elastic_stretch: float,
-	active_arc_amount: float
+	active_arc_amount: float,
+	active_arc_progress: float
 ) -> void:
 	var bounded: float = clampf(amount, 0.0, 1.0)
 	softness = bounded
@@ -732,6 +737,7 @@ func _advance_softness(
 	_soft_active_progress = clampf(active_progress, -1.0, 1.0)
 	_soft_elastic_stretch = clampf(elastic_stretch, -0.08, 0.70) * bounded
 	_soft_active_arc_amount = clampf(active_arc_amount, 0.0, 1.0)
+	_soft_active_arc_progress = clampf(active_arc_progress, -1.0, 1.0)
 	if not available or action_state == StateScript.ActionState.ROUND_LOCKED:
 		_reset_soft_motion()
 		return
@@ -783,7 +789,13 @@ func _advance_softness(
 		var root_index: int = _soft_control_indices[0]
 		var root_local_baseline: float = current_angles[root_index]
 		var root_local_target: float = lerp_angle(root_local_baseline, directional_local_angle, directional_weight)
-		var root_active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
+		var root_active_q: float = clampf(
+			_soft_active_arc_progress
+			if _soft_active_arc_progress >= 0.0
+			else _soft_active_progress,
+			0.0,
+			1.0
+		)
 		if (
 			soft_active_arc_weight * _soft_active_arc_amount > 0.000001
 			and _soft_active_progress >= 0.0
@@ -839,6 +851,13 @@ func _advance_softness(
 			var fraction: float = clampf(fractions[index], 0.0, 1.0)
 			var active_section: float = 0.0
 			var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
+			var arc_q: float = clampf(
+				_soft_active_arc_progress
+				if _soft_active_arc_progress >= 0.0
+				else _soft_active_progress,
+				0.0,
+				1.0
+			)
 			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
 				var wave_fraction: float = smoothstep(0.0, 1.0, fraction)
 				var active_start: float = lerpf(
@@ -852,6 +871,7 @@ func _advance_softness(
 					wave_fraction
 				)
 				active_section = smoothstep(active_start, active_full, active_q)
+				var arc_section: float = smoothstep(active_start, active_full, arc_q)
 
 				# さくらみこ等の扇状軌道では、charge終端→release終端を
 				# unwrapped local angleで連続的に進ませる。
@@ -869,7 +889,7 @@ func _advance_softness(
 					var arc_local: float = lerpf(
 						charge_arc_local,
 						release_arc_local,
-						active_section
+						arc_section
 					)
 					var arc_world: float = angle + arc_local
 					target = lerp_angle(
@@ -1099,6 +1119,7 @@ func _reset_soft_motion() -> void:
 	_soft_active_progress = -1.0
 	_soft_elastic_stretch = 0.0
 	_soft_active_arc_amount = 0.0
+	_soft_active_arc_progress = -1.0
 
 
 func active_strike_vertices(target_local: Vector2, contact_progress: float, charge_ratio: float) -> PackedVector2Array:
