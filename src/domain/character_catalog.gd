@@ -11,9 +11,17 @@ static func all() -> Array:
 		CharacterDefinitionScript.AhogeType.LONG,
 		CharacterDefinitionScript.AttackType.SWING,
 		"1人目の正式実装キャラクター",
-		"",
+		"res://assets/characters/sakuramiko/head.png",
 		"res://assets/characters/sakuramiko/ahoge.png",
-		0.64
+		0.64,
+		"res://assets/characters/sakuramiko/ahoge_profile.tres",
+		1.15,
+		4.0,
+		1.2,
+		2.0,
+		0.8,
+		2.2,
+		0.55
 	))
 	characters.append(CharacterDefinitionScript.create(
 		"LONG_TEST",
