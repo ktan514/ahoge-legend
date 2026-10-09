@@ -1399,3 +1399,22 @@ Human Verificationは「正式アホ毛textureが赤線形状に曲がってい�
 - Preview停止中の呼吸 / Passive Flexを30fpsで90frame進める。
 - SubViewportをPNG連番として `artifacts/neck-range/sakuramiko-breath/` へ保存する。
 - これはHuman Verification資料生成のみであり、ゲーム挙動・キャラクター設定は変更しない。
+
+
+### 2026-10-09 チャージ攻撃GIFの真正な実描画キャプチャ
+
+Human Verification用の攻撃GIFは、過去にユーザーが添付した録画を再利用してはならない。**現在のPR HEADをGodot 4.7.2で実行し、その実描画フレームだけを新規取得して生成する。**
+
+キャプチャ条件:
+- source: current PR exact HEAD only。
+- scene: `res://tools/motion_preview/NeckRangePreview.tscn`
+- character: `SAKURAMIKO`
+- mode: `CHARGED_ATTACK`
+- side: P1 / 右向き
+- resolution: 1280x720
+- capture rate: 30fps
+- capture duration: `CHARGED_PREVIEW_SECONDS` 1周期。
+- capture target: SubViewportの実描画。
+- output: `artifacts/neck-range/sakuramiko-charged/frame_###.png`
+
+既存のユーザー録画・過去のMOV・既存GIFはこの検証資料のsourceとして使用しない。
