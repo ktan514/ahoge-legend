@@ -777,6 +777,27 @@ func _advance_softness(
 		var root_index: int = _soft_control_indices[0]
 		var root_local_baseline: float = current_angles[root_index]
 		var root_local_target: float = lerp_angle(root_local_baseline, directional_local_angle, directional_weight)
+		var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
+		if (
+			soft_active_arc_weight > 0.000001
+			and _soft_active_progress >= 0.0
+			and directional_weight > 0.000001
+		):
+			var root_arc_progress: float = smoothstep(
+				soft_active_wave_start_root,
+				soft_active_wave_full_root,
+				active_q
+			)
+			var root_arc_local: float = lerpf(
+				soft_active_arc_charge_root_angle,
+				soft_active_arc_release_root_angle,
+				root_arc_progress
+			)
+			root_local_target = lerp_angle(
+				root_local_target,
+				root_arc_local,
+				soft_active_arc_weight * directional_weight
+			)
 		var root_baseline: float = angle + root_local_baseline
 		var root_target: float = angle + root_local_target + drive * soft_root_drive_ratio
 		var root_error: float = wrapf(root_target - previous_world[0], -PI, PI)
@@ -813,8 +834,44 @@ func _advance_softness(
 			var active_section: float = 0.0
 			var active_q: float = clampf(_soft_active_progress, 0.0, 1.0)
 			if _soft_active_progress >= 0.0 and directional_weight > 0.000001:
-				var active_start: float = 0.30 + 0.55 * smoothstep(0.0, 1.0, fraction)
-				var active_full: float = 0.50 + 0.50 * smoothstep(0.0, 1.0, fraction)
+				var wave_fraction: float = smoothstep(0.0, 1.0, fraction)
+				var active_start: float = lerpf(
+					soft_active_wave_start_root,
+					soft_active_wave_start_tip,
+					wave_fraction
+				)
+				var active_full: float = lerpf(
+					soft_active_wave_full_root,
+					soft_active_wave_full_tip,
+					wave_fraction
+				)
+				active_section = smoothstep(active_start, active_full, active_q)
+
+				# さくらみこ等の扇状軌道では、charge終端→release終端を
+				# unwrapped local angleで連続的に進ませる。
+				if soft_active_arc_weight > 0.000001:
+					var charge_arc_local: float = lerpf(
+						soft_active_arc_charge_root_angle,
+						soft_active_arc_charge_tip_angle,
+						wave_fraction
+					)
+					var release_arc_local: float = lerpf(
+						soft_active_arc_release_root_angle,
+						soft_active_arc_release_tip_angle,
+						wave_fraction
+					)
+					var arc_local: float = lerpf(
+						charge_arc_local,
+						release_arc_local,
+						active_section
+					)
+					var arc_world: float = angle + arc_local
+					target = lerp_angle(
+						target,
+						arc_world,
+						soft_active_arc_weight * directional_weight
+					)
+
 				# wave到達前はそのcontrolの前substep角へtargetを寄せ、
 				# root→middle→tipの順に旧方向を解放する。
 				if (
@@ -829,13 +886,14 @@ func _advance_softness(
 					)
 					var hold_weight: float = soft_active_wave_hold * (1.0 - wave_release)
 					target = lerp_angle(target, previous_world[control], hold_weight)
-				active_section = smoothstep(active_start, active_full, active_q)
+
 				var direct_gain: float = lerpf(
 					soft_active_root_direct_gain,
 					soft_active_tip_direct_gain,
-					smoothstep(0.0, 1.0, fraction)
+					wave_fraction
 				) * active_section
-				# hold解除後はキャラクター前方基準のlocal 0radへ自力で向く。
+				# 扇状軌道を使わない従来キャラは前方0radへ自力で向く。
+				# 扇状軌道中はdirect gainをキャラ側で低くし、円弧targetを優先する。
 				target = lerp_angle(target, angle, direct_gain)
 			var error: float = wrapf(target - previous_world[control], -PI, PI)
 			# 毛先の追加massは前方振り抜き用。後方へ溜め始める段階から重くすると
