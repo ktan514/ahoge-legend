@@ -1549,3 +1549,53 @@ charge終端角候補も、後方fanを明確にするため更新する。
 - C8 release: +0.65rad
 
 これによりfull chargeでroot側は左上寄り、tip側は左下寄りとなり、straight boardではなく後方fanを作る。releaseはunwrapped angleを-3.65→+0.65へ連続増加させ、左後方→上→右→右下を通る。
+
+
+### 2026-10-10 ローカル録画確認: bend〜tipの硬さを追加緩和
+
+Human Verification録画 `画面収録 2026-10-10 13.03.00.mov` を確認した。録画はcurrent HEAD `55b76e58...` のNeckRangePreview / SAKURAMIKO / CHARGED_ATTACK。
+
+観察:
+- 0.3〜0.5秒: chargeへ入るとneutral C字の局所曲率が急速に消え、bend apex〜tipが細い直線板のように左へ倒れる。
+- 0.5〜0.8秒: releaseでもC5〜C8がほぼ同じ方向を向き、扇状の「しなり」より剛体回転が目立つ。
+- 0.8〜1.3秒: tipの円弧経路が短く、右方向へ早く抜けすぎる。上方を通る青軌道が目視しにくい。
+- 1.3秒前後からneutral復帰へ入り、distalの残留しなりが短い。
+
+原因候補:
+- SAKURAMIKO `directional_curve_retention=0.08` が低すぎ、charge/release中にneutral局所曲率をほぼ消している。
+- `active_arc_weight=1.0` がabsolute arc targetを強制しすぎ、C5〜C8の物理遅れが見えにくい。
+- distal chainのspring/dampingがまだ高く、曲がり頂点以降が一枚板化している。
+- blue arc 0.33秒でもHuman Verification上は短い。
+
+次候補:
+- chain_hz: 12.0 → **9.5**
+- tip_damping: 0.46 → **0.28**
+- relative_damping_tip: 0.22 → **0.10**
+- tip_spring_gain: 0.30 → **0.16**
+- dynamic_curve_retention: 0.18 → **0.30**
+- directional_curve_retention: 0.08 → **0.45**
+- directional_root_hz: 16.0 → **13.0**
+- directional_control_step_tip: 0.20 → **0.34**
+- active_directional_control_step_tip: 0.32 → **0.46**
+- directional_clamp_upstream_blend: 0.72 → **0.50**
+- active_tip_mass: 2.20 → **2.60**
+- active_tip_drive_gain: 1.90 → **1.65**
+- active_tip_damping_ratio: 0.42 → **0.30**
+- active_arc_weight: 1.00 → **0.58**
+- active_root_direct_gain: 0.02 → **0.00**
+- active_tip_direct_gain: 0.08 → **0.03**
+- blue arc duration: 0.33秒 → **0.45秒**（STRIKE 0.15 + FRONT_HOLD 0.30）
+
+意図:
+- root〜C2はコシを残す。
+- C5〜C8はneutral曲率を部分的に保持し、absolute targetへ完全拘束しない。
+- tipは遅く・重く・低減衰で追従し、middleより後まで残る。
+- blue arcはFRONT_HOLD全体まで使って進め、上方→右→右下の経路を視認可能にする。
+- 通常攻撃 / パリィ / LONG_TESTは変更しない。
+
+採用条件:
+- full chargeでC5〜C8が一直線に潰れず、local曲率が残る。
+- release中、tipの角度/位置がmiddleと同時に揃わない。
+- tip path length > middle path length、tip speed peakはmiddleより後。
+- root固定。
+- U字/loop/mesh反転なし。
