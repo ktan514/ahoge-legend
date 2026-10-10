@@ -327,9 +327,14 @@ func matches_texture(texture: Texture2D) -> bool:
 		return false
 	if Vector2i(texture.get_size()) != source_size:
 		return false
-	# 開発時は元PNGそのものを識別する。export時は復号画像のdigestを使用する。
-	if FileAccess.file_exists(source_texture_path):
-		return FileAccess.get_sha256(source_texture_path) == source_file_sha256
+	# PNGは同じRGBAでもlossless再圧縮やmetadata差でfile hashが変わり得る。
+	# file hash一致は高速経路として使い、不一致時はRGBA digestで最終判定する。
+	if (
+		FileAccess.file_exists(source_texture_path)
+		and not source_file_sha256.is_empty()
+		and FileAccess.get_sha256(source_texture_path) == source_file_sha256
+	):
+		return true
 	var image: Image = texture.get_image()
 	if image == null or image.is_empty():
 		return false
