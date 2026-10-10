@@ -1645,3 +1645,14 @@ Human Verification録画 `画面収録 2026-10-10 13.03.00.mov` を確認した�
 - full charge fan >=0.12rad。
 - 青解放の上方→右下軌道とtip path優位を維持。
 - mesh反転/U字なし。
+
+
+#### fan=0.103547: 最終候補2.0 / 0.45
+
+前候補でfull charge fanは0.089535→0.103547radまで改善したが、採用下限0.12radにはまだ不足。
+
+追加候補:
+- `active_arc_shape_weight`: 1.60 → **2.00**
+- `active_arc_weight`: 0.50 → **0.45**
+
+shape側を最大候補へ、absolute trajectory側を少し弱める。これ以上の増幅は行わず、0.12未達ならangle target自体の設計を再検討する。
