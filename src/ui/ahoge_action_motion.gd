@@ -900,6 +900,47 @@ func _advance_softness(
 						arc_section
 					)
 					var arc_world: float = angle + arc_local
+
+					# absolute軌道だけではspring結合に局所曲率を消されるため、
+					# 1つ上流controlとのarc角度差もchain targetへ直接加える。
+					var previous_fraction: float = clampf(fractions[previous_index], 0.0, 1.0)
+					var previous_wave_fraction: float = smoothstep(0.0, 1.0, previous_fraction)
+					var previous_active_start: float = lerpf(
+						soft_active_wave_start_root,
+						soft_active_wave_start_tip,
+						previous_wave_fraction
+					)
+					var previous_active_full: float = lerpf(
+						soft_active_wave_full_root,
+						soft_active_wave_full_tip,
+						previous_wave_fraction
+					)
+					var previous_arc_section: float = smoothstep(
+						previous_active_start,
+						previous_active_full,
+						arc_q
+					)
+					var previous_charge_arc_local: float = lerpf(
+						soft_active_arc_charge_root_angle,
+						soft_active_arc_charge_tip_angle,
+						previous_wave_fraction
+					)
+					var previous_release_arc_local: float = lerpf(
+						soft_active_arc_release_root_angle,
+						soft_active_arc_release_tip_angle,
+						previous_wave_fraction
+					)
+					var previous_arc_local: float = lerpf(
+						previous_charge_arc_local,
+						previous_release_arc_local,
+						previous_arc_section
+					)
+					target += (
+						(arc_local - previous_arc_local)
+						* soft_active_arc_shape_weight
+						* _soft_active_arc_amount
+						* directional_weight
+					)
 					target = lerp_angle(
 						target,
 						arc_world,
