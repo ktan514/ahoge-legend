@@ -40,6 +40,11 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: timeout 90s xvfb-run -a ./scripts/godot-strict.sh --path . --audio-driver Dummy --script res://tests/neck_range_test.gd -- --neck-test
+      - name: さくらみこの新しい待機C字を実描画する
+        if: always()
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 90s xvfb-run -a ./scripts/godot-strict.sh --path . --audio-driver Dummy --script res://tests/sakuramiko_preview_capture.gd -- --capture
       - name: 首の確認資料を保存
         if: always()
         uses: actions/upload-artifact@v4
