@@ -1599,3 +1599,29 @@ Human Verification録画 `画面収録 2026-10-10 13.03.00.mov` を確認した�
 - tip path length > middle path length、tip speed peakはmiddleより後。
 - root固定。
 - U字/loop/mesh反転なし。
+
+
+#### fan collapseの構造原因: absolute targetだけでは局所曲率が残らない
+
+2026-10-10の追加候補で `directional_curve_retention` / tip damping / spring / arc weightを緩和したが、CI実測ではfull charge時のroot↔tip角度差が **0.007831rad** しかなく、bend〜tipは依然ほぼ一直線だった。
+
+原因:
+- 現行Active arcは各controlへabsolute world angle targetを与えている。
+- 一方でchain側の `coupled_target = upstream + desired_curve` が各controlを上流へ結合する。
+- charge fanのroot=-2.95rad / tip=-3.65radという差はabsolute targetにしか存在せず、局所曲率としてchainへ注入されていない。
+- そのためspring結合が勝つと、全controlがほぼ同角度へ収束する。
+
+修正:
+- Active arcを **absolute trajectory + local curvature trajectory** の2成分へ分ける。
+- controlごとに現在のarc target angleを計算する。
+- 1つ上流controlのarc targetとの差 `arc_curve_delta` を求める。
+- `coupled_target` へ `arc_curve_delta * active_arc_shape_weight` を加え、fan形状そのものをchainの局所曲率として保持する。
+- generic defaultは0で従来互換。
+- さくらみこだけ `active_arc_shape_weight=1.0` 候補。
+- absolute arc weightは0.58のまま、軌道中心を誘導する。
+- shape weightは局所角度差だけを作り、root位置や全体回転を直接変更しない。
+
+採用条件:
+- full charge root↔tip angle差 >=0.12rad。
+- charge中にC5〜C8が同角度へ収束しない。
+- release中も局所曲率を保ちながらblue arcへ移る。
