@@ -377,8 +377,8 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 		tuning["control_targets"] == [0.00, 0.03, 0.08, 0.15, 0.26, 0.40, 0.56, 0.74, 1.00],
 		"さくらみこのcontrol配置が赤青軌道用ではありません"
 	)
-	_expect(float(tuning["active_arc_weight"]) >= 0.48 and float(tuning["active_arc_weight"]) <= 0.52, "さくらみこの扇状軌道weightが候補域ではありません")
-	_expect(float(tuning["active_arc_shape_weight"]) >= 1.55, "さくらみこの扇状局所曲率が不足しています")
+	_expect(float(tuning["active_arc_weight"]) >= 0.43 and float(tuning["active_arc_weight"]) <= 0.47, "さくらみこの扇状軌道weightが候補域ではありません")
+	_expect(float(tuning["active_arc_shape_weight"]) >= 1.95, "さくらみこの扇状局所曲率が不足しています")
 	_expect(float(tuning["tip_damping"]) <= 0.32, "曲がり以降のtip dampingが高すぎます")
 	_expect(float(tuning["relative_damping_tip"]) <= 0.12, "tip相対減衰が高すぎます")
 	_expect(float(tuning["directional_control_step_tip"]) >= 0.30, "tip側角度自由度が不足しています")
