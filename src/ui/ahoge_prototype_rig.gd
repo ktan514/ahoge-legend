@@ -12,6 +12,7 @@ const MeshMotionScript := preload("res://src/ui/ahoge_mesh_motion.gd")
 var _texture: Texture2D
 var display_scale: float = 1.0
 var _profile_path: String = ""
+var _texture_source_path: String = ""
 var _motion_root: Node2D
 var _sprite: Sprite2D
 var _mesh_deformer: MeshDeformerScript
@@ -49,25 +50,37 @@ func _ready() -> void:
 	_motion_root.add_child(_mesh_deformer)
 	set_process(true)
 	if _texture != null:
-		configure(_texture, _facing)
+		configure(
+			_texture,
+			_facing,
+			_profile_path,
+			display_scale,
+			_texture_source_path
+		)
 
 
 func configure(
 	texture_value: Texture2D,
 	facing_value: float,
 	profile_path_value: String = "",
-	display_scale_value: float = 1.0
+	display_scale_value: float = 1.0,
+	texture_source_path_value: String = ""
 ) -> void:
 	_texture = texture_value
 	_facing = 1.0 if facing_value >= 0.0 else -1.0
 	_profile_path = profile_path_value
+	_texture_source_path = texture_source_path_value
 	display_scale = clampf(display_scale_value, 0.5, 2.0)
 	scale = Vector2(_facing, 1.0)
 	if _sprite == null:
 		return
 	_sprite.texture = _texture
 	_update_sprite_anchor()
-	_mesh_active = _mesh_deformer.configure(_texture, _profile_path)
+	_mesh_active = _mesh_deformer.configure(
+		_texture,
+		_profile_path,
+		_texture_source_path
+	)
 	_sprite.visible = not _mesh_active
 	_shape_motion = MeshMotionScript.new()
 	_apply_visual_transform()
