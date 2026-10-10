@@ -84,10 +84,11 @@ func _run() -> void:
 			max_y = maxf(max_y, point.y)
 		_expect(reference_curve[1].x < -20.0, "赤線形状が根元直後から左へ曲がりません")
 		_expect(min_x < -280.0, "赤線形状の左側C字が浅すぎます")
-		_expect(max_x > 650.0, "赤線形状が右側まで回り込みません")
+		_expect(max_x >= 470.0 and max_x <= 490.0, "待機C字の右側最大位置が候補域ではありません")
 		_expect(min_y < -490.0, "赤線形状の上端が低すぎます")
-		_expect(reference_curve[-1].x > 600.0, "赤線形状の毛先が右側にありません")
+		_expect(reference_curve[-1].x >= 400.0 and reference_curve[-1].x <= 450.0, "待機C字の毛先巻き戻し位置が候補域ではありません")
 		_expect(reference_curve[-1].y > min_y + 80.0, "赤線形状の毛先が下へ返っていません")
+		_expect(reference_curve[-1].x < max_x - 30.0, "待機C字の毛先が十分に内側へ巻き戻っていません")
 		var rest_centers: PackedVector2Array = ParryScript.centers_of(
 			sakuramiko_profile.rest_vertices,
 			sakuramiko_profile.WIDTH_POINTS
