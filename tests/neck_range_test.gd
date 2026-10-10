@@ -52,6 +52,25 @@ func _run() -> void:
 	_expect(sakuramiko_profile != null and sakuramiko_profile.prepare(), "さくらみこのアホ毛profileを準備できません")
 	if sakuramiko_profile != null and sakuramiko_profile.prepare():
 		_expect(sakuramiko_profile.idle_reference_curve.size() == 33, "赤線待機中心線のsample数")
+		_expect(
+			sakuramiko_profile.idle_reference_curve[-1].distance_to(Vector2(427.069326, -264.002529)) < 0.02,
+			"待機C字のtipが新しい巻き戻し位置ではありません"
+		)
+		var curve_min_x: float = INF
+		var curve_max_x: float = -INF
+		var curve_min_y: float = INF
+		var curve_length: float = 0.0
+		for i in range(sakuramiko_profile.idle_reference_curve.size()):
+			var point: Vector2 = sakuramiko_profile.idle_reference_curve[i]
+			curve_min_x = minf(curve_min_x, point.x)
+			curve_max_x = maxf(curve_max_x, point.x)
+			curve_min_y = minf(curve_min_y, point.y)
+			if i > 0:
+				curve_length += point.distance_to(sakuramiko_profile.idle_reference_curve[i - 1])
+		_expect(curve_min_x <= -360.0, "待機C字の左膨らみが不足しています")
+		_expect(curve_max_x >= 470.0 and curve_max_x <= 490.0, "待機C字の右側最大位置が候補域ではありません")
+		_expect(curve_min_y <= -480.0 and curve_min_y >= -505.0, "待機C字の高さが候補域ではありません")
+		_expect(curve_length >= 1530.0 and curve_length <= 1580.0, "待機C字の弧長が変わりすぎています")
 		_expect(sakuramiko_profile.section_left_px.size() == 33, "さくらみこmesh断面数")
 		var reference_curve: PackedVector2Array = sakuramiko_profile.idle_reference_curve
 		var min_x: float = INF
@@ -79,6 +98,12 @@ func _run() -> void:
 	# Preview停止中も頭部が呼吸し、アホ毛rootは頭部anchorへ固定されたまま少し遅れて揺れる。
 	var breath_fighter = scene.fighter
 	var breath_mesh = breath_fighter.find_child("AhogeDeformMesh", true, false)
+	_expect(breath_mesh != null and breath_mesh.configured, "さくらみこがSprite fallbackになっています")
+	if breath_mesh != null and breath_mesh.configured:
+		_expect(
+			str(breath_mesh.profile.resource_path) == "res://assets/characters/sakuramiko/ahoge_profile.tres",
+			"さくらみこ専用profileが実描画meshへ接続されていません"
+		)
 	var breath_y_min: float = INF
 	var breath_y_max: float = -INF
 	var breath_root_error: float = 0.0
