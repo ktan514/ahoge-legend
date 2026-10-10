@@ -85,7 +85,10 @@ func prepare() -> bool:
 		if not idle_reference_curve.is_empty():
 			if (
 				idle_reference_curve.size() < 4
-				or idle_reference_widths.size() != idle_reference_curve.size()
+				or (
+					not idle_reference_widths.is_empty()
+					and idle_reference_widths.size() != idle_reference_curve.size()
+				)
 				or not idle_reference_curve[0].is_equal_approx(Vector2.ZERO)
 			):
 				return false
@@ -124,7 +127,11 @@ func prepare() -> bool:
 				if source_width <= 0.001:
 					return false
 				var t: float = arc[center_index] / total_arc
-				var width_scale: float = _sample_reference_width(t) / source_width
+				# reference width未指定なら元画像の断面幅をそのまま維持する。
+				# さくらみこは「同じ素材をボーンで曲げる」ためこの経路を使う。
+				var width_scale: float = 1.0
+				if not idle_reference_widths.is_empty():
+					width_scale = _sample_reference_width(t) / source_width
 				var turn: float = wrapf(
 					posed_tangent.angle() - source_tangent.angle(),
 					-PI,
