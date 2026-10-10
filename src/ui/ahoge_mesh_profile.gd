@@ -322,8 +322,13 @@ func sample(amount: float) -> PackedVector2Array:
 	return result
 
 
-func matches_texture(texture: Texture2D) -> bool:
-	if texture == null or texture.resource_path != source_texture_path:
+func matches_texture(texture: Texture2D, source_path_override: String = "") -> bool:
+	if texture == null:
+		return false
+	var actual_source_path: String = source_path_override
+	if actual_source_path.is_empty():
+		actual_source_path = texture.resource_path
+	if actual_source_path != source_texture_path:
 		return false
 	if Vector2i(texture.get_size()) != source_size:
 		return false
