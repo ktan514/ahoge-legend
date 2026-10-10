@@ -265,7 +265,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	soft_active_arc_shape_weight = clampf(
 		float(tuning.get("active_arc_shape_weight", soft_active_arc_shape_weight)),
 		0.0,
-		1.0
+		2.0
 	)
 	soft_active_arc_charge_root_angle = float(
 		tuning.get("active_arc_charge_root_angle", soft_active_arc_charge_root_angle)
