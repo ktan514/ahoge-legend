@@ -201,7 +201,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"active_tip_drive_gain", "active_tip_damping_ratio",
 		"active_preload_contraction", "active_wave_hold",
 		"active_directional_control_step_tip", "directional_clamp_upstream_blend",
-		"active_arc_weight", "active_arc_shape_weight", "active_arc_charge_root_angle", "active_arc_charge_tip_angle",
+		"active_arc_weight", "active_arc_shape_weight", "active_arc_attachment_weight", "active_arc_charge_root_angle", "active_arc_charge_tip_angle",
 		"active_arc_release_root_angle", "active_arc_release_tip_angle",
 		"active_wave_start_root", "active_wave_start_tip",
 		"active_wave_full_root", "active_wave_full_tip"
@@ -268,6 +268,11 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		float(tuning.get("active_arc_shape_weight", soft_active_arc_shape_weight)),
 		0.0,
 		2.0
+	)
+	soft_active_arc_attachment_weight = clampf(
+		float(tuning.get("active_arc_attachment_weight", soft_active_arc_attachment_weight)),
+		0.0,
+		1.0
 	)
 	soft_active_arc_charge_root_angle = float(
 		tuning.get("active_arc_charge_root_angle", soft_active_arc_charge_root_angle)
@@ -349,6 +354,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"directional_clamp_upstream_blend": soft_directional_clamp_upstream_blend,
 		"active_arc_weight": soft_active_arc_weight,
 		"active_arc_shape_weight": soft_active_arc_shape_weight,
+		"active_arc_attachment_weight": soft_active_arc_attachment_weight,
 		"active_arc_charge_root_angle": soft_active_arc_charge_root_angle,
 		"active_arc_charge_tip_angle": soft_active_arc_charge_tip_angle,
 		"active_arc_release_root_angle": soft_active_arc_release_root_angle,
