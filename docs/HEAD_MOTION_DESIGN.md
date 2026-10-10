@@ -1656,3 +1656,42 @@ Human Verification録画 `画面収録 2026-10-10 13.03.00.mov` を確認した�
 - `active_arc_weight`: 0.50 → **0.45**
 
 shape側を最大候補へ、absolute trajectory側を少し弱める。これ以上の増幅は行わず、0.12未達ならangle target自体の設計を再検討する。
+
+
+### 2026-10-10 修正: 「もっと寝ている」の解釈
+
+Human Verificationで「もっとねてる」と再指摘された。前候補は柔軟性を静的なfan曲率で表現しすぎており、意図を取り違えていた。
+
+正しい解釈:
+
+- charge/release中の**アホ毛本体はもっと水平寄りに寝る**。
+- full chargeで大きいC字/fanを静的に保持する必要はない。
+- 柔軟さは「root→middle→tipが時間差で動く」ことで表現する。
+- tipが遅れて追うことと、tipが大きく曲がった静止形状であることは別。
+- 手描き赤/青の軌道はroot中心のscreen-space扇として扱う。
+- 頭部の±30°回転をarc targetへ100%加算すると、軌道全体が立つ/下がるため、さくらみこではhead angle寄与を大きく減らす。
+
+さくらみこ候補:
+
+- active arc attachment weight: **0.15**
+  - active arc world angle = arc target + head attachment angle * 0.15
+- full charge:
+  - root target = **-3.05rad**
+  - tip target = **-3.30rad**
+  - ほぼ左水平、tipだけわずかに下へ遅れる。
+- release end:
+  - root target = **+0.02rad**
+  - tip target = **+0.20rad**
+  - ほぼ右水平、tipだけわずかに下へ振り抜く。
+- active arc absolute weight: **0.55**
+- active arc shape weight: **0.80**
+
+前候補の `full charge fan >=0.12rad` は採用条件から削除する。代わりに:
+
+- full charge時のroot/tip world angleが左水平から±0.45rad以内。
+- full chargeのroot↔tip角度差は0.45rad以下。
+- release終端のroot/tip world angleが右水平から±0.45rad以内。
+- 動的にはtip path > middle path、tip速度peakはmiddleより後/大きい。
+- root固定、U字/loop/mesh反転なし。
+
+これにより「姿勢は寝ているが、動きは柔らかい」を分離する。
