@@ -377,8 +377,9 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 		tuning["control_targets"] == [0.00, 0.03, 0.08, 0.15, 0.26, 0.40, 0.56, 0.74, 1.00],
 		"さくらみこのcontrol配置が赤青軌道用ではありません"
 	)
-	_expect(float(tuning["active_arc_weight"]) >= 0.43 and float(tuning["active_arc_weight"]) <= 0.47, "さくらみこの扇状軌道weightが候補域ではありません")
-	_expect(float(tuning["active_arc_shape_weight"]) >= 1.95, "さくらみこの扇状局所曲率が不足しています")
+	_expect(float(tuning["active_arc_weight"]) >= 0.55 and float(tuning["active_arc_weight"]) <= 0.65, "さくらみこの扇状軌道weightが候補域ではありません")
+	_expect(float(tuning["active_arc_shape_weight"]) >= 0.45 and float(tuning["active_arc_shape_weight"]) <= 0.70, "さくらみこの扇状局所曲率weightが候補域ではありません")
+	_expect(float(tuning["active_arc_attachment_weight"]) <= 0.20, "扇軌道へ頭部回転を追従させすぎています")
 	_expect(float(tuning["tip_damping"]) <= 0.32, "曲がり以降のtip dampingが高すぎます")
 	_expect(float(tuning["relative_damping_tip"]) <= 0.12, "tip相対減衰が高すぎます")
 	_expect(float(tuning["directional_control_step_tip"]) >= 0.30, "tip側角度自由度が不足しています")
@@ -388,7 +389,7 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 	_expect(float(tuning["active_wave_full_tip"]) <= 0.93, "tipの解放完了が遅すぎます")
 	_expect(float(tuning["chain_hz"]) <= 10.0, "bend以降を柔らかくするchain Hzではありません")
 	_expect(float(tuning["tip_spring_gain"]) <= 0.18, "tip springが強すぎます")
-	_expect(float(tuning["directional_curve_retention"]) >= 0.40, "charge/release中の局所曲率保持が不足しています")
+	_expect(float(tuning["directional_curve_retention"]) <= 0.25, "charge/release中にC字曲率を残しすぎています")
 	_expect(
 		absf(scene.CHARGED_ARC_FRONT_SECONDS - scene.FRONT_HOLD_SECONDS) < 0.0001,
 		"青の扇軌道がFRONT_HOLD全体を使っていません"
@@ -433,12 +434,26 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 	_expect(tip_travel > 0.05, "赤チャージでtipが動いていません")
 	var charged_controls: PackedFloat32Array = actor.action_motion.soft_control_world_angles()
 	if charged_controls.size() == actor.action_motion.SOFT_CONTROL_COUNT:
+		var charge_root_horizontal_error: float = absf(
+			wrapf(charged_controls[0] - PI, -PI, PI)
+		)
+		var charge_tip_horizontal_error: float = absf(
+			wrapf(charged_controls[-1] - PI, -PI, PI)
+		)
 		var charged_fan: float = absf(
 			wrapf(charged_controls[-1] - charged_controls[0], -PI, PI)
 		)
 		_expect(
-			charged_fan >= 0.12,
-			"full chargeでbend〜tipが一直線へ潰れています: fan=%f" % charged_fan
+			charge_root_horizontal_error <= 0.50,
+			"full chargeのrootが左水平まで寝ていません: error=%f" % charge_root_horizontal_error
+		)
+		_expect(
+			charge_tip_horizontal_error <= 0.50,
+			"full chargeのtipが左水平まで寝ていません: error=%f" % charge_tip_horizontal_error
+		)
+		_expect(
+			charged_fan <= 0.45,
+			"full chargeで静的fanを曲げすぎています: fan=%f" % charged_fan
 		)
 
 	# 青: release中のtip軌道はmiddleより大きく、最後は右下へ振り抜く。
@@ -471,6 +486,22 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 			seen_tip_downward_finish = seen_tip_downward_finish or current_tip.y > 0.0
 		last_tip = current_tip
 		last_mid = current_mid
+	var release_controls: PackedFloat32Array = actor.action_motion.soft_control_world_angles()
+	if release_controls.size() == actor.action_motion.SOFT_CONTROL_COUNT:
+		var release_root_horizontal_error: float = absf(
+			wrapf(release_controls[0], -PI, PI)
+		)
+		var release_tip_horizontal_error: float = absf(
+			wrapf(release_controls[-1], -PI, PI)
+		)
+		_expect(
+			release_root_horizontal_error <= 0.60,
+			"release終端のrootが右水平まで寝ていません: error=%f" % release_root_horizontal_error
+		)
+		_expect(
+			release_tip_horizontal_error <= 0.60,
+			"release終端のtipが右水平まで寝ていません: error=%f" % release_tip_horizontal_error
+		)
 	_expect(tip_path > mid_path * 1.10, "青解放でtipの円弧半径がmiddleより大きくありません")
 	_expect(maximum_tip_speed > maximum_mid_speed * 1.05, "青解放でtip速度がmiddleを上回りません")
 	_expect(seen_tip_above, "青解放が上方を通る扇状軌道になっていません")
