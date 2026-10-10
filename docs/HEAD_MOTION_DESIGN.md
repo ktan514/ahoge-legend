@@ -1730,3 +1730,24 @@ profileが確実に有効になった前提で、待機 `idle_reference_curve` �
 - 弧長は大きく変えず、静止形状の曲率だけ増やす。
 - width profileは変更しない。
 - 攻撃赤青軌道のtuningは変更しない。
+
+
+## 2026-10-11 検証画面のLONG_TEST自動fallback禁止
+
+Human Verification画面で、さくらみこ素材がGodotのimport済みResourceとして未認識だった場合に、UIが自動的に `LONG_TEST (prototype)` を初期選択していた。
+
+これは検証対象をすり替えるため禁止する。
+
+- NeckRangePreviewの初期選択はCatalog内に `SAKURAMIKO` が存在する限り必ずさくらみこ。
+- `ResourceLoader.exists()` がfalseでも、raw `res://*.png` がFileAccessで存在すれば選択可能とする。
+- FighterVisualはTexture2Dの通常loadに失敗した場合、raw PNGを `Image.load_from_file()` で読み、ImageTextureを生成する。
+- raw ImageTextureはresource_pathを持たないため、AhogeMeshDeformerへ元asset pathを明示してprofile照合する。
+- profileのsource path / size / RGBA digestは引き続き検証する。
+- さくらみこの読み込みが失敗した場合はprototypeへfallbackせず、さくらみこ選択のまま明示エラーにする。
+- `_selected_character_id()` のfallbackも `SAKURAMIKO` とする。
+
+採用条件:
+- 新規clone / 新規pull直後に `godot --path . NeckRangePreview.tscn` を直接実行しても初期選択が「さくらみこ」。
+- `AhogeDeformMesh.configured=true`。
+- 実使用profile pathが `res://assets/characters/sakuramiko/ahoge_profile.tres`。
+- LONG_TESTはユーザーが明示選択した場合だけ表示する。
