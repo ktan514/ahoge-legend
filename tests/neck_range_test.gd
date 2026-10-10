@@ -77,44 +77,63 @@ func _run() -> void:
 	var sakuramiko_profile = load("res://assets/characters/sakuramiko/ahoge_profile.tres")
 	_expect(sakuramiko_profile != null and sakuramiko_profile.prepare(), "さくらみこのアホ毛profileを準備できません")
 	if sakuramiko_profile != null and sakuramiko_profile.prepare():
-		_expect(sakuramiko_profile.idle_reference_curve.size() == 33, "赤線待機中心線のsample数")
+		_expect(sakuramiko_profile.idle_reference_curve.size() == 33, "待機中心線のsample数")
 		_expect(
-			sakuramiko_profile.idle_reference_curve[-1].distance_to(Vector2(427.069326, -264.002529)) < 0.02,
-			"待機C字のtipが新しい巻き戻し位置ではありません"
+			str(sakuramiko_profile.source_file_sha256) == "be5b247529ae956f748c6483dd6c8552389a568ea750b9cd6be661b4ff333cca",
+			"正式ahoge.pngのfile SHAがユーザー提供素材と一致しません"
 		)
-		var curve_min_x: float = INF
-		var curve_max_x: float = -INF
-		var curve_min_y: float = INF
-		var curve_length: float = 0.0
-		for i in range(sakuramiko_profile.idle_reference_curve.size()):
-			var point: Vector2 = sakuramiko_profile.idle_reference_curve[i]
-			curve_min_x = minf(curve_min_x, point.x)
-			curve_max_x = maxf(curve_max_x, point.x)
-			curve_min_y = minf(curve_min_y, point.y)
-			if i > 0:
-				curve_length += point.distance_to(sakuramiko_profile.idle_reference_curve[i - 1])
-		_expect(curve_min_x <= -360.0, "待機C字の左膨らみが不足しています")
-		_expect(curve_max_x >= 470.0 and curve_max_x <= 490.0, "待機C字の右側最大位置が候補域ではありません")
-		_expect(curve_min_y <= -480.0 and curve_min_y >= -505.0, "待機C字の高さが候補域ではありません")
-		_expect(curve_length >= 1530.0 and curve_length <= 1580.0, "待機C字の弧長が変わりすぎています")
-		_expect(sakuramiko_profile.section_left_px.size() == 33, "さくらみこmesh断面数")
+		_expect(
+			str(sakuramiko_profile.source_rgba_sha256) == "d9623a46fa41bee10a8f4cd256a69d5fa221f12f98a29de0a903f7e1299ce5b6",
+			"正式ahoge.pngのRGBA SHAがユーザー提供素材と一致しません"
+		)
+		_expect(
+			sakuramiko_profile.tip_px.distance_to(Vector2(613.0, 818.0)) < 0.01,
+			"正式素材のtip座標が一致しません"
+		)
+		_expect(
+			sakuramiko_profile.idle_reference_widths.is_empty(),
+			"さくらみこの待機形状で元画像の太さを再構成しています"
+		)
+		_expect(
+			sakuramiko_profile.idle_reference_curve[-1].distance_to(Vector2(468.859875, -648.882880)) < 0.02,
+			"待機曲げのtip位置が候補と一致しません"
+		)
 		var reference_curve: PackedVector2Array = sakuramiko_profile.idle_reference_curve
 		var min_x: float = INF
 		var max_x: float = -INF
 		var min_y: float = INF
-		var max_y: float = -INF
-		for point in reference_curve:
+		var curve_length: float = 0.0
+		for i in range(reference_curve.size()):
+			var point: Vector2 = reference_curve[i]
 			min_x = minf(min_x, point.x)
 			max_x = maxf(max_x, point.x)
 			min_y = minf(min_y, point.y)
-			max_y = maxf(max_y, point.y)
-		_expect(reference_curve[1].x < -20.0, "赤線形状が根元直後から左へ曲がりません")
-		_expect(min_x < -280.0, "赤線形状の左側C字が浅すぎます")
-		_expect(max_x >= 470.0 and max_x <= 490.0, "待機C字の右側最大位置が候補域ではありません")
-		_expect(min_y < -490.0, "赤線形状の上端が低すぎます")
-		_expect(reference_curve[-1].x >= 400.0 and reference_curve[-1].x <= 450.0, "待機C字の毛先巻き戻し位置が候補域ではありません")
-		_expect(reference_curve[-1].y > min_y + 80.0, "赤線形状の毛先が下へ返っていません")
-		_expect(reference_curve[-1].x < max_x - 30.0, "待機C字の毛先が十分に内側へ巻き戻っていません")
+			if i > 0:
+				curve_length += point.distance_to(reference_curve[i - 1])
+		_expect(min_x <= -160.0 and min_x >= -180.0, "待機曲げの左膨らみが候補域ではありません")
+		_expect(max_x >= 465.0 and max_x <= 485.0, "待機曲げの右側最大位置が候補域ではありません")
+		_expect(min_y <= -850.0 and min_y >= -870.0, "待機曲げの高さが候補域ではありません")
+		_expect(curve_length >= 1450.0 and curve_length <= 1490.0, "待機曲げで弧長が変わりすぎています")
+		_expect(sakuramiko_profile.section_left_px.size() == 33, "さくらみこmesh断面数")
+		var maximum_width_ratio_error: float = 0.0
+		for row in range(sakuramiko_profile.section_left_px.size()):
+			var first: int = 1 + row * sakuramiko_profile.WIDTH_POINTS
+			var last: int = first + sakuramiko_profile.WIDTH_POINTS - 1
+			var source_width: float = sakuramiko_profile.idle_pose_vertices[first].distance_to(
+				sakuramiko_profile.idle_pose_vertices[last]
+			)
+			var posed_width: float = sakuramiko_profile.rest_vertices[first].distance_to(
+				sakuramiko_profile.rest_vertices[last]
+			)
+			if source_width > 0.001:
+				maximum_width_ratio_error = maxf(
+					maximum_width_ratio_error,
+					absf(posed_width / source_width - 1.0)
+				)
+		_expect(
+			maximum_width_ratio_error < 0.002,
+			"待機曲げで元画像の太さ分布を変えています: error=%f" % maximum_width_ratio_error
+		)
 		var rest_centers: PackedVector2Array = ParryScript.centers_of(
 			sakuramiko_profile.rest_vertices,
 			sakuramiko_profile.WIDTH_POINTS
