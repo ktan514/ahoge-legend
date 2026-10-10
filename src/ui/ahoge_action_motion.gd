@@ -827,9 +827,13 @@ func _advance_softness(
 				soft_active_arc_release_root_angle,
 				root_arc_progress
 			)
+			var root_arc_world: float = (
+				root_arc_local
+				+ angle * soft_active_arc_attachment_weight
+			)
 			root_local_target = lerp_angle(
 				root_local_target,
-				root_arc_local,
+				root_arc_world - angle,
 				soft_active_arc_weight * _soft_active_arc_amount * directional_weight
 			)
 		var root_baseline: float = angle + root_local_baseline
@@ -907,7 +911,10 @@ func _advance_softness(
 						release_arc_local,
 						arc_section
 					)
-					var arc_world: float = angle + arc_local
+					var arc_world: float = (
+						arc_local
+						+ angle * soft_active_arc_attachment_weight
+					)
 
 					# absolute軌道だけではspring結合に局所曲率を消されるため、
 					# 1つ上流controlとのarc角度差もchain targetへ直接加える。
