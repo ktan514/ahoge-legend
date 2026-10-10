@@ -14,7 +14,11 @@ var _array_mesh: ArrayMesh
 var _custom_pose: bool = false
 
 
-func configure(source: Texture2D, explicit_profile_path: String = "") -> bool:
+func configure(
+	source: Texture2D,
+	explicit_profile_path: String = "",
+	source_asset_path: String = ""
+) -> bool:
 	configured = false
 	visible = false
 	mesh = null
@@ -28,7 +32,7 @@ func configure(source: Texture2D, explicit_profile_path: String = "") -> bool:
 	if not ResourceLoader.exists(profile_path):
 		return false
 	profile = load(profile_path) as ProfileScript
-	if profile == null or not profile.matches_texture(source) or not profile.prepare():
+	if profile == null or not profile.matches_texture(source, source_asset_path) or not profile.prepare():
 		return false
 	texture = source
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
