@@ -123,27 +123,23 @@ func _build_ui() -> void:
 	var catalog: Array = CatalogScript.all()
 	for i in range(catalog.size()):
 		var definition = catalog[i]
-		var prototype: bool = str(definition.character_id).ends_with("_TEST")
-		var head_ready: bool = (
-			not str(definition.head_asset_path).is_empty()
-			and ResourceLoader.exists(str(definition.head_asset_path))
-		)
-		var ahoge_ready: bool = (
-			not str(definition.ahoge_asset_path).is_empty()
-			and ResourceLoader.exists(str(definition.ahoge_asset_path))
-		)
+		var character_id: String = str(definition.character_id)
+		var prototype: bool = character_id.ends_with("_TEST")
+		var head_ready: bool = _asset_path_present(str(definition.head_asset_path))
+		var ahoge_ready: bool = _asset_path_present(str(definition.ahoge_asset_path))
 		var enabled: bool = head_ready and ahoge_ready
 		var label: String = str(definition.display_name)
 		if prototype:
 			label += "（prototype）"
 		elif not enabled:
-			label += "（素材準備中）"
+			label += "（素材読み込み失敗）"
 		_character.add_item(label)
-		_character.set_item_metadata(i, str(definition.character_id))
+		_character.set_item_metadata(i, character_id)
 		_character.set_item_disabled(i, not enabled)
 		if enabled and first_enabled_index < 0:
 			first_enabled_index = i
-		if enabled and str(definition.character_id) == "SAKURAMIKO":
+		# さくらみこはenabled判定に関係なく既定選択。prototypeへ自動fallbackしない。
+		if character_id == "SAKURAMIKO":
 			default_index = i
 	if default_index < 0:
 		default_index = maxi(first_enabled_index, 0)
@@ -291,13 +287,19 @@ func rebuild() -> void:
 		await rebuild()
 
 
+func _asset_path_present(path: String) -> bool:
+	if path.is_empty():
+		return false
+	return ResourceLoader.exists(path) or FileAccess.file_exists(path)
+
+
 func _selected_character_id() -> String:
 	if _character == null or _character.item_count <= 0:
-		return "LONG_TEST"
+		return "SAKURAMIKO"
 	var index: int = clampi(_character.selected, 0, _character.item_count - 1)
 	var metadata = _character.get_item_metadata(index)
 	var character_id: String = str(metadata)
-	return "LONG_TEST" if character_id.is_empty() else character_id
+	return "SAKURAMIKO" if character_id.is_empty() else character_id
 
 
 func _selected_character_name() -> String:
