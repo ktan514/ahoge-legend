@@ -1751,3 +1751,50 @@ Human Verification画面で、さくらみこ素材がGodotのimport済みResour
 - `AhogeDeformMesh.configured=true`。
 - 実使用profile pathが `res://assets/characters/sakuramiko/ahoge_profile.tres`。
 - LONG_TESTはユーザーが明示選択した場合だけ表示する。
+
+
+## 2026-10-11 正式アホ毛素材を再同期しprofile変形をやり直す
+
+Human Verificationで、現在表示されているさくらみこのアホ毛が、ユーザー提供の `ahoge.png` と形状・太さ・曲がり方すべて異なることを確認した。
+
+実測:
+- ユーザー提供 `ahoge.png`: 800×2000
+- file SHA256: `be5b247529ae956f748c6483dd6c8552389a568ea750b9cd6be661b4ff333cca`
+- RGBA SHA256: `d9623a46fa41bee10a8f4cd256a69d5fa221f12f98a29de0a903f7e1299ce5b6`
+- skeleton root ≈ (389,1981)
+- skeleton tip ≈ (613,818)
+- source centerline arc length ≈1473.31px
+
+現在リポジトリのhashと一致しておらず、profileは別のpixel contentを前提としていた。
+
+### 正本
+
+- 今回アップロードされた `ahoge.png` をそのまま `assets/characters/sakuramiko/ahoge.png` の正式素材へ置き換える。
+- 画像の色・模様・輪郭・太さ分布は素材そのものを正とし、profile側で再設計しない。
+- `idle_reference_widths` による太さ再構成をさくらみこでは廃止する。
+- source断面の幅はそのまま維持し、centerline/tangentの移動と回転だけで曲げる。
+
+### 待機曲げ
+
+元画像のsource centerlineを基準に、弧長を変えずにdistal側ほど追加回転を与える。
+
+- root側0〜12%はほぼ元形状。
+- 12%以降から追加曲げを滑らかに増やす。
+- tip側追加曲げ候補: +1.20rad。
+- source arc lengthは維持する。
+- target bounds候補:
+  - X ≈ -168..+475px
+  - Y ≈ -860..0px
+- target tip ≈ (469,-649)px
+- 太さは元PNGの断面幅を100%維持する。
+
+これにより「画像を別の形へ作り直す」のではなく、「同じアホ毛画像をボーンでさらに曲げる」に戻す。
+
+### Preview起動
+
+ローカルの直接起動でNakama autoloadがclass_name cache未生成のままparseされ、Previewと無関係なエラーを出している。
+
+- Preview起動用wrapperを追加する。
+- 最初にGodotのheadless editor importを1回実行してclass cache/importを更新する。
+- その後NeckRangePreviewを起動する。
+- Human Verificationではwrapperを正規起動経路とする。
