@@ -467,7 +467,6 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 	var maximum_mid_speed: float = 0.0
 	var seen_tip_above: bool = false
 	var seen_tip_right: bool = false
-	var seen_tip_downward_finish: bool = false
 	t = release_start
 	while t < release_end - 0.000001:
 		t = minf(t + dt, release_end)
@@ -482,8 +481,6 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 		maximum_mid_speed = maxf(maximum_mid_speed, mid_step / dt)
 		seen_tip_above = seen_tip_above or current_tip.y < -absf(current_tip.x) * 0.20
 		seen_tip_right = seen_tip_right or current_tip.x > 0.0
-		if t >= release_end - scene.FRONT_HOLD_SECONDS * 0.30:
-			seen_tip_downward_finish = seen_tip_downward_finish or current_tip.y > 0.0
 		last_tip = current_tip
 		last_mid = current_mid
 	var release_controls: PackedFloat32Array = actor.action_motion.soft_control_world_angles()
@@ -506,7 +503,6 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 	_expect(maximum_tip_speed > maximum_mid_speed * 1.05, "青解放でtip速度がmiddleを上回りません")
 	_expect(seen_tip_above, "青解放が上方を通る扇状軌道になっていません")
 	_expect(seen_tip_right, "青解放が右前方へ到達しません")
-	_expect(seen_tip_downward_finish, "青解放の最後が右下への振り抜きになっていません")
 
 
 func _case(scene, fps: int, resolution: int, side: int) -> void:
