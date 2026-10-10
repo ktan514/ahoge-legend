@@ -1625,3 +1625,23 @@ Human Verification録画 `画面収録 2026-10-10 13.03.00.mov` を確認した�
 - full charge root↔tip angle差 >=0.12rad。
 - charge中にC5〜C8が同角度へ収束しない。
 - release中も局所曲率を保ちながらblue arcへ移る。
+
+
+#### fan=0.089535: 局所曲率weightを追加増幅
+
+局所 `arc_curve_delta` をchainへ追加した候補でfull chargeのroot↔tip角度差は **0.007831 → 0.089535rad** まで改善したが、採用下限0.12radには未達。
+
+次候補:
+- `active_arc_shape_weight`: 1.00 → **1.60**
+- `active_arc_weight`: 0.58 → **0.50**
+
+理由:
+- shape weightは各control間の局所角度差だけを増幅し、fan形状を作る。
+- absolute arc weightは全体をtrajectoryへ誘導する成分なので少し下げ、spring/coupled chainとの競合を弱める。
+- generic default=0は維持。shape weightの許容上限のみ2.0へ拡張する。
+- さくらみこ専用候補のみ1.60を使う。
+
+採用条件:
+- full charge fan >=0.12rad。
+- 青解放の上方→右下軌道とtip path優位を維持。
+- mesh反転/U字なし。
