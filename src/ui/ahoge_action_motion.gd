@@ -65,6 +65,7 @@ const SOFT_ACTIVE_DIRECTIONAL_CONTROL_STEP_TIP: float = SOFT_DIRECTIONAL_CONTROL
 const SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND: float = 1.0
 # Active arcはdefault無効。キャラクター固有Human Verificationでだけ有効化する。
 const SOFT_ACTIVE_ARC_WEIGHT: float = 0.0
+const SOFT_ACTIVE_ARC_SHAPE_WEIGHT: float = 0.0
 const SOFT_ACTIVE_ARC_CHARGE_ROOT_ANGLE: float = -PI
 const SOFT_ACTIVE_ARC_CHARGE_TIP_ANGLE: float = -PI
 const SOFT_ACTIVE_ARC_RELEASE_ROOT_ANGLE: float = 0.0
@@ -157,6 +158,7 @@ var soft_active_wave_hold: float = SOFT_ACTIVE_WAVE_HOLD
 var soft_active_directional_control_step_tip: float = SOFT_ACTIVE_DIRECTIONAL_CONTROL_STEP_TIP
 var soft_directional_clamp_upstream_blend: float = SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND
 var soft_active_arc_weight: float = SOFT_ACTIVE_ARC_WEIGHT
+var soft_active_arc_shape_weight: float = SOFT_ACTIVE_ARC_SHAPE_WEIGHT
 var soft_active_arc_charge_root_angle: float = SOFT_ACTIVE_ARC_CHARGE_ROOT_ANGLE
 var soft_active_arc_charge_tip_angle: float = SOFT_ACTIVE_ARC_CHARGE_TIP_ANGLE
 var soft_active_arc_release_root_angle: float = SOFT_ACTIVE_ARC_RELEASE_ROOT_ANGLE
@@ -197,7 +199,7 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 		"active_tip_drive_gain", "active_tip_damping_ratio",
 		"active_preload_contraction", "active_wave_hold",
 		"active_directional_control_step_tip", "directional_clamp_upstream_blend",
-		"active_arc_weight", "active_arc_charge_root_angle", "active_arc_charge_tip_angle",
+		"active_arc_weight", "active_arc_shape_weight", "active_arc_charge_root_angle", "active_arc_charge_tip_angle",
 		"active_arc_release_root_angle", "active_arc_release_tip_angle",
 		"active_wave_start_root", "active_wave_start_tip",
 		"active_wave_full_root", "active_wave_full_tip"
@@ -257,6 +259,11 @@ func set_soft_tuning(tuning: Dictionary) -> bool:
 	)
 	soft_active_arc_weight = clampf(
 		float(tuning.get("active_arc_weight", soft_active_arc_weight)),
+		0.0,
+		1.0
+	)
+	soft_active_arc_shape_weight = clampf(
+		float(tuning.get("active_arc_shape_weight", soft_active_arc_shape_weight)),
 		0.0,
 		1.0
 	)
@@ -339,6 +346,7 @@ func soft_tuning_snapshot() -> Dictionary:
 		"active_directional_control_step_tip": soft_active_directional_control_step_tip,
 		"directional_clamp_upstream_blend": soft_directional_clamp_upstream_blend,
 		"active_arc_weight": soft_active_arc_weight,
+		"active_arc_shape_weight": soft_active_arc_shape_weight,
 		"active_arc_charge_root_angle": soft_active_arc_charge_root_angle,
 		"active_arc_charge_tip_angle": soft_active_arc_charge_tip_angle,
 		"active_arc_release_root_angle": soft_active_arc_release_root_angle,
