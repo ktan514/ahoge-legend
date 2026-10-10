@@ -66,6 +66,7 @@ const SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND: float = 1.0
 # Active arcはdefault無効。キャラクター固有Human Verificationでだけ有効化する。
 const SOFT_ACTIVE_ARC_WEIGHT: float = 0.0
 const SOFT_ACTIVE_ARC_SHAPE_WEIGHT: float = 0.0
+const SOFT_ACTIVE_ARC_ATTACHMENT_WEIGHT: float = 1.0
 const SOFT_ACTIVE_ARC_CHARGE_ROOT_ANGLE: float = -PI
 const SOFT_ACTIVE_ARC_CHARGE_TIP_ANGLE: float = -PI
 const SOFT_ACTIVE_ARC_RELEASE_ROOT_ANGLE: float = 0.0
@@ -159,6 +160,7 @@ var soft_active_directional_control_step_tip: float = SOFT_ACTIVE_DIRECTIONAL_CO
 var soft_directional_clamp_upstream_blend: float = SOFT_DIRECTIONAL_CLAMP_UPSTREAM_BLEND
 var soft_active_arc_weight: float = SOFT_ACTIVE_ARC_WEIGHT
 var soft_active_arc_shape_weight: float = SOFT_ACTIVE_ARC_SHAPE_WEIGHT
+var soft_active_arc_attachment_weight: float = SOFT_ACTIVE_ARC_ATTACHMENT_WEIGHT
 var soft_active_arc_charge_root_angle: float = SOFT_ACTIVE_ARC_CHARGE_ROOT_ANGLE
 var soft_active_arc_charge_tip_angle: float = SOFT_ACTIVE_ARC_CHARGE_TIP_ANGLE
 var soft_active_arc_release_root_angle: float = SOFT_ACTIVE_ARC_RELEASE_ROOT_ANGLE
