@@ -377,14 +377,21 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 		tuning["control_targets"] == [0.00, 0.03, 0.08, 0.15, 0.26, 0.40, 0.56, 0.74, 1.00],
 		"さくらみこのcontrol配置が赤青軌道用ではありません"
 	)
-	_expect(float(tuning["active_arc_weight"]) >= 0.99, "さくらみこの扇状軌道が無効です")
-	_expect(float(tuning["tip_damping"]) <= 0.50, "曲がり以降のtip dampingが高すぎます")
-	_expect(float(tuning["relative_damping_tip"]) <= 0.25, "tip相対減衰が高すぎます")
-	_expect(float(tuning["directional_control_step_tip"]) >= 0.18, "tip側角度自由度が不足しています")
-	_expect(float(tuning["active_directional_control_step_tip"]) >= 0.30, "攻撃中tip側角度自由度が不足しています")
-	_expect(float(tuning["active_tip_mass"]) >= 2.10, "tip慣性が不足しています")
+	_expect(float(tuning["active_arc_weight"]) >= 0.55 and float(tuning["active_arc_weight"]) <= 0.65, "さくらみこの扇状軌道weightが候補域ではありません")
+	_expect(float(tuning["tip_damping"]) <= 0.32, "曲がり以降のtip dampingが高すぎます")
+	_expect(float(tuning["relative_damping_tip"]) <= 0.12, "tip相対減衰が高すぎます")
+	_expect(float(tuning["directional_control_step_tip"]) >= 0.30, "tip側角度自由度が不足しています")
+	_expect(float(tuning["active_directional_control_step_tip"]) >= 0.42, "攻撃中tip側角度自由度が不足しています")
+	_expect(float(tuning["active_tip_mass"]) >= 2.50, "tip慣性が不足しています")
 	_expect(float(tuning["active_wave_start_tip"]) <= 0.50, "tipの解放開始が遅すぎます")
 	_expect(float(tuning["active_wave_full_tip"]) <= 0.93, "tipの解放完了が遅すぎます")
+	_expect(float(tuning["chain_hz"]) <= 10.0, "bend以降を柔らかくするchain Hzではありません")
+	_expect(float(tuning["tip_spring_gain"]) <= 0.18, "tip springが強すぎます")
+	_expect(float(tuning["directional_curve_retention"]) >= 0.40, "charge/release中の局所曲率保持が不足しています")
+	_expect(
+		absf(scene.CHARGED_ARC_FRONT_SECONDS - scene.FRONT_HOLD_SECONDS) < 0.0001,
+		"青の扇軌道がFRONT_HOLD全体を使っていません"
+	)
 
 	# 赤: neutralからfull chargeまで、tipがrootと同時に動かず後方へ遅れて入る。
 	var dt: float = 1.0 / 60.0
@@ -423,6 +430,15 @@ func _sakuramiko_charge_arc_case(scene) -> void:
 	_expect(root_travel > 0.10, "赤チャージでrootが動いていません")
 	_expect(mid_travel > 0.08, "赤チャージで中腹が動いていません")
 	_expect(tip_travel > 0.05, "赤チャージでtipが動いていません")
+	var charged_controls: PackedFloat32Array = actor.action_motion.soft_control_world_angles()
+	if charged_controls.size() == actor.action_motion.SOFT_CONTROL_COUNT:
+		var charged_fan: float = absf(
+			wrapf(charged_controls[-1] - charged_controls[0], -PI, PI)
+		)
+		_expect(
+			charged_fan >= 0.12,
+			"full chargeでbend〜tipが一直線へ潰れています: fan=%f" % charged_fan
+		)
 
 	# 青: release中のtip軌道はmiddleより大きく、最後は右下へ振り抜く。
 	var release_start: float = charge_end
