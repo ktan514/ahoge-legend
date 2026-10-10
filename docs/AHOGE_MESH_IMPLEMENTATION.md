@@ -56,3 +56,9 @@ Spriteとmeshは排他表示する。非有限パラメータ等でdeformerが�
 - パリィ割込み、再構成、Round lock、異常時Sprite fallbackを検証。
 - 対戦相手の頭部への見た目上の到達距離とMac上の操作感はHuman Verificationで確認する。現在の試験はその合格を意味しない。
 - #105への統合は並行変更との照合が必要。#106を勝手にマージしない。
+
+## 異常時fallbackからの再構成復帰（回帰契約）
+
+メッシュ変形時に非有限値が渡された場合、deformerを停止し、元Spriteだけを表示する。異常が解消した状態で同じキャラクターの有効なTexture2Dとfacingを使って`configure()`を再実行した場合、メッシュ生成を再試行する。成功した場合は`mesh_ready=true`、メッシュだけ表示、元Spriteは非表示、`straighten=0.0`、`fallback_reason`は空へ戻る。再試行に失敗した場合は引き続き元Spriteで表示する。サーバーの攻撃・勝敗判定には影響させない。
+
+`tests/ahoge_mesh_cycle_test.gd`で30/60/120fps、左右、通常/最大チャージの12条件それぞれについて、異常値によるfallbackの後に再構成が成功することを回帰検証する。この追加テストのCI実行とMacの実画面Human Verificationは別ゲートとし、実行結果の確認前に完了とはしない。
