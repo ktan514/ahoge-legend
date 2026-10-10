@@ -36,6 +36,10 @@ func _run() -> void:
 	if not scene.ready_for_input:
 		quit(1)
 		return
+	_expect(
+		scene._selected_character_id() == "SAKURAMIKO",
+		"検証画面の初期キャラクターがさくらみこではありません"
+	)
 	# さくらみこ固有の待機形状・倍率・呼吸設定を固定する。
 	var sakuramiko = CatalogScript.get_by_id("SAKURAMIKO")
 	_expect(sakuramiko != null, "さくらみこの定義がありません")
@@ -165,10 +169,8 @@ func _run() -> void:
 		var item_id: String = str(scene._character.get_item_metadata(i))
 		_expect(item_id == str(definition.character_id), "キャラクター選択順がCatalogと一致しません")
 		var ready: bool = (
-			not str(definition.head_asset_path).is_empty()
-			and ResourceLoader.exists(str(definition.head_asset_path))
-			and not str(definition.ahoge_asset_path).is_empty()
-			and ResourceLoader.exists(str(definition.ahoge_asset_path))
+			scene._asset_path_present(str(definition.head_asset_path))
+			and scene._asset_path_present(str(definition.ahoge_asset_path))
 		)
 		_expect(
 			scene._character.is_item_disabled(i) == not ready,
