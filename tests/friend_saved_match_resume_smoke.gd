@@ -248,18 +248,18 @@ func _run() -> void:
 		_fail("終了済みFriend match後のP2再認証でuser_idが変化しました。")
 		return
 	var guest_result = finished_app.get_child(0)
-	if _find_visible_button(guest_result, "REMATCH") != null \
-			or _find_visible_button(guest_result, "CHANGE CHARACTER") != null:
+	if _find_visible_button(guest_result, "再戦する") != null \
+			or _find_visible_button(guest_result, "キャラクターを選び直す") != null:
 		_fail("Guest Friend ResultにHost専用操作ボタンが表示されています。")
 		return
-	var guest_leave_button := _find_visible_button(guest_result, "LEAVE ROOM")
+	var guest_leave_button := _find_visible_button(guest_result, "ルームを抜ける")
 	if guest_leave_button == null:
 		_fail("Guest Friend Resultに表示中のLEAVE ROOMがありません。")
 		return
 	if not await _wait_button_enabled(guest_leave_button, 7000):
 		_fail("Guest Friend ResultのLEAVE ROOMが同期完了後も有効になりません。")
 		return
-	if not _has_label_text(guest_result, "WAITING FOR HOST..."):
+	if not _has_label_text(guest_result, "ホストの選択を待っています…"):
 		_fail("Guest Friend ResultにHOST選択待ち表示がありません。")
 		return
 

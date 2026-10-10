@@ -111,22 +111,22 @@ Battleは5:4中央領域案を固定せず、最終UI/UX設計で採否を決定
 
 ## 4. Screen-by-screen design
 
-以下はすべて最終デザイン未確定。工程4.5で順に設計する。
+本節は工程4.5開始時に定めた**設計対象一覧の履歴**である。現在の最終Screen Designは §14 を正本とし、UI-01〜UI-12はすべて `DESIGN v1` 確定済みである。
 
-| ID | Screen | 最終デザイン |
+| ID | Screen | 現在の設計状態 |
 | --- | --- | --- |
-| UI-01 | Top Menu | PENDING |
-| UI-02 | Settings | PENDING |
-| UI-03 | Battle Mode Select | PENDING |
-| UI-04 | Character Select | PENDING |
-| UI-05 | Ranked Matching | PENDING |
-| UI-06 | Friend Match Menu | PENDING |
-| UI-07 | Friend Room Join | PENDING |
-| UI-08 | Friend Room Lobby | PENDING |
-| UI-09 | PreBattle Dialogue | PENDING |
-| UI-10 | Battle / HUD | PENDING |
-| UI-11 | Match Result | PENDING |
-| UI-12 | Ranking | PENDING |
+| UI-01 | Top Menu | DESIGN v1（§14.1） |
+| UI-02 | Settings | DESIGN v1（§14.2） |
+| UI-03 | Battle Mode Select | DESIGN v1（§14.3） |
+| UI-04 | Character Select | DESIGN v1（§14.4） |
+| UI-05 | Ranked Matching | DESIGN v1（§14.5） |
+| UI-06 | Friend Match Menu | DESIGN v1（§14.6） |
+| UI-07 | Friend Room Join | DESIGN v1（§14.7） |
+| UI-08 | Friend Room Lobby | DESIGN v1（§14.8） |
+| UI-09 | PreBattle Dialogue | DESIGN v1（§14.9） |
+| UI-10 | Battle / HUD | DESIGN v1（§14.10） |
+| UI-11 | Match Result | DESIGN v1（§14.11） |
+| UI-12 | Ranking | DESIGN v1（§14.12） |
 
 各画面では最低限以下を確定する。
 
@@ -469,12 +469,12 @@ C案を採用するが、「常時うるさい漫画演出」にはしない。
 - character colorは補助色として使い、基本UIはPaper / Ink / Impact Yellowを軸にする
 - 顔全体・全身をBattle画面へ表示しない
 
-### 9.2 Design System draft
+### 9.2 Design System draft（履歴）
 
 Human Decision済み:
 - visual direction: MANGA BOUT / COMIC IMPACT
 
-現時点のdraft。実画面mockup確認後に確定する。
+本節はDesign System確定前のdraft履歴である。**現在の正本は §12 Design System v1 / §13 Design System確定**とし、本節の値を現行仕様として参照しない。
 
 #### Color
 
@@ -541,9 +541,9 @@ Human Decision済み:
 - Battle HUD常時animationは禁止
 - screen shakeは重大eventだけ、2〜4px程度の短時間に限定
 
-## 10. 代表4画面 具体デザイン
+## 10. 代表4画面 具体デザイン（先行設計履歴）
 
-この節は#101へ渡す先行screen designとする。機能prototypeの座標・文言をそのまま踏襲しない。
+この節は#101へ渡した先行screen designの履歴である。UI-01 / 04 / 10 / 11を含む現在の全画面仕様は §14 UI-01〜UI-12 最終Screen Design v1を正本とする。
 
 ### 10.1 UI-01 Top Menu
 
@@ -808,16 +808,16 @@ Rating変動はscore summary内へ整理し、buttonより上に表示する。
 
 #### Friend Host actions
 
-- REMATCH
-- CHANGE CHARACTER
-- LEAVE ROOM
+- 再戦する
+- キャラクターを選び直す
+- ルームを終了
 
-REMATCHをPrimary、CHANGE CHARACTERをSecondary、LEAVE ROOMをDestructiveとする。
+「再戦する」をPrimary、「キャラクターを選び直す」をSecondary、「ルームを終了」をDestructiveとする。
 
 #### Friend Guest
 
-- WAITING FOR HOST...
-- LEAVE ROOM
+- ホストの選択を待っています…
+- ルームを抜ける
 
 Hostの選択待ちはspeech balloonではなくstatus captionとして明確にする。
 
@@ -828,11 +828,11 @@ Hostの選択待ちはspeech balloonではなくstatus captionとして明確に
 - network同期中は同じResult画面上でstatus表示
 - Host選択後はcomic panel wipeで次状態へ
 
-## 11. #100 残Human Decision
+## 11. #100 残Human Decision（解決済み履歴）
 
 visual directionは確定済み。
 
-残りはdesign systemの詳細として、以下をmockup確認後に確定する。
+以下は#100当時の未決項目であり、すべて §12〜§13 で解決済み。現在の仕様判断には §12〜§13 を使用する。
 
 1. UI主言語
    - 英語short label + 日本語補足
@@ -847,7 +847,7 @@ visual directionは確定済み。
    - moderate
    - strong
 
-#100ではこれらをcommon component mockupと合わせて確定する。
+#100でcommon component mockupと合わせて確定済み。
 
 
 ## 12. Design System v1
@@ -1226,7 +1226,9 @@ Primary action:
 ### 14.4 UI-04 Character Select
 
 Purpose:
-- アホ毛の見た目と戦闘特性を比較して選ぶ
+- アホ毛の見た目と戦闘特性を比較してキャラクターを選ぶ
+- 選択単位はキャラクター固定セット（頭部 + 髪型 + 固有アホ毛）であり、頭部とアホ毛を別々に付け替えるUIは作らない
+- アホ毛タイプ / 攻撃タイプは選択中キャラクターの属性表示であり、独立した装備選択ではない
 
 Final copy:
 - キャラクターを選ぶ
@@ -1240,14 +1242,17 @@ Card:
 - character name
 - Ahoge Type
 - Attack Type
-- selectedはImpact Yellow frame
+- selectedはPaper fillを維持し、Impact Yellow 4px frameで示す。selected card全体をYellow fillにはしない
+- 正式素材未導入の段階でも、各cardはcharacterごとのAhoge Typeが見分けられる専用vector previewを表示する
+- Top Menu用の2人hero artをCharacter Selectのcard / selected previewへ流用しない
 
 Selected detail:
 - キャラクター名
-- 1行特徴
+- CharacterDefinitionの1行特徴
 - アホ毛タイプ
 - 攻撃タイプ
-- 動くAhoge preview
+- 選択中characterだけを描く動くAhoge preview
+- previewはvisual-onlyで、gameplay判定やserver stateの正本にしない
 
 Transition:
 - card change 160ms
@@ -1393,6 +1398,13 @@ Final labels:
 - 再接続中…
 - 相手を待っています…
 
+Round Result:
+- scoreboard上のplayer識別は P1 / P2 を使用する
+- local client視点の一時event / Round Resultでは YOU / OPPONENT を使用する
+- Drawは DRAW と表示する
+- Round Result本文は `ROUND N / YOU|OPPONENT|DRAW / score` の順で表示する
+- Result表示中は次RoundのWaiting / Countdownを重ねない
+
 Event impact:
 - HIT!
 - PARRY!
@@ -1402,6 +1414,8 @@ Event impact:
 
 Rules:
 - 180〜300ms
+- 実装基準は240ms。新しいeventが来た場合は前eventの消去timerを無効化して新eventの240msを開始する
+- event textは時間経過後に自動消去し、次eventまで残留させない
 - timer / attack trajectoryを覆わない
 - root/head-topを覆わない
 
@@ -1430,9 +1444,15 @@ Ranked copy:
 - トップへ戻る
 
 Rating:
-- 「レート +18」
-- 「レート -14」
-- Draw時もserver確定deltaを表示
+- Player Ratingは「プレイヤーレート  1500 → 1518  (+18)」形式
+- Ahoge Ratingは「アホ毛レート  1500 → 1518  (+18)」形式
+- 同キャラ戦ではAhoge Ratingの後ろへ「/ 同キャラ戦」を付与してよい
+- Draw時もserver確定before / after / deltaを表示
+- settlement取得失敗時は各欄を「プレイヤーレートを確認できませんでした」「アホ毛レートを確認できませんでした」とする
+
+Friend Result common:
+- 「フレンド対戦 / レート変動なし」を表示する
+- Player Rating / Ahoge Ratingの変動行は表示しない
 
 Friend Host copy:
 - 再戦する
@@ -1442,6 +1462,7 @@ Friend Host copy:
 Friend Guest:
 - 「ホストの選択を待っています…」
 - 「ルームを抜ける」
+- 再起動からFriend Resultへ復帰する場合も、初回表示前にHost / Guest roleを復元し、誤ったroleの操作を一瞬でも表示しない
 
 Hierarchy:
 1. Result
@@ -1570,3 +1591,128 @@ Window:
 | UI-12 | Ranking | DESIGN v1 |
 
 Godot実装時にpixel-level調整は行うが、information hierarchy / copy / interaction / visual directionを無断変更しない。
+
+
+## 15. 画像アセット主体UI実装
+
+2026-10-02 Human Verificationで、code draw中心の第一モックは製品版として質感不足と判断した。
+
+以後の最終UIは **画像アセット主体** とする。
+
+- 背景 / button surface / panel / frame / decorationは画像
+- fixed logo / fixed copy / 漫画効果音 / WIN・LOSE・DRAWは画像化可能
+- timer数字は0〜9の個別画像
+- player name / Rating / room code / 設定値 / 可変台詞等はtext
+- 吹き出しは画像 + 可変text
+- codeはlayout / state / animation / texture切替を担当する
+- 本番用の漫画装飾を `draw_line` / `draw_rect` だけで完成扱いにしない
+
+asset naming / file list / Godot node mappingの正本は `docs/UI_ASSET_SPEC.md` とする。
+
+### 15.1 UI-01 Top Menu migration
+
+UI-01は画像asset移行の最初の対象とする。
+
+- full-screen background: TextureRect
+- **background本体と集中線は別画像**
+- halftone / corner decorationもbackgroundへ焼き込まず独立layer
+- menu / hero frame: NinePatchRectまたはTextureRect
+- button: TextureButton
+- fixed button label: TextureRect
+- logo / fixed catch copy: TextureRect
+- hero artとhero frameも別画像
+- debug-only controlsは製品visual hierarchyから分離
+
+Top Menuでasset pipelineをHuman Verificationした後、Battle HUD / Result / 残り画面へ展開する。
+
+### 15.2 Timer
+
+Battle timerはLabelによる数字描画を最終仕様としない。
+
+- 0〜9のPNGを使用
+- integer secondsを桁へ分解してTextureRectで並べる
+- zero paddingなし
+- 85 → ... → 10 → 9 → ... → 0
+
+
+## 16. コンセプト画像をvisual正本とする
+
+2026-10-02 Human Reviewで、UI Design Proposal Board「C. MANGA BOUT」を最終UIのvisual referenceとして再確認した。
+
+以後のasset制作では、単に「漫画風」「黄色・ピンク・黒」を使うだけでは不十分とし、**このconcept boardの具体的な画面構成・形状・情報密度・色の使い方へ合わせる**。
+
+### 16.1 Top Menu
+
+Top Menuはconcept boardの01 Top Menuを基準とする。
+
+- 全体baseは黒〜濃紺のpanel / bar
+- 選択中primary actionだけYellowで強く出す
+- 非選択buttonは黒〜濃紺 / low contrast
+- buttonは横長で細め、斜めcut / rough ink edgeを持つ
+- pinkは主にaccent / slash / player identityへ限定し、button surfaceの常用色にしない
+- glossy UI / rounded card / neon pink主体のbuttonは採用しない
+- menu buttonを大きなpop-art stickerとして独立させない
+- background / speed lines / character art / menu UIを重ねて1画面を構成する
+- logo / title treatmentもconcept boardの白brush + red accent系を優先する
+
+### 16.2 Battle / Result
+
+- Battle HUDはconcept board 05の細い上部bar構成を基準とする
+- timerは中央で最大視認性
+- player sideはBlue / Redのaccent
+- 漫画effectは大きく出すが、UI chromeそのものはdark baseで抑える
+- Resultはconcept board 06のsplit manga panelを基準とする
+- WIN / LOSEはillustrated impact assetとして扱う
+
+### 16.3 Asset review rule
+
+新規assetは次を満たさなければ不採用。
+
+1. concept boardと並べて見て同一visual familyに見える
+2. 色・形・線幅・情報密度がconcept boardと整合する
+3. 単体で派手でも、画面へ置いた時にconcept boardから逸脱するものは不採用
+4. Human Review前に「漫画風だからOK」と自己判断しない
+
+
+### 16.4 Top Menu interaction / background correction
+
+2026-10-03 Human Verificationで次を確定した。
+
+#### Focus / Hover
+- keyboard / controller focusとmouse hoverを別々のselected状態として同時表示しない
+- mouseがmenu buttonへ入った時点で、そのbuttonへfocusも移す
+- selected visualは常に1buttonだけ
+- mouseが離れても最後に選択したbuttonのfocusを維持してよい
+
+#### Background
+- 現在のstadium background + speed linesはBattle向けvisualとして扱う
+- UI-01 Top Menuではspeed linesを使用しない
+- UI-01には専用background assetを使用する
+- Top Menu backgroundはBattleより静かにし、menu / logoの可読性を優先する
+
+#### Button micro animation
+- focus / hover: 80〜120msで右へ8〜12px slide
+- unfocus: 80〜120msで元位置へ戻る
+- pressed: 40〜80msの押し込み + 1〜3px程度の短い振動
+- animationはvisual-onlyでnavigation signalやhit areaを変えない
+- 同時に複数buttonを動かさない
+
+
+### 16.5 Top Menu tooltip
+
+- Top Menuではtooltipを表示しない
+- hover / focus時のfeedbackは色変化 + 微小slideだけで成立させる
+- mouse hoverで説明ポップアップを重ねない
+- menu項目の意味はlabel画像そのものから理解できることを前提とする
+
+
+### 16.6 Battle character image prototype
+
+UI-10のcharacter表示は、prototype checkpointとして頭部画像とアホ毛画像を分離する。
+
+- 頭部: character固有のhead asset
+- アホ毛: 同じCharacterDefinitionへ固定された別asset
+- アホ毛はrootを頭部へ固定し、tipほど大きく曲がる
+- idleでも停止させず、Live2Dのsecondary motionのように緩く連続変形する
+- HeadMotion / action stateへ追従して遅れ・反動を加える
+- visual-onlyでserver authoritativeなContact判定を変更しない

@@ -124,6 +124,35 @@ function requireNoActiveOnlineMatchForUser(
   }
 }
 
+function clearActiveOnlineMatchForUsers(
+  nk: nkruntime.Nakama,
+  userIds: string[],
+  matchId: string
+): boolean {
+  let success = true;
+
+  userIds.forEach(function (userId): void {
+    const record = readActiveOnlineMatch(nk, userId);
+    if (!record) {
+      return;
+    }
+
+    // A newer match must never be cleared by an older abandoned match.
+    if (record.value.match_id !== matchId) {
+      return;
+    }
+
+    try {
+      deleteActiveOnlineMatch(nk, userId, record.version);
+    } catch (_error) {
+      success = false;
+    }
+  });
+
+  return success;
+}
+
+
 function createActiveOnlineMatchForUsers(
   nk: nkruntime.Nakama,
   userIds: string[],

@@ -262,16 +262,16 @@ func _run() -> void:
 		_fail("Friend Match Result受信後1秒以内にResult画面を表示できませんでした。", app)
 		return
 	var result_screen = app.get_child(0)
-	if not _has_label_text(result_screen, "NO RATING CHANGE (FRIEND MATCH)"):
+	if not _has_label_text(result_screen, "フレンド対戦 / レート変動なし"):
 		_fail("Friend ResultにRating非対象表示がありません。", app)
 		return
-	if _has_label_text(result_screen, "PLAYER RATING") \
-			or _has_label_text(result_screen, "AHOGE RATING"):
+	if _has_label_text(result_screen, "プレイヤーレート") \
+			or _has_label_text(result_screen, "アホ毛レート"):
 		_fail("Friend ResultにRating変動が表示されています。", app)
 		return
-	var rematch_button = _find_button(result_screen, "REMATCH")
-	var change_character_button = _find_button(result_screen, "CHANGE CHARACTER")
-	var leave_room_button = _find_button(result_screen, "LEAVE ROOM")
+	var rematch_button = _find_button(result_screen, "再戦する")
+	var change_character_button = _find_button(result_screen, "キャラクターを選び直す")
+	var leave_room_button = _find_button(result_screen, "ルームを終了")
 	if rematch_button == null or change_character_button == null or leave_room_button == null:
 		_fail("Host Friend Resultの3ボタンが揃っていません。", app)
 		return

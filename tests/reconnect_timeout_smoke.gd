@@ -390,13 +390,202 @@ func _run() -> void:
 		_fail("Result遷移確定後もserver-side active matchが残っています。")
 		return
 
+	var p2_ack_result = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_ACK,
+		JSON.stringify({"match_id": original_match_id})
+	)
+	if p2_ack_result == null or p2_ack_result.is_exception():
+		_fail("P2の終了済みactive matchをackできませんでした。")
+		return
+
+	var abandon_rating_p1_before := await _read_current_rating(
+		online_session.client,
+		online_session.session
+	)
+	var abandon_rating_p2_before := await _read_current_rating(
+		second_client,
+		second_session
+	)
+	if abandon_rating_p1_before.is_empty() or abandon_rating_p2_before.is_empty():
+		_fail("両者不在abandon試験前Ratingを取得できませんでした。")
+		return
+
+	if not await _run_both_disconnected_abandon_scenario(
+		online_session,
+		second_client,
+		second_session,
+		p1_user_id,
+		p1_joined,
+		abandon_rating_p1_before,
+		abandon_rating_p2_before
+	):
+		return
+
 	if _second_socket != null:
-		await _second_socket.leave_match_async(_second_match_id)
 		_second_socket.close()
 	online_session.clear_session()
 
 	print("AHOGE LEGEND reconnect timeout smoke: PASS match_id=%s" % original_match_id)
 	quit(0)
+
+
+func _run_both_disconnected_abandon_scenario(
+	online_session,
+	second_client,
+	second_session,
+	p1_user_id: String,
+	p1_joined: Array,
+	p1_rating_before: Dictionary,
+	p2_rating_before: Dictionary
+) -> bool:
+	if _second_socket == null:
+		_fail("両者不在abandon試験用P2 socketがありません。")
+		return false
+
+	if not _second_match_id.is_empty():
+		await _second_socket.leave_match_async(_second_match_id)
+
+	# 前シナリオのruntime状態を一切持ち越さず、fresh client相当で開始する。
+	online_session.clear_session()
+	var fresh_auth: Dictionary = await online_session.authenticate_local_device()
+	if not bool(fresh_auth.get("ok", false)) or str(fresh_auth.get("user_id", "")) != p1_user_id:
+		_fail("両者不在abandon試験前のP1 fresh認証に失敗しました。")
+		return false
+	var fresh_realtime: Dictionary = await online_session.connect_realtime_socket()
+	if not bool(fresh_realtime.get("ok", false)):
+		_fail("両者不在abandon試験前のP1 Realtime再接続に失敗しました。")
+		return false
+	var fresh_active: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(fresh_active.get("ok", false)) or bool(fresh_active.get("active", false)):
+		_fail("両者不在abandon試験前にP1 active matchが残っています。")
+		return false
+
+	p1_joined[0] = ""
+	_second_match_id = ""
+	_second_ticket = ""
+	_second_failure = ""
+	_second_round_result = {}
+	_second_match_result = {}
+	_second_connection_events.clear()
+	_second_hit_count = 0
+	_second_input_sequence = 0
+
+	var countdown_started := [false]
+	online_session.round_countdown_changed.connect(
+		func(round_number: int, countdown_value: int, _server_tick: int) -> void:
+			if round_number == 1 and countdown_value > 0:
+				countdown_started[0] = true
+	)
+
+	var p1_start: Dictionary = await online_session.start_ranked_matchmaking(
+		1500,
+		OnlineConfigScript.RANKED_CHARACTER_LONG_TEST
+	)
+	if not bool(p1_start.get("ok", false)):
+		_fail("両者不在abandon試験でP1 Matchmakerを開始できませんでした。")
+		return false
+
+	var ticket_result = await _second_socket.add_matchmaker_async(
+		online_session.build_ranked_matchmaker_query(1500),
+		OnlineConfigScript.RANKED_MATCHMAKER_MIN_COUNT,
+		OnlineConfigScript.RANKED_MATCHMAKER_MAX_COUNT,
+		{
+			"mode": OnlineConfigScript.RANKED_MATCHMAKER_MODE,
+			"character_id": OnlineConfigScript.RANKED_CHARACTER_SHORT_TEST,
+		},
+		{"rating": 1500.0}
+	)
+	if ticket_result == null or ticket_result.is_exception():
+		_fail("両者不在abandon試験でP2 Matchmakerを開始できませんでした。")
+		return false
+	_second_ticket = str(ticket_result.ticket)
+
+	var join_deadline := Time.get_ticks_msec() + 40000
+	while Time.get_ticks_msec() < join_deadline:
+		if not _second_failure.is_empty():
+			_fail(_second_failure)
+			return false
+		if not str(p1_joined[0]).is_empty() and not _second_match_id.is_empty():
+			break
+		await create_timer(0.05).timeout
+
+	if str(p1_joined[0]).is_empty() or _second_match_id.is_empty():
+		_fail("両者不在abandon試験で2クライアントがjoinできませんでした。")
+		return false
+
+	var abandon_match_id := str(p1_joined[0])
+	var countdown_deadline := Time.get_ticks_msec() + 7000
+	while Time.get_ticks_msec() < countdown_deadline and not bool(countdown_started[0]):
+		await create_timer(0.02).timeout
+	if not bool(countdown_started[0]):
+		_fail("両者不在abandon試験でRound 1 countdownが開始しませんでした。")
+		return false
+
+	# Battle開始後に両者を離脱させる。
+	# 両participantが不在になった時点で15秒を待たず無効試合になる。
+	online_session.clear_runtime_session_preserving_match()
+	await _second_socket.leave_match_async(_second_match_id)
+
+	var clear_deadline := Time.get_ticks_msec() + 5000
+	var p2_active_cleared := false
+	while Time.get_ticks_msec() < clear_deadline:
+		var active_rpc = await second_client.rpc_async(
+			second_session,
+			OnlineConfigScript.ACTIVE_MATCH_RPC_GET
+		)
+		if active_rpc != null and not active_rpc.is_exception():
+			var active_value = JSON.parse_string(str(active_rpc.payload))
+			if active_value is Dictionary and not bool((active_value as Dictionary).get("active", false)):
+				p2_active_cleared = true
+				break
+		await create_timer(0.10).timeout
+
+	if not p2_active_cleared:
+		_fail("両者切断の無効試合後もP2 active match lockが残っています。")
+		return false
+
+	var reauth: Dictionary = await online_session.authenticate_local_device()
+	if not bool(reauth.get("ok", false)) or str(reauth.get("user_id", "")) != p1_user_id:
+		_fail("両者不在abandon後のP1再認証に失敗しました。")
+		return false
+
+	var p1_active: Dictionary = await online_session.refresh_active_online_match()
+	if not bool(p1_active.get("ok", false)) or bool(p1_active.get("active", false)):
+		_fail("両者切断の無効試合後もP1 active match lockが残っています。")
+		return false
+
+	var restored: Dictionary = await online_session.restore_unresolved_match_with_retry()
+	if not bool(restored.get("ok", false)) 			or bool(restored.get("repaired", false)) 			or str(restored.get("destination", "")) != "none":
+		_fail("ABANDON済みmatchが再起動復帰対象になっています。")
+		return false
+
+	var p1_rating_after := await _read_current_rating(
+		online_session.client,
+		online_session.session
+	)
+	var p2_rating_after := await _read_current_rating(
+		second_client,
+		second_session
+	)
+	if not _same_rating_record(p1_rating_before, p1_rating_after) 			or not _same_rating_record(p2_rating_before, p2_rating_after):
+		_fail("両者切断の無効試合でPlayer Ratingが変動しました。")
+		return false
+
+	var p2_active_verify = await second_client.rpc_async(
+		second_session,
+		OnlineConfigScript.ACTIVE_MATCH_RPC_GET
+	)
+	if p2_active_verify == null or p2_active_verify.is_exception():
+		_fail("ABANDON後のP2 active match再確認に失敗しました。")
+		return false
+	var p2_active_value = JSON.parse_string(str(p2_active_verify.payload))
+	if not p2_active_value is Dictionary 			or bool((p2_active_value as Dictionary).get("active", false)):
+		_fail("ABANDON後のP2 active matchが再出現しました。")
+		return false
+
+	print("AHOGE LEGEND both-disconnected invalid match smoke: PASS match_id=%s" % abandon_match_id)
+	return true
 
 
 func _read_ahoge_ranking(client, session, limit: int) -> Dictionary:

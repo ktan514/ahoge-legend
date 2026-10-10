@@ -1,6 +1,7 @@
 extends Control
 
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
+const MangaThemeScript := preload("res://src/ui/theme/manga_theme.gd")
 const TOP_MENU_SCENE := preload("res://scenes/screens/top_menu/TopMenu.tscn")
 const SETTINGS_SCENE := preload("res://scenes/screens/settings/Settings.tscn")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
@@ -10,7 +11,6 @@ const RANKED_MATCHING_SCENE := preload("res://scenes/screens/ranked_matching/Ran
 const PRE_BATTLE_SCENE := preload("res://scenes/overlays/PreBattleDialogue.tscn")
 const ONLINE_BATTLE_SCENE := preload("res://scenes/screens/battle/OnlineBattle.tscn")
 const BATTLE_SCENE := preload("res://scenes/screens/battle/Battle.tscn")
-const M1_BATTLE_SCENE := preload("res://scenes/screens/battle/BattleM1Debug.tscn")
 const MATCH_RESULT_SCENE := preload("res://scenes/screens/result/MatchResult.tscn")
 const RANKING_SCENE := preload("res://scenes/screens/ranking/Ranking.tscn")
 const FRIEND_MATCH_MENU_SCENE := preload("res://scenes/screens/friend_match/FriendMatchMenu.tscn")
@@ -31,20 +31,15 @@ var _friend_last_role: String = ""
 var _friend_character_id: String = "LONG_TEST"
 var _friend_join_in_progress: bool = false
 var _friend_refresh_in_progress: bool = false
-var _m1_direct_mode: bool = false
 
 
 func _ready() -> void:
+	theme = MangaThemeScript.build_theme()
 	_online_session = get_node("/root/OnlineSession")
 	var settings_path := OS.get_environment("AHOGE_SETTINGS_PATH")
 	_settings_store = SettingsStoreScript.new(settings_path)
 	_settings_store.load_and_apply()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_m1_direct_mode = OS.get_cmdline_user_args().has("--m1-battle")
-	if _m1_direct_mode:
-		_show_m1_authoritative_battle()
-		return
-
 	_show_loading("CHECKING ONLINE STATE...")
 	call_deferred("_initialize_online_state")
 
@@ -243,6 +238,11 @@ func _force_resume_unresolved_online_match() -> void:
 			_show_friend_online_battle(snapshot)
 			return
 		if destination == "friend_result":
+			# 再起動復帰では初回Result表示前にroom membershipを復元し、
+			# Host / Guest専用操作を誤表示しない。
+			var room: Dictionary = await _online_session.get_friend_room_status(_friend_room_code)
+			if bool(room.get("ok", false)):
+				_set_friend_room(room)
 			_show_friend_result_from_snapshot(snapshot)
 			return
 
@@ -519,7 +519,7 @@ func _synchronize_friend_result(screen: Control, result_match_id: String) -> voi
 		if not is_instance_valid(screen) or _current_screen != screen:
 			return
 		screen.call("set_friend_result_actions_enabled", false)
-		screen.call("set_status", "SYNCING MATCH RESULT...")
+		screen.call("set_status", "対戦結果を同期しています…")
 		await get_tree().create_timer(0.25).timeout
 
 	if not is_instance_valid(screen) or _current_screen != screen:
@@ -646,9 +646,9 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 		var ack_completed := bool(screen.get_meta("friend_result_ack_completed", false))
 		screen.call("set_friend_result_actions_enabled", ack_completed)
 		if not ack_completed:
-			screen.call("set_status", "SYNCING MATCH RESULT...")
+			screen.call("set_status", "対戦結果を同期しています…")
 		elif _friend_last_role == "guest":
-			screen.call("set_status", "WAITING FOR HOST...")
+			screen.call("set_status", "ホストの選択を待っています…")
 		else:
 			screen.call("set_status", "")
 		return
@@ -662,9 +662,9 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 			return
 		screen.call("set_friend_result_actions_enabled", false)
 		if _friend_last_role == "guest":
-			screen.call("set_status", "WAITING FOR HOST...")
+			screen.call("set_status", "ホストの選択を待っています…")
 		else:
-			screen.call("set_status", "SYNCING FRIEND ROOM...")
+			screen.call("set_status", "ルーム状態を確認しています…")
 		return
 
 	if state == "STARTING":
@@ -681,9 +681,9 @@ func _refresh_friend_result(screen: Control, result_match_id: String) -> void:
 
 	screen.call("set_friend_result_actions_enabled", false)
 	if _friend_last_role == "guest":
-		screen.call("set_status", "WAITING FOR HOST...")
+		screen.call("set_status", "ホストの選択を待っています…")
 	else:
-		screen.call("set_status", "SYNCING FRIEND ROOM...")
+		screen.call("set_status", "ルーム状態を確認しています…")
 
 
 func _leave_friend_room(_screen: Control = null) -> void:
@@ -909,10 +909,6 @@ func _show_local_battle(player_one_id: String, player_two_id: String) -> void:
 	screen.connect("exit_requested", Callable(self, "_show_top_menu"))
 
 
-func _show_m1_authoritative_battle() -> void:
-	var screen = _replace_screen(M1_BATTLE_SCENE)
-	screen.connect("exit_requested", Callable(self, "_on_m1_exit_requested"))
-
 
 func _show_local_match_result(summary: Dictionary) -> void:
 	var screen = MATCH_RESULT_SCENE.instantiate()
@@ -959,12 +955,6 @@ func _replace_screen_instance(instance: Control) -> void:
 	_current_screen = instance
 	add_child(_current_screen)
 
-
-func _on_m1_exit_requested() -> void:
-	if _m1_direct_mode:
-		get_tree().quit()
-	else:
-		_show_top_menu()
 
 
 func _on_exit_requested() -> void:

@@ -126,6 +126,7 @@ interface AhogeRankedMatchState {
   ratingSettlementRetryTick: number;
   activeMatchResultPersisted: boolean;
   activeMatchResultRetryTick: number;
+  abandoned: boolean;
 }
 
 const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = function (
@@ -260,7 +261,8 @@ const rankedMatchInit: nkruntime.MatchInitFunction<AhogeRankedMatchState> = func
       ratingSettlementDone: false,
       ratingSettlementRetryTick: 0,
       activeMatchResultPersisted: false,
-      activeMatchResultRetryTick: 0
+      activeMatchResultRetryTick: 0,
+      abandoned: false
     },
     tickRate: AUTHORITATIVE_MATCH_TICK_RATE,
     label: JSON.stringify({
@@ -390,7 +392,7 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
 
       if (isActiveRoundPhase(state)) {
         // active Round中は15秒deadlineを開始しない。
-        // Roundそのものを進行し、同Round終了までいつでも復帰可能にする。
+        // 片側切断なら同Round終了まで復帰可能とする。
         delete state.reconnectDeadlineTickByUser[presence.userId];
         broadcastPlayerConnectionChanged(
           dispatcher,
@@ -422,6 +424,17 @@ const rankedMatchLeave: nkruntime.MatchLeaveFunction<AhogeRankedMatchState> = fu
     }
   });
 
+  // Battle開始後に両participantが同時に不在になった場合は、
+  // 勝敗・Ratingを作らず無効試合として即終了する。
+  if (
+    !state.matchFinished &&
+    hasBattleStarted(state) &&
+    participantUserIds(state).length === 2 &&
+    Object.keys(state.presences).length === 0
+  ) {
+    state.abandoned = true;
+  }
+
   logger.info("ahoge_ranked player left. size=%d", Object.keys(state.presences).length);
   return {state: state};
 };
@@ -439,6 +452,17 @@ function allExpectedPlayersConnected(state: AhogeRankedMatchState): boolean {
     return !!state.presences[userId];
   });
 }
+
+function hasBattleStarted(state: AhogeRankedMatchState): boolean {
+  return (
+    state.roundCountdownStartTick >= 0 ||
+    state.roundTimerStartTick >= 0 ||
+    state.roundFinished ||
+    state.roundResetPending ||
+    state.roundNumber > 1
+  );
+}
+
 
 function isActiveRoundPhase(state: AhogeRankedMatchState): boolean {
   return (
@@ -1796,7 +1820,20 @@ function resolveRoundBoundaryTimeout(
     }
   );
 
-  // 両者同時切断は別契約。片側だけのRound境界timeoutだけを処理する。
+  const participantIds = participantUserIds(state);
+
+  // leave eventを取りこぼした場合でも、Battle開始後に両participantが
+  // 不在ならdeadlineを待たず無効試合へ収束させる。
+  if (
+    hasBattleStarted(state) &&
+    Object.keys(state.presences).length === 0 &&
+    participantIds.length === 2
+  ) {
+    state.abandoned = true;
+    return;
+  }
+
+  // 片側だけのRound境界timeoutだけをDISCONNECT_FORFEITとして処理する。
   if (expiredUserIds.length !== 1) {
     return;
   }
@@ -1809,7 +1846,6 @@ function resolveRoundBoundaryTimeout(
   }
 
   let winnerUserId = "";
-  const participantIds = participantUserIds(state);
   for (let index = 0; index < participantIds.length; index += 1) {
     const userId = participantIds[index];
     if (userId !== loserUserId && state.presences[userId]) {
@@ -1851,6 +1887,36 @@ const rankedMatchLoop: nkruntime.MatchLoopFunction<AhogeRankedMatchState> = func
   messages
 ) {
   resolveRoundBoundaryTimeout(dispatcher, state, tick);
+
+  if (state.abandoned) {
+    // Friend Matchはroom側のIN_MATCH状態も終了させる。
+    // Match Resultは生成しないため、これはroom lifecycleだけのsettlement。
+    if (state.matchMode === "friend" && !state.friendRoomSettlementDone) {
+      const roomSettled = markFriendRoomMatchFinished(
+        nk,
+        state.friendRoomCode,
+        state.matchId,
+        state.friendMatchGeneration
+      );
+      if (!roomSettled) {
+        return {state: state};
+      }
+      state.friendRoomSettlementDone = true;
+    }
+
+    const cleared = clearActiveOnlineMatchForUsers(
+      nk,
+      participantUserIds(state),
+      state.matchId
+    );
+    if (cleared) {
+      logger.info("ahoge match invalidated because all participants disconnected.");
+      return null;
+    }
+    // Storage version conflictなどでlock削除に失敗した場合は次tickで再試行する。
+    return {state: state};
+  }
+
   settleRankedRatingIfNeeded(nk, logger, state, tick);
   settleFriendRoomIfNeeded(nk, state, tick);
   persistActiveMatchResultIfNeeded(nk, state, tick);

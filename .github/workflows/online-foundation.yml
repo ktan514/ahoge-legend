@@ -41,8 +41,6 @@ on:
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
-      - "scripts/client-m1-battle.sh"
-      - "scripts/client-m1-battle-smoke.sh"
       - "src/ui/app_root.gd"
       - "src/ui/battle_mode_select.gd"
       - "src/ui/character_select.gd"
@@ -62,8 +60,7 @@ on:
       - "src/ui/ranking.gd"
       - "scenes/screens/ranking/Ranking.tscn"
       - "src/ui/battle_hud.gd"
-      - "src/ui/battle_m1_debug.gd"
-      - "scenes/screens/battle/BattleM1Debug.tscn"
+      - "src/ui/ahoge_prototype_rig.gd"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -143,8 +140,6 @@ on:
       - "scripts/client-round-result-smoke.sh"
       - "scripts/client-bo3-smoke.sh"
       - "scripts/client-match-result-smoke.sh"
-      - "scripts/client-m1-battle.sh"
-      - "scripts/client-m1-battle-smoke.sh"
       - "src/ui/app_root.gd"
       - "src/ui/battle_mode_select.gd"
       - "src/ui/character_select.gd"
@@ -161,8 +156,7 @@ on:
       - "src/ui/ranking.gd"
       - "scenes/screens/ranking/Ranking.tscn"
       - "src/ui/battle_hud.gd"
-      - "src/ui/battle_m1_debug.gd"
-      - "scenes/screens/battle/BattleM1Debug.tscn"
+      - "src/ui/ahoge_bone_rig.gd"
       - "scripts/godot-import.sh"
       - "scripts/godot-strict.sh"
       - "addons/com.heroiclabs.nakama/**"
@@ -364,10 +358,6 @@ jobs:
       - name: Godot authoritative Round Result smoke
         if: matrix.group == 'round'
         run: ./scripts/client-round-result-smoke.sh
-
-      - name: Godot M1 authoritative Battle UI smoke
-        if: matrix.group == 'round'
-        run: ./scripts/client-m1-battle-smoke.sh
 
       - name: Godot authoritative BO3 full match smoke
         if: matrix.group == 'match'

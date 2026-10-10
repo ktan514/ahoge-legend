@@ -601,7 +601,7 @@ authoritative matchへ通常joinした場合もserverはjoinしたplayerへ `MAT
 
 UI-09初期実装は正式台詞コンテンツを要求せず、snapshotで確定した双方のcharacterと `READY...` を短時間表示する機能優先版とする。スキップ可否は未決のまま追加しない。
 
-UI-10 Rankedは既存M1 HUD表現を再利用するが、M1デバッグ用の第二client自動生成は使用しない。実際の相手はremote playerとし、ローカルplayerの入力だけを `OnlineSession.send_combat_input()` でserverへ送る。
+UI-10 Rankedは共通BattleHUD / FighterVisualを使用し、実際の相手はremote playerとする。実際の相手はremote playerとし、ローカルplayerの入力だけを `OnlineSession.send_combat_input()` でserverへ送る。
 
 UI-11 Rankedは `MATCH_RESULT` のwinner / final score / finish_causeを勝敗正本として表示する。RatingはMatch Resultからclient計算しない。`match_id` を使ってserverのRanked settlement RPCを取得し、Player Ratingと使用characterのAhoge Ratingをそれぞれ `before → after (delta)` で表示する。再ログインResultでも同じsettlement RPCを使用するため、clientローカルにmatch前Ratingを保存して正本化しない。
 
@@ -1363,10 +1363,15 @@ VictoryLineDefinition
 
 ### 12.1 CharacterDefinition
 
+キャラクター選択の単位は `CharacterDefinition` 1件であり、頭部・髪型・アホ毛を別slotとして組み替えない。
+`head_asset` と `ahoge_asset` は同じCharacterDefinitionへ固定で紐づく一体のvisual setである。
+UI-04はCharacterDefinitionを選ぶ画面であり、アホ毛単体の装備選択UIではない。
+
 ```text
 CharacterDefinition
 - id
 - display_name
+- feature_text: String # Character Selectの1行特徴
 - ahoge_type
 - attack_type
 - head_asset
@@ -1386,6 +1391,27 @@ SHORT
 ```
 
 これは攻撃範囲を意味しない。
+
+### 12.2.1 Character Select用Visual Placeholder
+
+正式な `head_asset / ahoge_asset` が未導入の間も、UI-04は文字だけのcardにしない。
+visual-only component `MangaCharacterArt` を使用し、`CharacterDefinition` から次を描き分ける。
+
+- `ahoge_type`: LONG / NORMAL / SHORTごとの長さ・curve
+- `attack_type`: SWING / THROWを補助的なmotion cueとして表現
+- selected detail previewではidle swayを付ける
+- card内previewは静止または極小motionとし、可読性を優先する
+- 顔・目・鼻・口・全身は描かず、頭頂部 + 髪 + アホ毛だけを描く
+- Top Menu用の2人hero artはUI-04へ流用しない
+
+このcomponentは見た目専用であり、Hit / Contact / action stateのauthoritative判定には使用しない。
+
+現行テストキャラクターの `feature_text` は次を使用する。
+
+- `LONG_TEST`: 「長いアホ毛で間合いを取るスタンダード型」
+- `SHORT_TEST`: 「短いアホ毛を投げてかき回す変則型」
+
+正式キャラクター導入時は各CharacterDefinitionで個別に置き換える。
 
 ### 12.3 MotionProfile
 
@@ -1407,6 +1433,8 @@ MotionProfile
 各キャラクターはアホ毛タイプの共通MotionProfileを基準とし、固有補正を重ねられる。
 
 ## 13. モーション詳細
+
+2026-10-06更新: LONG_TESTのTexture/Profile正本は `ahoge_straight.png` / `ahoge_straight_profile.tres`。Profileは素材座標の `bind_vertices` とゲーム空間の `idle_pose_vertices` を分離し、UV/indexを固定したままActionMotion・柔軟chainで頂点だけを更新する。旧 `ahoge.png` / `ahoge_mesh_profile.tres` は回帰用に保持する。
 
 ### 13.1 HeadMotion
 
@@ -1434,6 +1462,125 @@ HeadMotionはアクションごとに頭部のローカル位置・回転を生�
 - detached_state
 
 完全な物理シミュレーション結果をゲーム判定には使用しない。
+
+
+### 13.3 2D Head / Prototype-compatible Ahoge Motion
+
+UI-10 BattleのLONG型visualは、元HTML prototypeの実装ロジックをGodotへ移植する。
+
+構成:
+
+```text
+FighterVisual
+├─ HeadClipControl
+│  └─ HeadSprite
+└─ AhogePrototypeRig
+   └─ MotionRoot
+      └─ AhogeSprite
+```
+
+アホ毛はsource PNGを変形meshへ分解せず、画像そのものを使用する。
+root anchorを頭頂部へ固定し、`MotionRoot` のrotation / scaleだけを更新する。
+
+#### 13.3.1 Prototype whole motion
+
+state:
+- `whole_angle`
+- `whole_angle_velocity`
+- `whole_reach`
+- `whole_reach_velocity`
+
+入力:
+- head forward velocity
+- head forward acceleration
+- action state
+- action elapsed time
+- charge ratio
+
+prototypeから移植するLONG基準値:
+
+```text
+base angle target
+= head_forward_velocity * 0.00135
++ head_forward_acceleration * 0.000028
+```
+
+CHARGING:
+- `tension = charge_elapsed / max_charge`
+- angle target = `-0.28 - 0.48 * tension + inertia * 0.12`
+- reach target = `1.0`
+- チャージ中は長さを増やさない
+
+WINDUP:
+- charged: angle `-0.38 - 0.40 * charge`, reach `1.0`
+- normal: angleへ `-0.62 * easeOut(q)`
+- normal reach `1.0 -> 0.80`
+
+STRIKE charged:
+- release = `easeOut(clamp((u - 0.035) / 0.74))`
+- angle `(-0.38 - 0.40*charge) -> (1.04 + 0.20*charge)`
+- reach `1.0 -> (2.10 + 0.42*charge)`
+
+STRIKE normal:
+- lag = `sin(clamp(u / 0.44) * PI)`
+- release = `easeOut(clamp((u - 0.30) / 0.70))`
+- angle += `-0.50 * lag + 1.04 * release`
+- reach `0.82 -> 2.05`
+
+clamp:
+- angle target: `-1.38 .. 1.48 rad`
+- angle state: `-1.50 .. 1.60 rad`
+- reach target: `0.74 .. 2.55`
+- reach state: `0.68 .. 2.62`
+
+spring / damping:
+- angle default: stiffness 38 / damping 6.6
+- angle charging: 46 / 7.2
+- angle charged strike: 58 / 7.8
+- reach default: 38 / 7.2
+- reach charging: 72 / 11.5
+- reach charged windup: 70
+- reach strike: 58 / 8.5
+
+render:
+- local X scale = `whole_reach`
+- local Y scale = `lerp(1.0, 0.82, clamp((reach - 1) / 1.45))`
+- rotation = `whole_angle`
+- source image root anchorを固定
+
+この方式ではsource PNGのC字輪郭自体が攻撃中も保持される。
+旧Polygon deformation / ribbon / Skeleton2Dによる大変形は使用しない。
+
+#### 13.3.2 Prototype head motion
+
+頭部もprototypeの時間曲線を移植する。
+
+WINDUP:
+- `backAmp = 82 + 72 * charge`
+- easeOutで後方へ移動
+
+STRIKE:
+- `forwardAmp = 86 + 74 * charge`
+- phase1: `1 - easeOut(u / 0.20)`
+- phase2: `easeOut((u - 0.12) / 0.42)`
+- phase3: `easeOut((u - 0.46) / 0.40)`
+- retreat残量 + 前方加速 + 最終pushの3段階で頭部を振る
+
+頭部の座標変化からvelocity / accelerationを算出し、AhogePrototypeRigへ入力する。
+
+#### 13.3.3 Visual checkpoint
+
+Human Verificationは元prototype動画を基準とする。
+
+- IDLEで元PNGのC字輪郭がそのまま見える
+- CHARGINGでは後方へ張るが画像サイズは増えない
+- WINDUPで頭が先に後退し、アホ毛が遅れる
+- STRIKE前半は頭が先行しアホ毛が後方へ残る
+- STRIKE後半でアホ毛全体が前へ追い越す
+- reach最大時も画像が裂けない
+- texture / 太さ / ハイライトが崩れない
+- charged STRIKEでは通常攻撃よりさらに大きく前方へ伸びる
+- ばねと減衰によりovershoot後にrestへ戻る
 
 ### 13.3 ロング型
 
@@ -1757,58 +1904,81 @@ Contact到達時点ではまだPARRY / DODGE成功結果やHitを確定しない
 通信遅延を考慮したContactEventの時刻補正と100ms上限の具体的な補正方式は後続Issueで実装する。
 
 
-### 14.4 M1 Battle Core用authoritative実画面接続
+### 14.4 M1 Battle Core検証導線の扱い
 
-工程2完了直後のM1 #53では、工程4のGameFlow完成を待たず、UI-10 Battleへ直接入るデバッグ導線を用意する。
+工程2のM1 #53では、GameFlow完成前の一時的な検証手段としてBattle直行構成を使用した。
+この構成は工程4以降の製品ランタイム仕様ではなく、M1完了後は残置しない。
 
-M1用のデバッグ構成は次とする。
+現行仕様:
 
-```text
-Godot実ウィンドウ
-├─ P1: OnlineSession
-│   ├─ Device Authentication
-│   ├─ Realtime Socket
-│   └─ LONG_TEST / マウス操作
-└─ P2: M1デバッグ用Nakama client/socket
-    ├─ 実行ごとに別Device ID
-    ├─ Realtime Socket
-    └─ SHORT_TEST / Q・E操作
+- 起動引数 `--m1-battle` は提供しない
+- `BattleM1Debug` のような専用Battle Sceneを製品ランタイムへ持たない
+- 1つのGodot process内で検証用P1/P2を自動生成する導線を持たない
+- BattleのHuman VerificationはUI-01から通常のGameFlowを通して実施する
+- Battleだけが表示され、接続待ちや入力lockのため操作不能になる特殊起動状態を作らない
+- authoritative Battleの自動検証は画面直行機能ではなく、既存protocol / combat / GameFlow smokeで担保する
 
-P1 + P2
-→ 同一Ranked Matchmaker
-→ 同一authoritative match
-→ server確定event
-→ UI-10 HUD / FighterVisual
-```
+M1で確立したserver authoritative event契約、Round Countdown、HUD表示契約は現行仕様として維持する。
+撤去対象は**M1専用の起動・Scene・内部2client構成だけ**であり、戦闘ルールやauthoritative判定自体は変更しない。
 
-M1では1つのGodot process内に2つのNakama clientを保持してよい。これは操作・描画を1画面で早期確認するためのデバッグ構成であり、本番Ranked GameFlowで1processに2playerを保持する仕様ではない。
 
-操作:
+#### 13.3.2 Human motion storyboard
 
-- P1 左クリック押下: `ATTACK_PRESS`
-- P1 左クリック解放: `ATTACK_RELEASE`
-- P1 右クリック: `DEFEND`
-- P2 Q押下: `ATTACK_PRESS`
-- P2 Q解放: `ATTACK_RELEASE`
-- P2 E: `DEFEND`
+2026-10-03 Human referenceの6コマをUI-10のmotion正本とする。
 
-M1のBattle表示はローカル `MatchCoordinator / CombatResolver` から勝敗を再計算しない。次のauthoritative eventを表示の正本として使用する。
+1. IDLE
+   - 頭は中央
+   - アホ毛は自然姿勢
+2. CHARGING開始
+   - 頭が先に後方へ移動
+   - アホ毛tipは慣性で元位置付近へ残る
+3. CHARGING追従
+   - 遅れてアホ毛が後方へ追従
+   - rootは頭頂部へ固定
+4. STRIKE開始
+   - 頭が先に前方へ急加速
+   - アホ毛tipは一瞬後方へ残る
+5. STRIKE追従
+   - アホ毛tipへ前向き初速が入り、頭へ追いつく
+6. CONTACT直前
+   - 頭は前方限界へ近づく
+   - アホ毛tipは頭を追い越して前方へ最大伸長
+   - tip側ほど大きく変形し、相手側へsweepする
 
-- `COMBAT_STATE_CHANGED`: Attack / Charge / Parry / Dodge / Stagger / ROUND_LOCKED
-- `DEFENSE_RESOLVED`: PARRY / DODGE / JUST_PARRY / JUST_DODGE
-- `ATTACK_CLASH`: CLASH
-- `HIT_CONFIRMED`: Hit演出
-- `ROUND_HIT_COUNT_CHANGED`: Hit数
-- `ROUND_TIMER_CHANGED`: 85秒timer
-- `ROUND_OVERTIME_STARTED`: OVERTIME
-- `ROUND_STARTED`: Round番号
-- `BO3_SCORE_CHANGED`: 取得Round数
-- `MATCH_RESULT`: Match終了・最終score
-- `ahoge_available`: SHORT detach / regrow表示
+実装上、action extensionを単純lerpしない。
+tip extensionは位置と速度を持つ1自由度ばねとして扱い、state transition時に速度impulseを与える。
 
-見た目の頭部・アホ毛二次動作は引き続きGodot client側で行い、serverの戦闘判定へ逆流させない。
+初期値:
+- head CHARGING target: -52px
+- head WINDUP target: -64px
+- head STRIKE target: +68px
+- head COOLDOWN follow-through: +20px
+- ahoge CHARGING target: -75px
+- CHARGING head lead delay: 約0.10秒（この間はahoge extension targetを0pxに保つ）
+- ahoge WINDUP target: -105px
+- ahoge STRIKE target: +150px
+- STRIKE transition tip impulse: +950〜1150px/s
 
-M1デバッグ起動は通常GameFlowと分離し、起動引数 `--m1-battle` からUI-10へ直接入れる。M1用の内部2client構成、固定テストキャラクター、操作キーは検証専用であり、本番仕様へ昇格させない。
+CHARGING中はextension springを弱くして「頭が先、アホ毛が遅れる」を作る。
+STRIKE中はspringを強くし、transition impulseと合わせて「遅れたtipが頭を追い越す」を作る。
+
+
+
+#### 13.3.3 FighterVisual clipping
+
+Battleの画像FighterVisualは、頭部とアホ毛でclip責務を分離する。
+
+- `FighterVisual.clip_contents = false`
+- image modeのrootもclipしない
+- headだけ `HeadClipControl` の子へ入れ、`HeadClipControl.clip_contents = true`
+- ahoge rigは `HeadClipControl` の外側のsiblingとして置く
+- headはBattle area下端でcropし、顔全体を表示しない
+- ahogeはplayer側Control矩形を越えて中央・相手側へsweep可能
+- CHARGING / STRIKEの可動域をclip回避のため縮小しない
+- fallback code-draw modeは従来どおりFighterVisual自体をclipする
+
+これにより「頭部は画面下端から一部だけ見える」「アホ毛は戦闘空間を自由に振り抜く」を同時に満たす。
+
 
 #### 14.4.1 authoritative Round開始Countdown
 
@@ -1960,14 +2130,14 @@ Round / BO3 / Reconnect / Match ResultはRankedと同じserver authoritative bat
 
 #### 15.2.5 Result / Rematch
 
-Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の次戦方針の選択権はHostだけが持つ。Guestは `WAITING FOR HOST...` と自分自身の `LEAVE ROOM` だけを持ち、Hostの選択を待つ。
+Match Result確定時、serverは対応roomを `POST_MATCH` へ移し、Host / Guest membershipと両者のcharacterを保持する。Readyは両者falseへ戻す。Result画面の次戦方針の選択権はHostだけが持つ。Guestは「ホストの選択を待っています…」と自分自身の「ルームを抜ける」だけを持ち、Hostの選択を待つ。
 
 Host Result操作はserver RPCを正本とし、次の3択とする。
 
 ```text
-REMATCH
-CHANGE CHARACTER
-LEAVE ROOM
+再戦する              (action=rematch)
+キャラクターを選び直す (action=change_character)
+ルームを終了           (action=leave)
 ```
 
 - `REMATCH`
@@ -2020,7 +2190,7 @@ Host以外のclient判断でREMATCH / CHANGE CHARACTER / room全体終了を確�
 Friend matchへjoinした後は既存 Nakama `user_id` 単位のserver-side `active_online_match/current` に `match_mode=friend` として保持する。
 
 - 進行中Friend matchもRankedと同じく、active Round中はdeadlineなしで同一matchへ復帰し、Round境界のみ15秒待機する
-- 終了済みFriend matchへ再ログインした場合はserver result snapshotからFriend Resultへ復帰する。Hostは3択を再表示し、GuestはHOST選択待ち + 自分のLEAVE ROOMを再表示する。すでにHost選択が確定済みならroom stateへ追従する
+- 終了済みFriend matchへ再ログインした場合はserver result snapshotからFriend Resultへ復帰する。Result初回表示前に `ahoge_friend_room_status` で現在userのHost / Guest membershipを復元し、Hostは3択、GuestはHost選択待ち + 自分の退出操作を最初の表示から正しく出す。すでにHost選択が確定済みならroom stateへ追従する。room statusを一時取得できない場合は誤ったroleの操作を表示せず、操作無効の同期状態から再取得する
 - 未解決match contextがある間、`OnlineSession` は新しいFriend room作成・参加・対戦開始を拒否する
 - Match Not Found / Invalid Match IDの安全解除契約を変更しない
 
@@ -2096,7 +2266,7 @@ Friend再起動復帰のidentity契約:
 - 同じ `device_id` で再認証したclientは同じNakama `user_id` として扱う
 - Friend match中にclientが終了してもserver-side `active_online_match/current` とそのMatch参加資格は解除しない。再起動後は元authoritative matchへ復帰する
 - 再起動時は新規Friend導線へ進む前に `active_online_match/current` を確認し、ACTIVEなら元authoritative matchへ強制復帰する
-- RESULT_PENDINGならserver result snapshotからFriend Resultを復元し、room stateと同期してHost選択待ちまたは確定済み遷移へ接続する
+- RESULT_PENDINGならserver result snapshotを取得した後、Friend Resultを表示する前にroom stateを1回取得してHost / Guest roleを復元する。そのroleを初回UIへ渡し、以後はroom stateのpollでHost選択待ちまたは確定済み遷移へ追従する
 - Friend roomのhost / guest membershipはNakama `user_id` を正本とし、Match終了時のPOST_MATCHでは両者membershipを保持する
 - Guest自身がLEAVEした場合だけGuest枠を解放し、その空席はroom code JOINの成功順で確定する。前MatchのGuestだったかどうかは優先条件にしない
 - 別 `device_id` は別userであり、進行中Matchの参加資格を引き継がない
@@ -2112,9 +2282,9 @@ Friend Result:
 
 - WIN / LOSE / DRAW
 - 最終BO3 score
-- `NO RATING CHANGE (FRIEND MATCH)`
-- Host: `REMATCH` / `CHANGE CHARACTER` / `LEAVE ROOM`
-- Guest: `WAITING FOR HOST...` / `LEAVE ROOM` のみ。Host専用のREMATCH / CHANGE CHARACTER / room全体LEAVEはGuest画面ではvisibleにしない
+- `フレンド対戦 / レート変動なし`
+- Host: `再戦する` / `キャラクターを選び直す` / `ルームを終了`
+- Guest: `ホストの選択を待っています…` / `ルームを抜ける` のみ。Host専用の再戦 / キャラクター選び直し / room全体終了はGuest画面ではvisibleにしない
 
 Result操作はHostだけが行い、server room stateを通してGuestへ伝播する。GuestはHostの選択へ追従する。
 
@@ -2736,6 +2906,36 @@ Round進行中に片側だけが切断した場合、match全体は停止しな�
 
 同じRound中に切断playerが復帰した場合、経過秒数に関係なく再joinを許可し、最新authoritative snapshotへ同期してそのRoundを継続する。
 
+#### 21.5.1a 両player切断時の無効試合
+
+Battle開始後、expected participant 2名がともにpresenceを失った時点で、server authoritativeにそのMatchを**無効試合**として終了する。
+
+対象:
+- Ranked Match
+- Friend Match
+- active Round
+- Round Result hold
+- 次Round Countdown / Round開始待機
+
+判定:
+- participantはexpected user 2名である
+- Battle開始後である
+- `state.presences` にexpected participantが1名も残っていない
+
+処理:
+- `abandoned=true` としてmatch loopを終了対象にする
+- winner / loserを生成しない
+- `MATCH_RESULT` を生成しない
+- Round Win / Hit数を勝敗へ変換しない
+- Player Ratingを更新しない
+- Ahoge Ratingを更新しない
+- 両participantの `active_online_match` lockを削除する
+- Friend Matchではroom側のIN_MATCH状態を終了扱いへ戻し、次のroom操作を阻害しない
+- 再ログイン時に元Battleへ復帰させない
+
+片側だけが切断した場合は従来の再接続契約を維持する。
+「両方が切断したので引き分け」とは扱わず、戦績に残らない無効試合とする。
+
 #### 21.5.2 Round境界の復帰待機
 
 Round境界は「前Round Result」と「次Round開始側」を明確に分離する。
@@ -2863,7 +3063,7 @@ RESULT_PENDING
 1. `active=false` → 通常導線
 2. `ACTIVE` → Realtime接続後、同じmatch IDへjoinしauthoritative snapshotを受信
 3. `RESULT_PENDING / ranked` → Battleを再表示せずUI-11 Resultへ遷移
-4. `RESULT_PENDING / friend` → Friend文脈のCharacter Selectへ遷移
+4. `RESULT_PENDING / friend` → room roleを復元してUI-11 Friend Resultへ直接遷移
 5. `ACTIVE` だがserver上にmatchが存在しない → serverがstale contextを安全解除
 6. timeout / network error / server error → contextを解除せず再試行可能な状態を保持
 
@@ -3053,3 +3253,154 @@ settlementが既に存在するmatchはRatingを再更新しない。
 - 画面比率の最終値
 
 未決事項を変更する場合は、Issueで目的を明確にし、基本設計・詳細設計を先に更新してから実装する。
+
+
+## 22. UI画像アセット実装
+
+UI画像assetのfile list / naming / visual responsibilityは `docs/UI_ASSET_SPEC.md` を正本とする。
+
+### 22.1 Component boundary
+
+```text
+TextureButton
+├─ state texture
+└─ fixed label TextureRect
+
+NinePatchRect
+└─ panel / frame texture
+
+DigitNumberDisplay
+└─ TextureRect[]  # digit_0.png ... digit_9.png
+
+ImpactImageDisplay
+└─ TextureRect    # fx_hit / fx_parry / sfx_doka ...
+
+BalloonMessage
+├─ NinePatchRect
+└─ Label          # 可変台詞
+```
+
+### 22.2 TextureButton
+
+button interactionはButton/TextureButtonのsignalを正本とし、画像側へlogicを持たせない。
+
+- normal / hover / pressed / disabled textureをstateへ割り当てる
+- fixed label画像はmouse filterを無効化し、入力判定をTextureButtonへ集約する
+- accessibilityやdebug検証のため、action自体の識別名はnode name / signalとして保持する
+
+### 22.3 DigitNumberDisplay
+
+入力: non-negative integer
+
+処理:
+1. integerをdecimal stringへ変換
+2. 1文字ずつ0〜9へmap
+3. 対応digit textureをTextureRectへ設定
+4. 必要桁数だけ表示
+5. leading zeroは付けない
+
+Battle timerでは85〜0のみを扱う。
+
+### 22.4 ImpactImageDisplay
+
+入力eventをasset keyへmapする。
+
+```text
+HIT        -> fx_hit
+PARRY      -> fx_parry
+JUST_*     -> fx_just
+DODGE      -> fx_dodge
+CLASH      -> fx_clash
+STAGGER    -> fx_stagger
+OVERTIME   -> fx_overtime
+```
+
+表示life timeはUI/UX正本の240msを初期基準とし、position / scale / rotationはvisual-onlyとする。
+
+
+
+### 22.6 Top Menu asset implementation
+
+UI-01は `assets/ui/top_menu/` の画像assetを直接preloadし、次のnodeで構成する。
+
+- background: `TextureRect`
+- speed lines: `TextureRect`
+- logo: `TextureRect`
+- menu actions: `TextureButton`
+- fixed labels: button childの `TextureRect`
+
+`TextureButton` は共通4stateを使用する。
+
+- normal: `btn_menu_normal.png`
+- hover / keyboard focus / controller focus: `btn_menu_focus.png`
+- pressed: `btn_menu_pressed.png`
+- disabled: `btn_menu_disabled.png`
+
+既存navigation signalは変更しない。
+
+- `online_battle_requested`
+- `ranking_requested`
+- `settings_requested`
+- `exit_requested`
+
+開発専用 `LOCAL TEST BATTLE` は通常のTop Menuへ表示しない。
+必要な場合のみuser command line argument `--show-debug-menu` で表示する。
+
+### 22.5 Asset fallback
+
+asset制作途中にmissing textureがある場合、開発用fallbackは許可するが、#55 M3へ提出する画面ではfallbackを残さない。
+
+- missing assetを黙ってcode drawで製品仕様へ昇格させない
+- missing assetはdebug placeholderとして明示する
+- final asset導入後にplaceholder pathを削除する
+
+
+### 22.7 Top Menu focus / animation
+
+UI-01のmenu buttonは、mouseとkeyboard/controllerの選択状態を1本化する。
+
+```text
+mouse_entered(button)
+  -> button.grab_focus()
+  -> previous focus buttonはnormalへ戻る
+  -> current buttonだけfocus texture
+```
+
+buttonはVBoxContainerへ直接置かず、固定sizeのrow wrapperへ入れる。
+TextureButton自体のlocal positionをTweenし、Container layoutとanimationが競合しないようにする。
+
+初期値:
+- focus offset x = 10px
+- focus duration = 0.10s
+- unfocus duration = 0.10s
+- press offset x = 6px追加
+- press shake = ±2px
+- press total duration <= 0.12s
+
+Top Menuでは `decor_speed_lines.png` をload/displayしない。
+現在のstadium + speed-line visualはBattle assetへ移管する。
+
+
+### 18.9 Ranked both-disconnected abandonment
+
+2026-10-03 Human Decision / bugfix。
+
+通常の片側切断契約は維持する。
+一方、Rankedで両participantが不在のままRound境界Reconnect deadlineを両者とも超過した場合、そのmatchを無期限ACTIVEのまま保持しない。
+
+契約:
+- 対象: `matchMode == ranked`
+- 条件:
+  - `presences` が0件
+  - expected participant 2名とも `reconnectDeadlineTickByUser` が期限超過
+- 結果:
+  - matchを `ABANDONED` として終了
+  - Player Rating更新なし
+  - Ahoge Rating更新なし
+  - Match Resultを作らない
+  - `active_online_match/current` を両participantから削除
+  - match processを終了する
+  - 次回client起動時は古いBattleへ復帰せずTop Menuへ進む
+
+片側のみ期限超過した場合は従来どおり `DISCONNECT_FORFEIT` Roundを適用する。
+瞬間的な両者切断の即終了ルールは本項では確定せず、Round境界deadline超過時だけを対象とする。

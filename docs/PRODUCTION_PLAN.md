@@ -15,7 +15,7 @@
 
 ## 2. 現在地
 
-2026-10-02時点で工程4の機能優先GameFlow・主要12画面はmainへ揃った。これらは最終UIではなく機能プロトタイプである。現在は **工程4.5: UI/UXデザイン・最終画面化 #98** を実施し、主要12画面の見た目・文言・操作感・画面遷移を製品版として設計し直す。
+2026-10-02時点で工程4の機能優先GameFlow・主要12画面はmainへ揃い、工程4.5では **#100 Design System / #101 UI-01〜UI-12 Screen Design v1まで確定済み**。現在は **#102 最終UI/UXのGodot実装・反復調整** を進行中である。
 
 完了済みの主要基盤:
 
@@ -35,7 +35,7 @@
 
 M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181041b` でmain採用済み。#54 Human VerificationもPASSし、未解決matchのNakama Storage正本化とRound境界15秒切断復帰も完了した。
 
-現在は #88 でAHOGE LEGEND Rankingを従来の「当月総勝利数」方式から **個別キャラクター単位のAhoge Rating方式** へ移行する。工程3で作成した総勝利数ベース初期実装は互換参考統計だけ残し、順位値をAhoge Ratingへ置換する。UI-12本画面量産前にserver settlement / Ranking RPC / UI-11 result contractを完成させる。
+#88 Ahoge Rating方式への移行、#92 UI-12 Ranking接続、#94 Friend Match主要画面、#96 Settingsはすべてmain採用・Human Verification済み。これらは工程4機能プロトタイプとして完了し、現在のblockingは工程4.5 #102の最終UI/UX実装と#55 M3である。
 
 
 ## 3. 製造工程
@@ -121,7 +121,9 @@ M2 Ranked主要導線はPR #87 / Merge SHA `a9073423a3966a96918ee4319611fd048181
 
 工程2のserver実装が完了したら、工程3へ進む前に #53 を実施する。
 
-この時点では工程4の全GameFlow完成を待たない。UI-10へ直接入れる最小のデバッグ導線を用意し、authoritativeなBattle状態を実画面へ接続して確認する。仮素材・仮レイアウトでよいが、実際に操作できることを必須とする。
+この時点では工程4の全GameFlow完成を待たず、一時的なBattle直行デバッグ構成を使ってauthoritativeなBattle状態を実画面へ接続して確認した。
+
+M1は完了済みであり、この直行デバッグ構成は工程4以降の製品ランタイムへ残さない。現行のHuman Verificationは通常GameFlowから実施し、`--m1-battle` や専用 `BattleM1Debug` Sceneを提供しない。
 
 M1で重大な乖離が見つかった場合、工程3へ進む前に修正する。
 
@@ -297,6 +299,8 @@ LONG / NORMAL / SHORTはキャラクター名ではなく戦闘特性の分類�
 - Windows x86_64 export
 - 2地点WAN対戦
 - latency / packet loss / disconnect / reconnect
+- #71 両者同時切断・意図的退出・server障害時の最終終了契約を確定・実装
+- #72 server tick基準のremote Motion位相同期を実装し、latency下で目視確認
 - 長時間試験
 - performance / balance調整
 
@@ -335,21 +339,21 @@ RC1
 
 現在からの優先順は次とする。
 
-1. #98 工程4.5 UI/UX design foundation
-2. visual direction / typography / color / spacing / component system / copy rule確定
-3. UI-01〜UI-12のscreen-by-screen最終設計
-4. Loading / Waiting / Error / Reconnect / transition設計
-5. Battle HUD / 5:4領域 / wide layout最終設計
-6. GodotへUI/UX実装
-7. 実画面で反復調整
-8. #55 M3主要12画面 UI/UX Human Verification
-9. LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
-10. #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
-11. 演出・音・台詞
-12. Steam認証
-13. AWS本番
-14. Windows実機・WAN試験
-15. balance / performance調整
+1. [x] #98 工程4.5 UI/UX design foundation
+2. [x] visual direction / typography / color / spacing / component system / copy rule確定（#100）
+3. [x] UI-01〜UI-12のscreen-by-screen最終設計（#101）
+4. [x] Loading / Waiting / Error / Reconnect / transition設計
+5. [x] Battle HUD / 5:4領域 / wide layout最終設計
+6. [ ] #102 Godotへ最終UI/UX実装
+7. [ ] #102 実画面で反復調整
+8. [ ] #55 M3主要12画面 UI/UX Human Verification
+9. [ ] LONG / NORMAL / SHORT各タイプの正式キャラクター初回実装
+10. [ ] #56 M4 PASS後、各タイプ複数名・概ね均等なロスターへ量産
+11. [ ] 演出・音・台詞
+12. [ ] Steam認証
+13. [ ] AWS本番
+14. [ ] Windows実機・WAN試験
+15. [ ] balance / performance調整
 16. Release Candidate
 
 Ahoge Ratingの `ahoge_weight` / `ahoge_k` / 対戦数による安定化条件は、balance検証により確定する。実装担当判断だけで固定しない。

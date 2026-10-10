@@ -12,6 +12,9 @@ const RankedMatchmakerQueryScript := preload("res://src/online/ranked_matchmaker
 const OnlineConfigScript := preload("res://src/config/online_config.gd")
 const CombatInputProtocolScript := preload("res://src/online/combat_input_protocol.gd")
 const SettingsStoreScript := preload("res://src/settings/settings_store.gd")
+const TopMenuScene := preload("res://scenes/screens/top_menu/TopMenu.tscn")
+const AhogePrototypeRigScript := preload("res://src/ui/ahoge_prototype_rig.gd")
+const FighterVisualScript := preload("res://src/ui/fighter_visual.gd")
 
 var _failures: Array[String] = []
 var _checks: int = 0
@@ -35,10 +38,15 @@ func _init() -> void:
 	_test_real_attacks_complete_best_of_three()
 	_test_device_identity_persists()
 	_test_settings_store_contract()
+	_test_top_menu_asset_contract()
 	_test_match_resume_router()
 	_test_ranked_matchmaker_query()
 	_test_ranked_recovery_policy()
 	_test_ranked_character_contract()
+	_test_character_catalog_ui_contract()
+	_test_ahoge_prototype_rig_contract()
+	_test_ahoge_prototype_rig_motion_contract()
+	_test_fighter_visual_clip_contract()
 	_test_combat_input_protocol()
 	_test_authoritative_attack_protocol()
 	_test_authoritative_defense_protocol()
@@ -301,6 +309,41 @@ func _test_settings_store_contract() -> void:
 	_expect_false(bool(display.get("vsync", true)), "Settings VSync OFFを維持する")
 
 
+func _test_top_menu_asset_contract() -> void:
+	var top_menu = TopMenuScene.instantiate()
+	top_menu.call("_ready")
+
+	var background = top_menu.find_child("TopMenuBackgroundPlaceholder", true, false)
+	var speed_lines = top_menu.find_child("SpeedLinesTexture", true, false)
+	var logo = top_menu.find_child("LogoTexture", true, false)
+	var battle_button = top_menu.find_child("OnlineBattleButton", true, false)
+	var ranking_button = top_menu.find_child("RankingButton", true, false)
+	var settings_button = top_menu.find_child("SettingsButton", true, false)
+	var exit_button = top_menu.find_child("ExitButton", true, false)
+
+	_expect_true(background is ColorRect, "Top Menuは専用背景asset導入までBattle背景を使わない")
+	_expect_true(speed_lines == null, "Top MenuではBattle用集中線を表示しない")
+	_expect_true(logo is TextureRect, "Top Menu logoはTextureRect")
+	_expect_true(battle_button is TextureButton, "Top Menu対戦buttonはTextureButton")
+	_expect_true(ranking_button is TextureButton, "Top Menu Ranking buttonはTextureButton")
+	_expect_true(settings_button is TextureButton, "Top Menu Settings buttonはTextureButton")
+	_expect_true(exit_button is TextureButton, "Top Menu Exit buttonはTextureButton")
+
+	if battle_button is TextureButton:
+		var texture_button := battle_button as TextureButton
+		_expect_true(texture_button.texture_normal != null, "Top Menu button normal assetをloadする")
+		_expect_true(texture_button.texture_hover != null, "Top Menu button focus assetをhoverへloadする")
+		_expect_true(texture_button.texture_focused != null, "Top Menu button focus assetをfocusへloadする")
+		_expect_true(texture_button.texture_pressed != null, "Top Menu button pressed assetをloadする")
+		_expect_true(texture_button.texture_disabled != null, "Top Menu button disabled assetをloadする")
+		_expect_true(
+			texture_button.get_parent() is Control,
+			"Top Menu buttonはanimation用row wrapper内へ配置する"
+		)
+
+	top_menu.free()
+
+
 func _test_match_resume_router() -> void:
 	_expect_equal(
 		MatchResumeRouterScript.resolve({
@@ -397,6 +440,219 @@ func _test_ranked_character_contract() -> void:
 	_expect_true(OnlineConfigScript.is_supported_ranked_character_id("LONG_TEST"), "LONG_TESTをRanked characterとして許可する")
 	_expect_true(OnlineConfigScript.is_supported_ranked_character_id("SHORT_TEST"), "SHORT_TESTをRanked characterとして許可する")
 	_expect_false(OnlineConfigScript.is_supported_ranked_character_id("UNKNOWN"), "未知character_idを拒否する")
+
+
+func _test_character_catalog_ui_contract() -> void:
+	var long_character = CharacterCatalogScript.get_by_id("LONG_TEST")
+	var short_character = CharacterCatalogScript.get_by_id("SHORT_TEST")
+	_expect_true(not str(long_character.feature_text).is_empty(), "LONG_TESTはCharacter Select特徴文を持つ")
+	_expect_true(not str(short_character.feature_text).is_empty(), "SHORT_TESTはCharacter Select特徴文を持つ")
+	_expect_true(
+		str(long_character.feature_text).contains("長いアホ毛"),
+		"LONG_TEST特徴文はLONG型の見た目を説明する"
+	)
+	_expect_true(
+		str(short_character.feature_text).contains("投げ"),
+		"SHORT_TEST特徴文はTHROW型の戦い方を説明する"
+	)
+	_expect_equal(
+		str(long_character.head_asset_path),
+		"res://assets/characters/prototype/charactor_01/head.png",
+		"LONG_TESTはprototype頭部asset pathを固定で持つ"
+	)
+	_expect_equal(
+		str(long_character.ahoge_asset_path),
+		"res://assets/characters/prototype/charactor_01/ahoge_straight.png",
+		"LONG_TESTは承認済み直線アホ毛asset pathを固定で持つ"
+	)
+	_expect_true(
+		absf(float(long_character.ahoge_head_anchor_x_ratio) - 0.64) < 0.0001,
+		"LONG_TESTは承認済み頭頂アンカーX比率0.64を持つ"
+	)
+	_expect_true(
+		str(short_character.head_asset_path).is_empty()
+			and str(short_character.ahoge_asset_path).is_empty(),
+		"SHORT_TESTは未素材のため従来fallbackを維持する"
+	)
+
+
+func _test_ahoge_prototype_rig_contract() -> void:
+	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
+	_expect_true(texture != null, "prototype互換rig試験用アホ毛画像をloadできる")
+	if texture == null:
+		return
+
+	var rig = AhogePrototypeRigScript.new()
+	rig.call("_ready")
+	rig.configure(texture, 1.0)
+
+	var motion_root = rig.find_child("AhogeMotionRoot", true, false) as Node2D
+	var sprite = rig.find_child("AhogeSprite", true, false) as Sprite2D
+	var skeleton = rig.find_child("AhogeSkeleton2D", true, false)
+	var polygon = rig.find_child("AhogeSkin", true, false)
+
+	_expect_true(motion_root != null, "prototype互換rigはwhole-image MotionRootを持つ")
+	_expect_true(sprite != null, "prototype互換rigは元PNGを直接描画するSprite2Dを持つ")
+	_expect_true(skeleton == null, "prototype互換LONG主描画はSkeleton2Dを使用しない")
+	_expect_true(polygon == null, "prototype互換LONG主描画はPolygon2D再変形を使用しない")
+	if motion_root == null or sprite == null:
+		rig.free()
+		return
+
+	_expect_true(sprite.texture == texture, "アホ毛はsource PNGそのものをtextureとして維持する")
+
+	var source_size := texture.get_size()
+	var expected_anchor := Vector2(
+		source_size.x * 180.0 / 1254.0,
+		source_size.y * 1175.0 / 1254.0
+	)
+	_expect_true(
+		rig.debug_sprite_anchor().distance_to(expected_anchor) <= 1.0,
+		"prototype sourceのroot anchor 180,1175をtexture比率で維持する"
+	)
+
+	_expect_true(absf(float(rig.debug_angle())) <= 0.001, "初期whole angleは0")
+	_expect_true(absf(float(rig.debug_reach()) - 1.0) <= 0.001, "初期whole reachは1.0")
+
+	rig.free()
+
+
+func _test_ahoge_prototype_rig_motion_contract() -> void:
+	var texture := load("res://assets/characters/prototype/charactor_01/ahoge.png") as Texture2D
+	_expect_true(texture != null, "prototype互換motion試験用アホ毛画像をloadできる")
+	if texture == null:
+		return
+
+	var rig = AhogePrototypeRigScript.new()
+	rig.call("_ready")
+	rig.configure(texture, 1.0)
+
+	# prototype同様、CHARGING中は後方へ張るだけでreachは1.0を維持する。
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.CHARGING,
+		true,
+		0.5,
+		0.60,
+		0.60
+	)
+	for _index in range(18):
+		rig.call("_process", 1.0 / 60.0)
+
+	_expect_true(rig.debug_angle_target() < -0.45, "CHARGINGは後方angle targetを作る")
+	_expect_true(
+		absf(float(rig.debug_reach_target()) - 1.0) <= 0.001,
+		"CHARGINGではprototype通りサイズを拡大しない"
+	)
+
+	# 通常STRIKE: 前半lag→後半releaseでwhole imageが前へ振り抜ける。
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.STRIKE,
+		true,
+		0.0,
+		0.20,
+		0.60
+	)
+	for _index in range(13):
+		rig.call("_process", 1.0 / 60.0)
+
+	_expect_true(rig.debug_angle_target() >= 0.95, "通常STRIKE終盤angle targetは約1.04rad")
+	_expect_true(
+		absf(float(rig.debug_reach_target()) - 2.05) <= 0.03,
+		"通常STRIKE終盤reach targetはprototypeの2.05"
+	)
+	_expect_true(rig.debug_reach() > 1.20, "whole reachはばね遅延を伴って実際に伸びる")
+	_expect_true(
+		rig.debug_vertical_squash() < 1.0 and rig.debug_vertical_squash() >= 0.82,
+		"reach増加時はprototype通り縦を最大18%だけ圧縮する"
+	)
+
+	var motion_root = rig.find_child("AhogeMotionRoot", true, false) as Node2D
+	if motion_root != null:
+		_expect_true(
+			absf(motion_root.scale.x) > absf(motion_root.scale.y),
+			"STRIKEでは元画像全体をlocal X方向へ伸ばす"
+		)
+
+	# 最大チャージSTRIKEはsource式 2.10 + 0.42 * charge。
+	var charged = AhogePrototypeRigScript.new()
+	charged.call("_ready")
+	charged.configure(texture, 1.0)
+	charged.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.STRIKE,
+		true,
+		1.0,
+		0.13,
+		0.60
+	)
+	for _index in range(9):
+		charged.call("_process", 1.0 / 60.0)
+
+	_expect_true(
+		absf(float(charged.debug_reach_target()) - 2.52) <= 0.03,
+		"最大チャージSTRIKE reach targetはprototype式で2.52"
+	)
+	_expect_true(
+		absf(float(charged.debug_angle_target()) - 1.24) <= 0.05,
+		"最大チャージSTRIKE angle targetはprototype式で約1.24rad"
+	)
+
+	rig.set_motion(
+		Vector2.ZERO,
+		Vector2.ZERO,
+		CombatantStateScript.ActionState.IDLE,
+		false
+	)
+	_expect_false(rig.visible, "ahoge unavailable時はprototype互換rigを非表示にする")
+
+	charged.free()
+	rig.free()
+
+
+func _test_fighter_visual_clip_contract() -> void:
+	var fighter = FighterVisualScript.new()
+	fighter.size = Vector2(420.0, 460.0)
+
+	var character = CharacterCatalogScript.get_by_id("LONG_TEST")
+	var state = CombatantStateScript.new(CombatConfigScript.new())
+	fighter.configure(character, state, 1.0)
+	fighter.call("_ready")
+
+	_expect_false(
+		fighter.clip_contents,
+		"画像FighterVisualはアホ毛sweepをplayer矩形でclipしない"
+	)
+
+	var head_clip = fighter.find_child("HeadClipControl", true, false) as Control
+	var head_layer = fighter.find_child("HeadLayer", true, false) as Node2D
+	var ahoge_rig = fighter.find_child("AhogePrototypeRig", true, false)
+	_expect_true(head_clip != null, "画像FighterVisualは頭部専用clip領域を持つ")
+	if head_clip != null:
+		_expect_true(head_clip.clip_contents, "頭部専用clip領域は下端cropを有効にする")
+		_expect_true(
+			head_clip.offset_left <= -180.0 and head_clip.offset_right >= 180.0,
+			"頭部clip領域は左右へ180px以上bleedし前後モーションを見切らせない"
+		)
+	_expect_true(head_layer != null, "頭部clip拡張用の座標補正layerを持つ")
+	if head_layer != null:
+		_expect_true(
+			head_layer.position.x >= 180.0,
+			"左右clip bleed分だけ頭部座標系を補正する"
+		)
+
+	_expect_true(ahoge_rig != null, "画像FighterVisualは独立AhogePrototypeRigを持つ")
+	if head_clip != null and ahoge_rig != null:
+		_expect_true(
+			not head_clip.is_ancestor_of(ahoge_rig),
+			"アホ毛rigは頭部clip領域の外側へ置く"
+		)
+
+	fighter.free()
 
 
 func _test_combat_input_protocol() -> void:

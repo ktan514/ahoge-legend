@@ -775,15 +775,15 @@ Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│                         YOU WIN                              │
+│                           WIN!                               │
 │                                                              │
 │                    [ WINNER AHOGE ]                          │
 │                                                              │
-│ PLAYER RATING 1532 → 1548   (+16)                           │
-│ AHOGE RATING  1678 → 1691   (+13)                           │
-│ AHOGE RANK    #3 → #2                                       │
+│ プレイヤーレート 1532 → 1548   (+16)                       │
+│ アホ毛レート     1678 → 1691   (+13)                       │
+│ AHOGE RANK       #3 → #2                                    │
 │                                                              │
-│ [NEXT MATCH]   [CHANGE CHARACTER]   [EXIT]                  │
+│ [次のランクマッチ] [キャラクターを変える] [トップへ戻る] │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -794,7 +794,7 @@ Player Rating / Ahoge Ratingはいずれもserver settlement後のmatch単位確
 Host表示:
 
 ```text
-[REMATCH] [CHANGE CHARACTER] [LEAVE ROOM]
+[再戦する] [キャラクターを選び直す] [ルームを終了]
 ```
 
 - REMATCH: 同じGuest・同じCharacterのまま次Friend Battleを開始
@@ -804,8 +804,8 @@ Host表示:
 Guest表示:
 
 ```text
-WAITING FOR HOST...
-[LEAVE ROOM]
+ホストの選択を待っています…
+[ルームを抜ける]
 ```
 
 GuestはREMATCH / CHANGE CHARACTER / room全体終了を選択できず、Hostがserverへ確定した選択へ自動追従する。ただしLEAVE ROOMだけは自分自身の退出として操作可能。Guestが退出した場合はGuestだけTop Menuへ戻り、Hostは同roomのLobbyへ戻って次Guestを待つ。
@@ -896,10 +896,10 @@ Season表示はserverが返す `season_id` を `YYYY / MM` へ整形する。cli
 │                                                              │
 │              [ PLAYER ] [ AHOGE LEGEND ]                    │
 │                                                              │
-│  👑 1   Character A          AHOGE RATING 1842              │
-│     2   Character F          AHOGE RATING 1798              │
-│     3   Character C          AHOGE RATING 1761              │
-│     4   Character H          AHOGE RATING 1715              │
+│  👑 1   Character A          アホ毛レート 1842              │
+│     2   Character F          アホ毛レート 1798              │
+│     3   Character C          アホ毛レート 1761              │
+│     4   Character H          アホ毛レート 1715              │
 │                                                              │
 │       Matches / Wins / Win Rate は補助情報として表示可       │
 │              Reset: Next month 1st 00:00 JST                │
@@ -952,7 +952,7 @@ active Round中に復帰した場合は、server authoritative snapshotを受信
 
 - server-side active matchが`ACTIVE`: `RECONNECTING...` を表示し、snapshot受信後にBattleへ直接復帰
 - server-side active matchが`RESULT_PENDING / ranked`: Battleを表示せずUI-11へ直接遷移
-- server-side active matchが`RESULT_PENDING / friend`: UI-11を再表示せず、Friend文脈のCharacter Select（選択メニュー）へ遷移
+- server-side active matchが`RESULT_PENDING / friend`: room stateからHost / Guest roleを復元し、Battleを再表示せずUI-11 Friend Resultへ直接遷移
 - 未解決matchがある間は新しいRanked / Friend開始操作を無効化し、元matchの復帰または終了処理を優先する
 - Round境界timeout後に切断playerが戻った場合、Match未決着なら最新server snapshotへ同期して待機中の次Roundへ復帰する。Match終了済みならserver確定Resultを表示する
 - serverが元matchに対して確定的に `NOT_FOUND` を返した場合のみ「元の対戦は復旧できませんでした」と通信エラー表示し、古い対戦lockを解除する

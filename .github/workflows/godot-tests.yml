@@ -23,6 +23,9 @@ jobs:
           sudo install -m 0755 Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
           godot --version
 
+      - name: Check prototype visual script
+        run: godot --headless --path . --check-only --script res://src/ui/ahoge_prototype_rig.gd
+
       - name: Import Godot project
         run: ./scripts/godot-import.sh
 

@@ -1,0 +1,103 @@
+name: Ahoge mesh verification
+
+on:
+  pull_request:
+    paths:
+      - 'assets/characters/**'
+      - 'src/ui/ahoge_*'
+      - 'src/ui/fighter_visual.gd'
+      - 'src/ui/battle_*'
+      - 'tests/ahoge_mesh*'
+      - 'tests/battle_contact*'
+      - 'tools/ahoge_mesh/**'
+      - '.github/workflows/ahoge-mesh-tests.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahoge-mesh-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mesh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: 素材検証の依存を準備
+        run: python -m pip install 'Pillow==11.3.0' 'numpy==2.3.5' 'shapely==2.1.2'
+      - name: 現行素材の寸法と輪郭を記録
+        run: |
+          python tools/ahoge_mesh/inspect_source.py
+          git rev-parse HEAD > artifacts/ahoge-mesh/tested_commit.txt
+      - name: Godotを準備
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat .godot-version | tr -d '[:space:]')"
+          mkdir -p .ci-bin
+          curl -L --fail --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${version}-stable/Godot_v${version}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d .ci-bin
+          mv .ci-bin/Godot* .ci-bin/godot
+          chmod +x .ci-bin/godot
+          echo "$PWD/.ci-bin" >> "$GITHUB_PATH"
+      - name: 同一HEADの描画再現環境を保存
+        run: python tools/ahoge_mesh/package_reproduction.py
+      - name: 描画再現環境を公開
+        uses: actions/upload-artifact@v4
+        with:
+          name: motion-reproduction
+          path: artifacts/motion-reproduction/
+          if-no-files-found: error
+          retention-days: 3
+      - name: Godot素材を読み込む
+        run: ./scripts/godot-import.sh
+      - name: 接触補正の歪みを次フレームへ残さない
+        run: timeout 60s ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_transform_test.gd
+      - name: 曲がり伝播と遅延Hitの巻き戻りを検査
+        run: timeout 60s ./scripts/godot-strict.sh --headless --path . --script res://tests/ahoge_mesh_rope_test.gd
+      - name: 実描画と固定メッシュを保存
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 120s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_render_test.gd
+      - name: 補間全区間と描画差を検査
+        run: python tools/ahoge_mesh/verify_geometry_and_render.py
+      - name: 通常と最大チャージの実時間で描画を検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 180s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_cycle_test.gd
+      - name: 接触表示試験を構文確認する
+        run: godot --headless --path . --check-only --script res://tests/battle_contact_presentation_test.gd
+      - name: 相手を配置した実対戦HUDで接触と見切れを検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 240s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/battle_contact_presentation_test.gd
+      - name: 溜め・ムチ打ち・パリィの連続動作を実描画で検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 240s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_action_test.gd
+      - name: 湾曲を保つ近距離パリィを実描画で検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 180s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_parry_test.gd
+      - name: 三動作の条件数と外周を照合する
+        run: python tools/ahoge_mesh/verify_action_report.py
+      - name: 下への振り抜きと拡大した近距離払いを実描画で検査
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: timeout 240s xvfb-run -a ./scripts/godot-strict.sh --path . --rendering-method gl_compatibility --audio-driver Dummy --script res://tests/ahoge_mesh_followthrough_test.gd
+      - name: 描画検証資料を保存
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ahoge-mesh-verification
+          path: artifacts/ahoge-mesh/
+          if-no-files-found: error
+          retention-days: 7

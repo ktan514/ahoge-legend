@@ -44,6 +44,21 @@ func _run() -> void:
 		_fail("Ranked導線開始時に認証 / Realtime接続が成立していません。", app)
 		return
 
+	var character_select_preview = app.get_child(0)
+	var long_art = character_select_preview.find_child("CharacterArt_LONG_TEST", true, false)
+	var short_art = character_select_preview.find_child("CharacterArt_SHORT_TEST", true, false)
+	var selected_art = character_select_preview.find_child("SelectedCharacterArt", true, false)
+	var selected_detail = character_select_preview.find_child("SelectedCharacterDetail", true, false)
+	if long_art == null or short_art == null or selected_art == null:
+		_fail("Character Selectにcharacter別Ahoge previewが揃っていません。", app)
+		return
+	if not long_art.is_visible_in_tree() or not short_art.is_visible_in_tree() 			or not selected_art.is_visible_in_tree():
+		_fail("Character SelectのAhoge previewが表示されていません。", app)
+		return
+	if not selected_detail is Label 			or not str((selected_detail as Label).text).contains("長いアホ毛で間合いを取るスタンダード型"):
+		_fail("Character Selectの選択中character特徴文が反映されていません。", app)
+		return
+
 	var second_client = nakama.create_client(
 		OnlineConfigScript.SERVER_KEY,
 		OnlineConfigScript.HOST,
@@ -203,32 +218,33 @@ func _run() -> void:
 		return
 
 	# 前Round Resultを先に表示し、その表示中には15秒待機を重ねない。
-	if not await _wait_label_text(app, "TAKES ROUND 1", 1500):
+	if not await _wait_label_text(app, "ROUND 1\nYOU\n1 - 0", 1500):
 		_fail("Round 1 Result表示を確認できませんでした。", app)
 		return
-	if _has_label_text(app, "WAITING FOR OPPONENT..."):
+	if _has_label_text(app, "相手を待っています…"):
 		_fail("Round 1 Result表示中に相手再接続15秒待機が始まりました。", app)
 		return
 
 	# Result hold完了後、次Round開始側で15秒カウントを表示する。
-	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n15", 5000):
+	if not await _wait_label_text(app, "相手を待っています…\n15", 5000):
 		_fail("次Round開始側でWAITING FOR OPPONENT 15秒表示が始まりませんでした。", app)
 		return
-	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n14", 2500):
+	if not await _wait_label_text(app, "相手を待っています…\n14", 2500):
 		_fail("相手再接続待機カウントが15から14へ減少しませんでした。", app)
 		return
-	if not await _wait_label_text(app, "WAITING FOR OPPONENT...\n0", 20000):
+	if not await _wait_label_text(app, "相手を待っています…\n0", 20000):
 		_fail("相手再接続待機カウントの0表示を確認できませんでした。", app)
 		return
 
 	if not await _wait_screen(app, "MatchResult", 5000):
 		_fail("authoritative Match ResultからUI-11へ遷移しません。", app)
 		return
-	if not _has_label_text(app, "PLAYER RATING") \
-			or not _has_label_text(app, "AHOGE RATING"):
+	if not _has_label_text(app, "プレイヤーレート") \
+			or not _has_label_text(app, "アホ毛レート"):
 		_fail("UI-11にPlayer / Ahoge Rating settlementが表示されません。", app)
 		return
-	if _has_label_text(app, "server settlementを取得できませんでした。"):
+	if _has_label_text(app, "プレイヤーレートを確認できませんでした") \
+			or _has_label_text(app, "アホ毛レートを確認できませんでした"):
 		_fail("UI-11がRanked settlementを取得できていません。", app)
 		return
 	if not await _wait_no_active_match(online_session, 6000):
@@ -239,10 +255,10 @@ func _run() -> void:
 		return
 
 	var result_screen = app.get_child(0)
-	if _has_button_text(result_screen, "REMATCH"):
+	if _has_button_text(result_screen, "再戦する"):
 		_fail("Ranked ResultにREMATCHが表示されています。", app)
 		return
-	if not _has_button_text(result_screen, "NEXT MATCH"):
+	if not _has_button_text(result_screen, "次のランクマッチ"):
 		_fail("Ranked ResultにNEXT MATCHがありません。", app)
 		return
 
