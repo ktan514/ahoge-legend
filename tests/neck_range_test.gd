@@ -5,6 +5,7 @@ const StateScript := preload("res://src/domain/combatant_state.gd")
 const ConfigScript := preload("res://src/config/combat_config.gd")
 const CatalogScript := preload("res://src/domain/character_catalog.gd")
 const ParryScript := preload("res://src/ui/ahoge_parry_motion.gd")
+const MeshDeformerScript := preload("res://src/ui/ahoge_mesh_deformer.gd")
 const OUT: String = "res://artifacts/neck-range/"
 var failures: Array[String] = []
 var cases: Array = []
@@ -40,6 +41,27 @@ func _run() -> void:
 		scene._selected_character_id() == "SAKURAMIKO",
 		"検証画面の初期キャラクターがさくらみこではありません"
 	)
+
+	# Godot import cacheが無い状態でも、raw PNGからさくらみこmeshを構成できる。
+	var raw_image: Image = Image.load_from_file("res://assets/characters/sakuramiko/ahoge.png")
+	_expect(raw_image != null and not raw_image.is_empty(), "さくらみこのraw PNGを読めません")
+	if raw_image != null and not raw_image.is_empty():
+		var raw_texture: ImageTexture = ImageTexture.create_from_image(raw_image)
+		var raw_deformer = MeshDeformerScript.new()
+		_expect(
+			raw_deformer.configure(
+				raw_texture,
+				"res://assets/characters/sakuramiko/ahoge_profile.tres",
+				"res://assets/characters/sakuramiko/ahoge.png"
+			),
+			"未importのraw PNGからさくらみこmeshを構成できません"
+		)
+		if raw_deformer.configured:
+			_expect(
+				str(raw_deformer.profile.resource_path) == "res://assets/characters/sakuramiko/ahoge_profile.tres",
+				"raw PNGがさくらみこ専用profileへ接続されていません"
+			)
+
 	# さくらみこ固有の待機形状・倍率・呼吸設定を固定する。
 	var sakuramiko = CatalogScript.get_by_id("SAKURAMIKO")
 	_expect(sakuramiko != null, "さくらみこの定義がありません")
