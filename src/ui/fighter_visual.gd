@@ -119,12 +119,12 @@ func _refresh_asset_mode() -> void:
 	if head_path.is_empty() or ahoge_path.is_empty():
 		queue_redraw()
 		return
-	if not ResourceLoader.exists(head_path) or not ResourceLoader.exists(ahoge_path):
+	if not _asset_path_present(head_path) or not _asset_path_present(ahoge_path):
 		queue_redraw()
 		return
 
-	var head_texture := load(head_path) as Texture2D
-	var ahoge_texture := load(ahoge_path) as Texture2D
+	var head_texture: Texture2D = _load_texture_asset(head_path)
+	var ahoge_texture: Texture2D = _load_texture_asset(ahoge_path)
 	if head_texture == null or ahoge_texture == null:
 		queue_redraw()
 		return
@@ -135,7 +135,8 @@ func _refresh_asset_mode() -> void:
 		ahoge_texture,
 		facing,
 		str(character.ahoge_profile_path),
-		float(character.ahoge_display_scale)
+		float(character.ahoge_display_scale),
+		ahoge_path
 	)
 	_asset_root.visible = true
 	_asset_mode = true
@@ -144,6 +145,27 @@ func _refresh_asset_mode() -> void:
 	clip_contents = false
 	_update_asset_pose()
 	queue_redraw()
+
+
+func _asset_path_present(path: String) -> bool:
+	if path.is_empty():
+		return false
+	return ResourceLoader.exists(path) or FileAccess.file_exists(path)
+
+
+func _load_texture_asset(path: String) -> Texture2D:
+	if path.is_empty():
+		return null
+	if ResourceLoader.exists(path):
+		var resource_texture := load(path) as Texture2D
+		if resource_texture != null:
+			return resource_texture
+	if not FileAccess.file_exists(path):
+		return null
+	var image: Image = Image.load_from_file(path)
+	if image == null or image.is_empty():
+		return null
+	return ImageTexture.create_from_image(image)
 
 
 func _process(delta: float) -> void:
