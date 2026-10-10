@@ -1695,3 +1695,38 @@ Human Verificationで「もっとねてる」と再指摘された。前候補�
 - root固定、U字/loop/mesh反転なし。
 
 これにより「姿勢は寝ているが、動きは柔らかい」を分離する。
+
+
+## 2026-10-11 待機profileが効かないfallbackを修正
+
+Human Verificationで `idle_reference_curve` を変更しても待機形状が変わらない状態を確認した。
+
+原因:
+- `AhogeMeshProfile.matches_texture()` は開発環境でsource PNGが存在すると、`source_file_sha256` の完全一致だけで判定し、不一致時に即falseを返す。
+- PNGは同じRGBA画素でもlossless再圧縮・metadata差でfile hashが変わる。
+- file hash不一致時にmesh configureがfalseとなり、`AhogePrototypeRig` はSprite fallbackへ切り替わる。
+- Sprite fallbackでは `idle_reference_curve` / bone / mesh変形が一切反映されない。
+
+修正:
+- file hash一致なら従来どおり即true。
+- file hash不一致でも即falseにせず、Texture2DをRGBA8へdecodeして `source_rgba_sha256` と比較する。
+- RGBA一致なら同一ゲーム素材としてprofileを有効化する。
+- RGBAも不一致ならfalse。
+- source path / image size条件は維持。
+
+Human Verification:
+- NeckRangePreviewでSAKURAMIKO選択時、`AhogeDeformMesh.configured=true` を表示・検査する。
+- Sprite fallback中は検証を合格扱いにしない。
+
+### 待機C字をさらに強くする
+
+profileが確実に有効になった前提で、待機 `idle_reference_curve` を現状より明確に強いC字へ変更する。
+
+方針:
+- root=(0,0)固定。
+- 前半35%をより左へ膨らませる。
+- distal 60〜100%をroot方向へ巻き戻す。
+- tipは現在よりroot寄り・下寄りへ戻す。
+- 弧長は大きく変えず、静止形状の曲率だけ増やす。
+- width profileは変更しない。
+- 攻撃赤青軌道のtuningは変更しない。
