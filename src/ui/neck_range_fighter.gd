@@ -94,6 +94,7 @@ const SAKURAMIKO_SOFT_TUNING := {
 	"drive_limit": 0.00,
 	"max_offset": 0.90,
 	"active_arc_weight": 0.58,
+	"active_arc_shape_weight": 1.00,
 	"active_arc_charge_root_angle": -2.95,
 	"active_arc_charge_tip_angle": -3.65,
 	"active_arc_release_root_angle": 0.15,
